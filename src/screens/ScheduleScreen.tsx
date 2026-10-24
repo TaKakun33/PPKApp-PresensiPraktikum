@@ -12,7 +12,7 @@ export default function ScheduleScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>ScheduleScreen (stub)</Text>
-      <Text style={styles.text}>Login: {currentUser.name} ({currentUser.role})</Text>
+      <Text style={styles.text}>Login: {currentUser.nama} ({currentUser.role})</Text>
       <Text style={styles.text}>Jumlah sesi terlihat: {getVisibleSessions().length}</Text>
     </View>
   );

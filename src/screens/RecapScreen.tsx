@@ -11,7 +11,7 @@ export default function RecapScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>RecapScreen (stub)</Text>
-      <Text style={styles.text}>Login: {currentUser.name}</Text>
+      <Text style={styles.text}>Login: {currentUser.nama}</Text>
     </View>
   );
 }

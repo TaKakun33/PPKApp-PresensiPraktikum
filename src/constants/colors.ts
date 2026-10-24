@@ -13,8 +13,15 @@ export const COLORS = {
   warning: '#D97706',
 };
 
+// Status disimpan sebagai kode; tampilkan ke pengguna lewat STATUS_LABEL.
+export const STATUS_LABEL: Record<SessionStatus, string> = {
+  belum_dibuka: 'Belum Dibuka',
+  dibuka: 'Dibuka',
+  ditutup: 'Ditutup',
+};
+
 export const STATUS_COLORS: Record<SessionStatus, { bg: string; text: string }> = {
-  'Belum Dibuka': { bg: '#E2E8F0', text: '#475569' },
-  Dibuka: { bg: '#DCFCE7', text: '#166534' },
-  Ditutup: { bg: '#FEE2E2', text: '#991B1B' },
+  belum_dibuka: { bg: '#E2E8F0', text: '#475569' },
+  dibuka: { bg: '#DCFCE7', text: '#166534' },
+  ditutup: { bg: '#FEE2E2', text: '#991B1B' },
 };

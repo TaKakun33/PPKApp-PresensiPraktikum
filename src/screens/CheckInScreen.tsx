@@ -13,7 +13,7 @@ export default function CheckInScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>CheckInScreen (stub)</Text>
-      <Text style={styles.text}>Login: {currentUser.name}</Text>
+      <Text style={styles.text}>Login: {currentUser.nama}</Text>
     </View>
   );
 }

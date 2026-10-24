@@ -11,7 +11,7 @@ export default function HistoryScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>HistoryScreen (stub)</Text>
-      <Text style={styles.text}>Login: {currentUser.name}</Text>
+      <Text style={styles.text}>Login: {currentUser.nama}</Text>
       <Text style={styles.text}>Jumlah riwayat: {getHistory().length}</Text>
     </View>
   );

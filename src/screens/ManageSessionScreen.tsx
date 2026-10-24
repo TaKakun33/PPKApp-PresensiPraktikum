@@ -13,7 +13,7 @@ export default function ManageSessionScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>ManageSessionScreen (stub)</Text>
-      <Text style={styles.text}>Login: {currentUser.name}</Text>
+      <Text style={styles.text}>Login: {currentUser.nama}</Text>
     </View>
   );
 }

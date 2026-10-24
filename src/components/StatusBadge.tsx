@@ -2,7 +2,7 @@
 // tapi pertahankan props agar layar lain tidak rusak.
 import { StyleSheet, Text, View } from 'react-native';
 
-import { STATUS_COLORS } from '../constants/colors';
+import { STATUS_COLORS, STATUS_LABEL } from '../constants/colors';
 import type { SessionStatus } from '../data/types';
 
 type Props = {
@@ -13,7 +13,7 @@ export default function StatusBadge({ status }: Props) {
   const color = STATUS_COLORS[status];
   return (
     <View style={[styles.badge, { backgroundColor: color.bg }]}>
-      <Text style={[styles.text, { color: color.text }]}>{status}</Text>
+      <Text style={[styles.text, { color: color.text }]}>{STATUS_LABEL[status]}</Text>
     </View>
   );
 }
