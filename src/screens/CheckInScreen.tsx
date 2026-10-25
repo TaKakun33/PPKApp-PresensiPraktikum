@@ -1,8 +1,8 @@
 // STUB dari PM - pemilik: Damar (feat/student-checkin-history), SRS-05 dan SRS-06.
 // Daftar sesi + tombol presensi. Aktif hanya saat Dibuka dan belum presensi.
-// Bottom Sheet sukses + tolak ganda + label "Sudah hadir" dari hasCheckedIn().
+// Konfirmasi presensi via Modal, lalu Bottom Sheet sukses.
 import { useRef, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import SuccessBottomSheet from '../components/SuccessBottomSheet';
 import { COLORS, STATUS_COLORS, STATUS_LABEL } from '../constants/colors';
@@ -18,6 +18,13 @@ export default function CheckInScreen() {
     sessionName: '',
     waktuHadir: '',
   });
+
+  const [confirm, setConfirm] = useState({
+    visible: false,
+    sessionId: '',
+    sessionName: '',
+  });
+
   const inFlightRef = useRef<Set<string>>(new Set());
 
   if (currentUser.role !== 'praktikan') {
@@ -41,6 +48,17 @@ export default function CheckInScreen() {
   }
 
   const handlePress = (sessionId: string, sessionName: string) => {
+    setConfirm({ visible: true, sessionId, sessionName });
+  };
+
+  const closeConfirm = () => {
+    setConfirm((c) => ({ ...c, visible: false }));
+  };
+
+  const runCheckIn = () => {
+    const { sessionId, sessionName } = confirm;
+    closeConfirm();
+
     if (inFlightRef.current.has(sessionId)) return;
     inFlightRef.current.add(sessionId);
 
@@ -118,6 +136,46 @@ export default function CheckInScreen() {
         }}
       />
 
+      {/* Konfirmasi presensi (popup di atas layar) */}
+      <Modal
+        visible={confirm.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeConfirm}
+      >
+        <Pressable style={styles.confirmBackdrop} onPress={closeConfirm}>
+          <Pressable style={styles.confirmCard}>
+            <Text style={styles.confirmTitle}>Konfirmasi Presensi</Text>
+            <Text style={styles.confirmText}>
+              Presensi untuk {confirm.sessionName}?
+            </Text>
+
+            <View style={styles.confirmRow}>
+              <Pressable
+                onPress={closeConfirm}
+                style={({ pressed }) => [
+                  styles.confirmButton,
+                  pressed && styles.buttonPressed,
+                ]}
+              >
+                <Text style={styles.confirmButtonText}>Batal</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={runCheckIn}
+                style={({ pressed }) => [
+                  styles.confirmButton,
+                  styles.confirmButtonPrimary,
+                  pressed && styles.buttonPressed,
+                ]}
+              >
+                <Text style={styles.confirmButtonTextPrimary}>Presensi</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <SuccessBottomSheet
         visible={sheet.visible}
         sessionName={sheet.sessionName}
@@ -156,4 +214,32 @@ const styles = StyleSheet.create({
   buttonPressed: { opacity: 0.85 },
   buttonText: { color: '#FFFFFF', fontWeight: '600' },
   reason: { fontSize: 12, color: COLORS.muted, marginTop: 4 },
+  confirmBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  confirmCard: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: 20,
+    gap: 12,
+  },
+  confirmTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
+  confirmText: { fontSize: 14, color: COLORS.text },
+  confirmRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  confirmButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    backgroundColor: COLORS.border,
+  },
+  confirmButtonPrimary: { backgroundColor: COLORS.primary },
+  confirmButtonText: { color: COLORS.text, fontWeight: '600' },
+  confirmButtonTextPrimary: { color: '#FFFFFF', fontWeight: '600' },
 });
