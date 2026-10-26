@@ -1,6 +1,7 @@
-// STUB dari PM - pemilik: Hadrian (feat/schedule-detail). Boleh diganti total,
-// tapi pertahankan props agar layar lain tidak rusak.
-import { Pressable, StyleSheet, Text } from 'react-native';
+// Pemilik: Hadrian (feat/schedule-detail), SRS-03.
+// Kartu satu sesi di daftar jadwal. Props dipertahankan agar layar lain tidak rusak.
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { COLORS } from '../constants/colors';
 import type { Session } from '../data/types';
@@ -13,12 +14,36 @@ type Props = {
 
 export default function SessionCard({ session, onPress }: Props) {
   return (
-    <Pressable style={styles.card} onPress={onPress}>
-      <Text style={styles.title}>{session.praktikum}</Text>
-      <Text style={styles.meta}>
-        Kelas {session.kelas} - {session.tanggal}, {session.waktu}
+    <Pressable
+      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${session.praktikum}, kelas ${session.kelas}, ${session.tanggal} ${session.waktu}`}
+    >
+      <View style={styles.topRow}>
+        <StatusBadge status={session.status} />
+        {onPress ? <Ionicons name="chevron-forward" size={18} color="#94A3B8" /> : null}
+      </View>
+
+      <Text style={styles.title} numberOfLines={2}>
+        {session.praktikum}
       </Text>
-      <StatusBadge status={session.status} />
+
+      <View style={styles.metaRow}>
+        <View style={styles.metaItem}>
+          <Ionicons name="people-outline" size={14} color={COLORS.muted} />
+          <Text style={styles.metaText}>Kelas {session.kelas}</Text>
+        </View>
+        <View style={styles.metaItem}>
+          <Ionicons name="calendar-outline" size={14} color={COLORS.muted} />
+          <Text style={styles.metaText}>{session.tanggal}</Text>
+        </View>
+        <View style={styles.metaItem}>
+          <Ionicons name="time-outline" size={14} color={COLORS.muted} />
+          <Text style={styles.metaText}>{session.waktu}</Text>
+        </View>
+      </View>
     </Pressable>
   );
 }
@@ -26,12 +51,16 @@ export default function SessionCard({ session, onPress }: Props) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: COLORS.card,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
-    padding: 14,
-    gap: 6,
+    padding: 16,
+    gap: 10,
   },
-  title: { fontSize: 16, fontWeight: '600', color: COLORS.text },
-  meta: { fontSize: 13, color: COLORS.muted },
+  cardPressed: { backgroundColor: '#F1F5F9' },
+  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  title: { fontSize: 16, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
+  metaRow: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 6 },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  metaText: { fontSize: 13, fontFamily: 'PlusJakartaSans_500Medium', color: COLORS.muted },
 });
