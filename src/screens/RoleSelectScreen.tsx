@@ -5,6 +5,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StatusBar,
@@ -115,20 +117,25 @@ export default function RoleSelectScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <StatusBar barStyle="dark-content" />
 
-      {/* Konten yang bisa di-scroll */}
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
+        {/* Konten yang bisa di-scroll */}
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
         {/* Header / Greeting Area */}
         <View style={styles.header}>
           <View style={styles.headerTextGroup}>
             <View style={styles.brandRow}>
               <Text style={styles.appName}>PPKApp</Text>
             </View>
-            <Text style={styles.greetingTitle}>Halo, Selamat Datang! </Text>
+            <Text style={styles.greetingTitle}>Halo, Selamat Datang!</Text>
             <Text style={styles.subtitle}>Sistem Presensi Praktikum Terpadu</Text>
           </View>
         </View>
@@ -321,41 +328,46 @@ export default function RoleSelectScreen() {
                   </Pressable>
                 );
               })}
+              {filteredUsers.length === 0 && (
+                <Text style={styles.sectionSub}>Tidak ada hasil untuk &quot;{searchQuery}&quot;.</Text>
+              )}
             </View>
           </View>
         )}
-      </ScrollView>
+        </ScrollView>
 
-      {/* Footer Sticky: Tombol Lanjut */}
-      <View style={styles.footer}>
-        {showValidation && !isFormValid && (
-          <View style={styles.validationBox}>
-            <Ionicons name="alert-circle" size={16} color={COLORS.danger} />
-            <Text style={styles.validationText}>{validationMessage}</Text>
-          </View>
-        )}
+        {/* Footer Sticky: Tombol Lanjut */}
+        <View style={styles.footer}>
+          {showValidation && !isFormValid && (
+            <View style={styles.validationBox}>
+              <Ionicons name="alert-circle" size={16} color={COLORS.danger} />
+              <Text style={styles.validationText}>{validationMessage}</Text>
+            </View>
+          )}
 
-        <Pressable
-          style={({ pressed }) => [
-            styles.button,
-            pressed && styles.buttonPressed,
-          ]}
-          onPress={handleLanjut}
-          accessibilityRole="button"
-          accessibilityLabel="Lanjut ke aplikasi"
-        >
-          <Text style={styles.buttonText}>
-            Lanjut ke Aplikasi
-          </Text>
-          <View style={styles.buttonIconBox}>
-            <Ionicons
-              name="arrow-forward"
-              size={16}
-              color={COLORS.white}
-            />
-          </View>
-        </Pressable>
-      </View>
+          <Pressable
+            style={({ pressed }) => [
+              styles.button,
+              pressed && styles.buttonPressed,
+            ]}
+            onPress={handleLanjut}
+            accessibilityRole="button"
+            accessibilityLabel="Lanjut ke aplikasi"
+            accessibilityState={{ disabled: !isFormValid }}
+          >
+            <Text style={styles.buttonText}>
+              Lanjut ke Aplikasi
+            </Text>
+            <View style={styles.buttonIconBox}>
+              <Ionicons
+                name="arrow-forward"
+                size={16}
+                color={COLORS.white}
+              />
+            </View>
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -364,6 +376,9 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  flex: {
+    flex: 1,
   },
   scroll: {
     flex: 1,
@@ -432,7 +447,8 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    borderRadius: 18,
+    borderRadius: 999,
+    overflow: 'hidden',
   },
   stepPillActive: {
     backgroundColor: COLORS.text,

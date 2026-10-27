@@ -2,6 +2,7 @@
 // tapi pertahankan props agar layar lain tidak rusak.
 // Bottom sheet dibuat dari Modal bawaan React Native (tanpa library tambahan).
 import { Modal, Pressable, StyleSheet, Text } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { COLORS } from '../constants/colors';
 
@@ -13,10 +14,11 @@ type Props = {
 };
 
 export default function SuccessBottomSheet({ visible, sessionName, waktuHadir, onClose }: Props) {
+  const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheet}>
+        <Pressable style={[styles.sheet, { paddingBottom: 24 + insets.bottom }]}>
           <Text style={styles.title}>Presensi berhasil</Text>
           <Text style={styles.text}>{sessionName}</Text>
           <Text style={styles.text}>Waktu hadir: {waktuHadir}</Text>

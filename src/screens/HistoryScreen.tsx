@@ -2,22 +2,20 @@
 // Riwayat kehadiran praktikan (sesi, kelas, waktu hadir) + empty state.
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 
+import EmptyState from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
 import { COLORS } from '../constants/colors';
 import { useApp } from '../context/AppContext';
 import { formatTanggalJam } from '../utils/format';
 
 export default function HistoryScreen() {
-  const { currentUser, getHistory } = useApp();
+  const { getHistory } = useApp();
   const history = getHistory();
 
   if (history.length === 0) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Belum ada riwayat</Text>
-        <Text style={styles.text}>
-          Halo {currentUser.nama}, presensi yang kamu lakukan akan muncul di sini.
-        </Text>
+      <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+        <EmptyState title="Belum ada riwayat" message="Presensi yang kamu lakukan akan muncul di sini." />
       </View>
     );
   }

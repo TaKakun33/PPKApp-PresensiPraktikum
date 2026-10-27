@@ -8,7 +8,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import EmptyState from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
-import { COLORS, STATUS_COLORS } from '../constants/colors';
+import { COLORS } from '../constants/colors';
 import { useApp } from '../context/AppContext';
 import type { Role, Session } from '../data/types';
 import { formatJam } from '../utils/format';
@@ -17,10 +17,10 @@ type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
 // Warna kartu kehadiran, diambil dari warna bersama agar senada dengan StatusBadge.
 const TONE = {
-  success: { color: COLORS.success, bg: STATUS_COLORS.dibuka.bg },
+  success: { color: COLORS.success, bg: COLORS.successLight },
   info: { color: COLORS.primary, bg: COLORS.primaryLight },
-  neutral: { color: COLORS.muted, bg: STATUS_COLORS.belum_dibuka.bg },
-  danger: { color: COLORS.danger, bg: STATUS_COLORS.ditutup.bg },
+  neutral: { color: COLORS.textSecondary, bg: COLORS.surface },
+  danger: { color: COLORS.danger, bg: COLORS.dangerLight },
 };
 
 type Presence = { icon: IoniconsName; tone: keyof typeof TONE; title: string; message: string };

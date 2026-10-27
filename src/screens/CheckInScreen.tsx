@@ -4,6 +4,7 @@
 import { useRef, useState } from 'react';
 import { Alert, FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import EmptyState from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
 import SuccessBottomSheet from '../components/SuccessBottomSheet';
 import { COLORS } from '../constants/colors';
@@ -40,9 +41,8 @@ export default function CheckInScreen() {
 
   if (sessions.length === 0) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Belum ada sesi</Text>
-        <Text style={styles.text}>Sesi praktikum untuk kelasmu belum tersedia.</Text>
+      <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+        <EmptyState title="Belum ada sesi" message="Sesi praktikum untuk kelasmu belum tersedia." />
       </View>
     );
   }
@@ -64,11 +64,8 @@ export default function CheckInScreen() {
 
     const result = checkIn(sessionId);
     if (result.ok) {
-      setSheet({
-        visible: true,
-        sessionName,
-        waktuHadir: formatJam(result.attendance.waktuHadir),
-      });
+      const waktuHadir = formatJam(result.attendance.waktuHadir);
+      setTimeout(() => setSheet({ visible: true, sessionName, waktuHadir }), 350);
     } else {
       inFlightRef.current.delete(sessionId);
       Alert.alert('Presensi gagal', result.message);
@@ -114,6 +111,7 @@ export default function CheckInScreen() {
               <Pressable
                 onPress={() => handlePress(item.id, item.praktikum)}
                 disabled={!canPress}
+                accessibilityState={{ disabled: !canPress }}
                 style={({ pressed }) => [
                   styles.button,
                   checked && styles.buttonSuccess,
@@ -209,10 +207,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   buttonSuccess: { backgroundColor: COLORS.success },
-  buttonDisabled: { backgroundColor: COLORS.border },
+  buttonDisabled: { backgroundColor: COLORS.surface },
   buttonPressed: { opacity: 0.85 },
   buttonText: { color: COLORS.white, fontFamily: 'PlusJakartaSans_600SemiBold' },
-  buttonTextDisabled: { color: COLORS.mutedLight },
+  buttonTextDisabled: { color: COLORS.muted },
   reason: { fontSize: 12, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted, marginTop: 4 },
   confirmBackdrop: {
     flex: 1,
