@@ -25,13 +25,33 @@ const TONE = {
 
 type Presence = { icon: IoniconsName; tone: keyof typeof TONE; title: string; message: string };
 
+// session.waktu diformat dengan zona waktu perangkat, jadi labelnya juga mengikuti perangkat.
+function zonaWaktu(iso: string): string {
+  const offset = -new Date(iso).getTimezoneOffset() / 60;
+  const nama: Record<number, string> = { 7: 'WIB', 8: 'WITA', 9: 'WIT' };
+  return nama[offset] ?? `GMT${offset >= 0 ? '+' : ''}${offset}`;
+}
+
 // Isi kartu kehadiran sesuai peran dan status sesi.
+// milikSaya = sesi ada di kelas praktikan / diampu asisten (getVisibleSessions).
 function describePresence(
   session: Session,
   role: Role,
+  milikSaya: boolean,
   waktuHadir: string | undefined,
   jumlahHadir: number,
 ): Presence {
+  if (!milikSaya) {
+    return {
+      icon: 'information-circle-outline',
+      tone: 'neutral',
+      title: role === 'asisten' ? 'Bukan sesi yang kamu ampu' : 'Bukan sesi kelasmu',
+      message:
+        role === 'asisten'
+          ? `Sesi ini diampu oleh ${session.asistenNama}, jadi kamu tidak dapat membuka atau menutupnya.`
+          : 'Kamu tidak terdaftar di kelas ini, jadi tidak dapat presensi di sesi ini.',
+    };
+  }
   if (role === 'asisten') {
     if (session.status === 'belum_dibuka') {
       return {
@@ -99,7 +119,7 @@ function InfoRow({ icon, label, value }: { icon: IoniconsName; label: string; va
 
 export default function SessionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { currentUser, getSessionById, getHistory, getRecap } = useApp();
+  const { currentUser, getSessionById, getVisibleSessions, getHistory, getRecap } = useApp();
   const session = getSessionById(id);
 
   if (!session) {
@@ -121,7 +141,14 @@ export default function SessionDetailScreen() {
   }
 
   const waktuHadir = getHistory().find((h) => h.session.id === session.id)?.attendance.waktuHadir;
-  const presence = describePresence(session, currentUser.role, waktuHadir, getRecap(session.id).length);
+  const milikSaya = getVisibleSessions().some((s) => s.id === session.id);
+  const presence = describePresence(
+    session,
+    currentUser.role,
+    milikSaya,
+    waktuHadir,
+    getRecap(session.id).length,
+  );
   const tone = TONE[presence.tone];
 
   return (
@@ -136,7 +163,7 @@ export default function SessionDetailScreen() {
         <InfoRow icon="book-outline" label="Praktikum" value={session.praktikum} />
         <InfoRow icon="people-outline" label="Kelas" value={`Kelas ${session.kelas}`} />
         <InfoRow icon="calendar-outline" label="Tanggal" value={session.tanggal} />
-        <InfoRow icon="time-outline" label="Waktu" value={`${session.waktu} WIB`} />
+        <InfoRow icon="time-outline" label="Waktu" value={`${session.waktu} ${zonaWaktu(session.startAt)}`} />
         <InfoRow icon="location-outline" label="Ruangan" value={session.ruangan} />
         <InfoRow icon="person-outline" label="Asisten" value={session.asistenNama} />
       </View>
