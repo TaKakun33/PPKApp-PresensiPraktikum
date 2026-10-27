@@ -118,7 +118,7 @@ export default function RecapScreen() {
               <StatusBadge status={selectedSession.status} />
               {selectedSession.status !== 'belum_dibuka' ? (
                 <View style={styles.countContainer}>
-                  <Text style={styles.countValue}>
+                  <Text style={[styles.countValue, styles.countValueSmall]}>
                     {recapItems.length} / {totalStudents}
                   </Text>
                   <Text style={styles.countLabel}>praktikan hadir</Text>
@@ -195,6 +195,7 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.border,
   },
   countValue: { fontSize: 20, fontFamily: 'PlusJakartaSans_800ExtraBold', color: COLORS.primary },
+  countValueSmall: { fontSize: 16 },
   countLabel: { fontSize: 13, fontFamily: 'PlusJakartaSans_600SemiBold', color: COLORS.muted },
   attendanceCard: {
     flexDirection: 'row',

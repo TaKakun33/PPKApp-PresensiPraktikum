@@ -45,5 +45,5 @@ export const STATUS_LABEL: Record<SessionStatus, string> = {
 export const STATUS_COLORS: Record<SessionStatus, { bg: string; text: string }> = {
   belum_dibuka: { bg: '#FEF3C7', text: '#92400E' },
   dibuka: { bg: '#DCFCE7', text: '#166534' },
-  ditutup: { bg: '#F1F5F9', text: '#64748B' },
+  ditutup: { bg: '#FEE2E2', text: '#DC2626' },
 };
