@@ -2,21 +2,20 @@
 // Riwayat kehadiran praktikan (sesi, kelas, waktu hadir) + empty state.
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 
+import EmptyState from '../components/EmptyState';
+import StatusBadge from '../components/StatusBadge';
 import { COLORS } from '../constants/colors';
 import { useApp } from '../context/AppContext';
 import { formatTanggalJam } from '../utils/format';
 
 export default function HistoryScreen() {
-  const { currentUser, getHistory } = useApp();
+  const { getHistory } = useApp();
   const history = getHistory();
 
   if (history.length === 0) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Belum ada riwayat</Text>
-        <Text style={styles.text}>
-          Halo {currentUser.nama}, presensi yang kamu lakukan akan muncul di sini.
-        </Text>
+      <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+        <EmptyState title="Belum ada riwayat" message="Presensi yang kamu lakukan akan muncul di sini." />
       </View>
     );
   }
@@ -29,6 +28,7 @@ export default function HistoryScreen() {
       keyExtractor={(item) => item.attendance.id}
       renderItem={({ item }) => (
         <View style={styles.card}>
+          <StatusBadge status={item.session.status} />
           <Text style={styles.title}>{item.session.praktikum}</Text>
           <Text style={styles.text}>Kelas: {item.session.kelas}</Text>
           <Text style={styles.text}>
@@ -42,9 +42,16 @@ export default function HistoryScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 24, gap: 8, backgroundColor: COLORS.background },
-  title: { fontSize: 18, fontWeight: '700', color: COLORS.text },
-  text: { fontSize: 14, color: COLORS.muted },
+  title: { fontSize: 18, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
+  text: { fontSize: 14, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
   list: { backgroundColor: COLORS.background },
   listContent: { padding: 16, gap: 12 },
-  card: { backgroundColor: COLORS.card, borderRadius: 16, padding: 16, gap: 4 },
+  card: {
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: 16,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
 });

@@ -1,3 +1,6 @@
+// STUB dari PM - pemilik: Naufal (feat/assistant-session-recap), SRS-10.
+// TODO: pilih sesi, tampilkan getRecap(sessionId) (nama, NIM, waktu) + jumlahnya.
+//       Kosong -> EmptyState; sesi Belum Dibuka -> info "sesi belum dibuka".
 import { useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -5,6 +8,7 @@ import EmptyState from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
 import { COLORS } from '../constants/colors';
 import { useApp } from '../context/AppContext';
+import { PENDAFTARAN } from '../data/dummy';
 import type { RecapItem } from '../data/types';
 import { formatJam } from '../utils/format';
 
@@ -14,12 +18,21 @@ export default function RecapScreen() {
 
   const visibleSessions = getVisibleSessions();
   const sessions = currentUser.role === 'asisten' ? visibleSessions : [];
+
+  // Default: pilih sesi yang sedang dibuka jika ada.
   const selectedSession =
-    sessions.find((session) => session.id === selectedSessionId) ?? sessions[0];
+    sessions.find((session) => session.id === selectedSessionId)
+    ?? sessions.find((session) => session.status === 'dibuka')
+    ?? sessions[0];
+
   const recapItems =
     selectedSession && selectedSession.status !== 'belum_dibuka'
       ? getRecap(selectedSession.id)
       : [];
+
+  const totalStudents = selectedSession
+    ? PENDAFTARAN.filter((p) => p.kelasId === selectedSession.kelasId).length
+    : 0;
 
   const renderAttendance = ({ item }: { item: RecapItem }) => (
     <View style={styles.attendanceCard}>
@@ -105,7 +118,9 @@ export default function RecapScreen() {
               <StatusBadge status={selectedSession.status} />
               {selectedSession.status !== 'belum_dibuka' ? (
                 <View style={styles.countContainer}>
-                  <Text style={styles.countValue}>{recapItems.length}</Text>
+                  <Text style={[styles.countValue, styles.countValueSmall]}>
+                    {recapItems.length} / {totalStudents}
+                  </Text>
                   <Text style={styles.countLabel}>praktikan hadir</Text>
                 </View>
               ) : null}
@@ -143,8 +158,8 @@ export default function RecapScreen() {
 const styles = StyleSheet.create({
   content: { flexGrow: 1, padding: 20, gap: 12, backgroundColor: COLORS.background },
   header: { gap: 8, marginBottom: 8 },
-  title: { fontSize: 22, fontWeight: '700', color: COLORS.text },
-  subtitle: { fontSize: 14, lineHeight: 20, color: COLORS.muted },
+  title: { fontSize: 22, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
+  subtitle: { fontSize: 14, lineHeight: 20, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
   sessionSelector: { gap: 8, paddingVertical: 8 },
   sessionOption: {
     width: 190,
@@ -155,11 +170,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: COLORS.card,
   },
-  sessionOptionSelected: { borderColor: COLORS.primary, backgroundColor: '#EFF6FF' },
+  sessionOptionSelected: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryLight },
   optionPressed: { opacity: 0.8 },
-  sessionOptionTitle: { fontSize: 13, fontWeight: '700', color: COLORS.text },
+  sessionOptionTitle: { fontSize: 13, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
   sessionOptionTitleSelected: { color: COLORS.primary },
-  sessionOptionDetails: { fontSize: 12, color: COLORS.muted },
+  sessionOptionDetails: { fontSize: 12, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
   selectedSessionCard: {
     padding: 14,
     gap: 10,
@@ -169,8 +184,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
   },
   selectedSessionInfo: { gap: 4 },
-  selectedSessionTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
-  selectedSessionDetails: { fontSize: 13, lineHeight: 19, color: COLORS.muted },
+  selectedSessionTitle: { fontSize: 16, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
+  selectedSessionDetails: { fontSize: 13, lineHeight: 19, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
   countContainer: {
     flexDirection: 'row',
     alignItems: 'baseline',
@@ -179,8 +194,9 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
   },
-  countValue: { fontSize: 20, fontWeight: '800', color: COLORS.primary },
-  countLabel: { fontSize: 13, fontWeight: '600', color: COLORS.muted },
+  countValue: { fontSize: 20, fontFamily: 'PlusJakartaSans_800ExtraBold', color: COLORS.primary },
+  countValueSmall: { fontSize: 16 },
+  countLabel: { fontSize: 13, fontFamily: 'PlusJakartaSans_600SemiBold', color: COLORS.muted },
   attendanceCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -192,9 +208,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
   },
   studentInfo: { flex: 1, gap: 5 },
-  studentName: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: COLORS.text },
-  studentNim: { fontSize: 13, color: COLORS.muted },
+  studentName: { fontSize: 14, lineHeight: 20, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
+  studentNim: { fontSize: 13, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
   timeContainer: { alignItems: 'flex-end', gap: 4 },
-  timeLabel: { fontSize: 11, color: COLORS.muted },
-  timeValue: { fontSize: 13, fontWeight: '700', color: COLORS.text },
+  timeLabel: { fontSize: 11, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
+  timeValue: { fontSize: 13, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
 });

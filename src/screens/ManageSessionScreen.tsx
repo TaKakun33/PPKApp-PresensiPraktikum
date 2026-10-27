@@ -1,4 +1,9 @@
-import { useRef, useState } from 'react';
+// STUB dari PM - pemilik: Naufal (feat/assistant-session-recap), SRS-08 dan SRS-09.
+// TODO: daftar sesi milik asisten (getVisibleSessions), tombol aksi sesuai status:
+//       Belum Dibuka -> "Buka sesi", Dibuka -> "Tutup sesi", Ditutup -> tanpa tombol.
+//       Tombol memunculkan ConfirmModal, lalu panggil openSession / closeSession,
+//       dan tampilkan umpan balik berhasil (result.message).
+import { useEffect, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import ConfirmModal from '../components/ConfirmModal';
@@ -20,10 +25,18 @@ type ActionFeedback = {
 };
 
 export default function ManageSessionScreen() {
-  const { currentUser, getVisibleSessions, openSession, closeSession } = useApp();
+  const { currentUser, getVisibleSessions, openSession, closeSession, getRecap } = useApp();
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [feedback, setFeedback] = useState<ActionFeedback | null>(null);
   const submittedAction = useRef<string | null>(null);
+
+  // Auto-hilangkan banner feedback setelah 3 detik.
+  useEffect(() => {
+    if (feedback) {
+      const timer = setTimeout(() => setFeedback(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [feedback]);
 
   const visibleSessions = getVisibleSessions();
   const sessions = currentUser.role === 'asisten' ? visibleSessions : [];
@@ -60,6 +73,12 @@ export default function ManageSessionScreen() {
 
   const pendingActionLabel = pendingAction?.action === 'open' ? 'Buka' : 'Tutup';
   const pendingSessionName = pendingSession?.praktikum ?? 'sesi ini';
+
+  // Pesan konfirmasi: untuk 'close', sertakan jumlah hadir dan peringatan.
+  const confirmMessage =
+    pendingAction?.action === 'close'
+      ? `Apakah kamu yakin ingin menutup ${pendingSessionName}? Sesi yang sudah ditutup tidak dapat dibuka kembali. Saat ini ${getRecap(pendingAction.sessionId).length} praktikan sudah hadir.`
+      : `Apakah kamu yakin ingin membuka ${pendingSessionName}?`;
 
   return (
     <>
@@ -158,7 +177,7 @@ export default function ManageSessionScreen() {
       <ConfirmModal
         visible={pendingAction !== null}
         title={`${pendingActionLabel} sesi?`}
-        message={`Apakah kamu yakin ingin ${pendingActionLabel.toLowerCase()} ${pendingSessionName}?`}
+        message={confirmMessage}
         confirmLabel="Konfirmasi"
         onConfirm={confirmAction}
         onCancel={() => setPendingAction(null)}
@@ -170,8 +189,8 @@ export default function ManageSessionScreen() {
 const styles = StyleSheet.create({
   content: { flexGrow: 1, padding: 20, gap: 12, backgroundColor: COLORS.background },
   header: { gap: 6, marginBottom: 8 },
-  title: { fontSize: 22, fontWeight: '700', color: COLORS.text },
-  subtitle: { fontSize: 14, lineHeight: 20, color: COLORS.muted },
+  title: { fontSize: 22, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
+  subtitle: { fontSize: 14, lineHeight: 20, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
   feedback: {
     marginTop: 8,
     padding: 12,
@@ -179,7 +198,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: COLORS.card,
   },
-  feedbackText: { fontSize: 14, fontWeight: '600' },
+  feedbackText: { fontSize: 14, fontFamily: 'PlusJakartaSans_600SemiBold' },
   card: {
     padding: 16,
     gap: 12,
@@ -190,10 +209,10 @@ const styles = StyleSheet.create({
   },
   cardHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   sessionInfo: { flex: 1, gap: 4 },
-  sessionTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
-  moduleTitle: { fontSize: 14, color: COLORS.muted },
+  sessionTitle: { fontSize: 16, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
+  moduleTitle: { fontSize: 14, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
   details: { gap: 4 },
-  detailText: { fontSize: 13, lineHeight: 19, color: COLORS.muted },
+  detailText: { fontSize: 13, lineHeight: 19, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
   actionButton: {
     alignItems: 'center',
     paddingVertical: 12,
@@ -202,5 +221,5 @@ const styles = StyleSheet.create({
   },
   closeButton: { backgroundColor: COLORS.danger },
   buttonPressed: { opacity: 0.8 },
-  actionButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+  actionButtonText: { color: COLORS.white, fontSize: 14, fontFamily: 'PlusJakartaSans_700Bold' },
 });

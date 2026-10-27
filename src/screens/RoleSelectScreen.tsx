@@ -5,23 +5,17 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-  useFonts,
-  PlusJakartaSans_400Regular,
-  PlusJakartaSans_500Medium,
-  PlusJakartaSans_600SemiBold,
-  PlusJakartaSans_700Bold,
-  PlusJakartaSans_800ExtraBold,
-} from '@expo-google-fonts/plus-jakarta-sans';
 
 import { COLORS } from '../constants/colors';
 import { useApp } from '../context/AppContext';
@@ -40,13 +34,13 @@ type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
 const ROLE_CONFIG: Record<Role, { label: string; icon: IoniconsName; desc: string; badge: string }> = {
   praktikan: {
-    label: 'Mahasiswa',
+    label: 'Praktikan',
     icon: 'school-outline',
     desc: 'Akses jadwal, presensi sesi, dan pantau riwayat',
     badge: 'Praktikan',
   },
   asisten: {
-    label: 'Asprak',
+    label: 'Asisten',
     icon: 'people-outline',
     desc: 'Buka/tutup sesi dan kelola rekap kehadiran',
     badge: 'Asisten Praktikum',
@@ -70,31 +64,24 @@ function getKelasLabels(user: User): string[] {
 }
 
 export default function RoleSelectScreen() {
-  const [fontsLoaded] = useFonts({
-    PlusJakartaSans_400Regular,
-    PlusJakartaSans_500Medium,
-    PlusJakartaSans_600SemiBold,
-    PlusJakartaSans_700Bold,
-    PlusJakartaSans_800ExtraBold,
-  });
-
   const router = useRouter();
   const { setCurrentUser } = useApp();
 
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showValidation, setShowValidation] = useState(false);
-
-  if (!fontsLoaded) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <ActivityIndicator size="large" color="#0F172A" style={{ flex: 1 }} />
-      </SafeAreaView>
-    );
-  }
+  const [searchQuery, setSearchQuery] = useState('');
 
   const userList = selectedRole === 'asisten' ? ASISTEN
     : selectedRole === 'praktikan' ? PRAKTIKAN : [];
+
+  const filteredUsers = searchQuery
+    ? userList.filter((user) => {
+        const q = searchQuery.toLowerCase();
+        return user.nama.toLowerCase().includes(q) || user.nim.includes(q);
+      })
+    : userList;
+
   const isFormValid = selectedRole !== null && selectedUser !== null;
 
   // Step saat ini: 1 = pilih peran, 2 = pilih identitas
@@ -106,6 +93,7 @@ export default function RoleSelectScreen() {
       setSelectedRole(role);
       setSelectedUser(null);
       setShowValidation(false);
+      setSearchQuery('');
     }
   };
 
@@ -129,20 +117,25 @@ export default function RoleSelectScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <StatusBar barStyle="dark-content" />
 
-      {/* Konten yang bisa di-scroll */}
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-        {/* Header / Greeting Area (Mirip Screen 2 Referensi) */}
+        {/* Konten yang bisa di-scroll */}
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+        {/* Header / Greeting Area */}
         <View style={styles.header}>
           <View style={styles.headerTextGroup}>
             <View style={styles.brandRow}>
-              <Text style={styles.appName}>TrackLab</Text>
+              <Text style={styles.appName}>PPKApp</Text>
             </View>
-            <Text style={styles.greetingTitle}>Halo, Selamat Datang! </Text>
+            <Text style={styles.greetingTitle}>Halo, Selamat Datang!</Text>
             <Text style={styles.subtitle}>Sistem Presensi Praktikum Terpadu</Text>
           </View>
         </View>
@@ -153,20 +146,20 @@ export default function RoleSelectScreen() {
             <Ionicons
               name={currentStep > 1 ? 'checkmark-circle' : 'radio-button-on'}
               size={14}
-              color={currentStep === 1 ? '#FFFFFF' : '#16A34A'}
+              color={currentStep === 1 ? COLORS.white : COLORS.success}
             />
             <Text style={[styles.stepPillText, currentStep === 1 ? styles.stepPillTextActive : styles.stepPillTextDone]}>
               1. Pilih Peran
             </Text>
           </View>
 
-          <Ionicons name="chevron-forward" size={14} color="#CBD5E1" />
+          <Ionicons name="chevron-forward" size={14} color={COLORS.borderLight} />
 
           <View style={[styles.stepPill, currentStep === 2 ? styles.stepPillActive : styles.stepPillInactive]}>
             <Ionicons
               name={selectedUser ? 'checkmark-circle' : 'radio-button-off'}
               size={14}
-              color={currentStep === 2 ? '#FFFFFF' : '#94A3B8'}
+              color={currentStep === 2 ? COLORS.white : COLORS.mutedLight}
             />
             <Text style={[styles.stepPillText, currentStep === 2 ? styles.stepPillTextActive : styles.stepPillTextInactive]}>
               2. Pilih Identitas
@@ -174,7 +167,7 @@ export default function RoleSelectScreen() {
           </View>
         </View>
 
-        {/* Step 1: Pilih Peran (Mirip Card & Pill di Referensi) */}
+        {/* Step 1: Pilih Peran */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Silahkan Pilih Peran Kamu</Text>
@@ -203,12 +196,12 @@ export default function RoleSelectScreen() {
                         <Ionicons
                           name={cfg.icon}
                           size={24}
-                          color={active ? '#FFFFFF' : '#0F172A'}
+                          color={active ? COLORS.white : COLORS.text}
                         />
                       </View>
                       {active && (
                         <View style={styles.activeCheckBadge}>
-                          <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                          <Ionicons name="checkmark" size={14} color={COLORS.white} />
                         </View>
                       )}
                     </View>
@@ -243,18 +236,36 @@ export default function RoleSelectScreen() {
               <View style={styles.sectionTitleRow}>
                 <Text style={styles.sectionTitle}>Pilih Identitas</Text>
                 <View style={styles.countBadge}>
-                  <Text style={styles.countBadgeText}>{userList.length} orang</Text>
+                  <Text style={styles.countBadgeText}>{filteredUsers.length} orang</Text>
                 </View>
               </View>
               <Text style={styles.sectionSub}>
                 {selectedRole === 'praktikan'
-                  ? 'Pilih namamu dari daftar mahasiswa kelas praktikum'
+                  ? 'Pilih namamu dari daftar praktikan kelas praktikum'
                   : 'Pilih namamu dari daftar asisten praktikum'}
               </Text>
             </View>
 
+            {/* Kolom pencarian nama/NIM */}
+            <View style={styles.searchBox}>
+              <Ionicons name="search-outline" size={16} color={COLORS.muted} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Cari nama atau NIM..."
+                placeholderTextColor={COLORS.mutedLight}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCorrect={false}
+              />
+              {searchQuery.length > 0 && (
+                <Pressable onPress={() => setSearchQuery('')}>
+                  <Ionicons name="close-circle" size={18} color={COLORS.mutedLight} />
+                </Pressable>
+              )}
+            </View>
+
             <View style={styles.identityList}>
-              {userList.map((user) => {
+              {filteredUsers.map((user) => {
                 const active = selectedUser?.id === user.id;
                 const kelasLabels = getKelasLabels(user);
                 return (
@@ -272,7 +283,7 @@ export default function RoleSelectScreen() {
                     accessibilityRole="button"
                     accessibilityState={{ selected: active }}
                   >
-                    {/* Avatar Inisial Elegan */}
+                    {/* Avatar Inisial */}
                     <View style={[styles.avatar, active && styles.avatarActive]}>
                       <Text style={[styles.avatarText, active && styles.avatarTextActive]}>
                         {user.nama.charAt(0)}
@@ -285,11 +296,11 @@ export default function RoleSelectScreen() {
                         {user.nama}
                       </Text>
 
-                      {/* Pill Meta Chips (Mirip Chip Info di Screen 3 Referensi) */}
+                      {/* Pill Meta Chips */}
                       <View style={styles.chipRow}>
                         {user.role === 'praktikan' && (
                           <View style={[styles.infoChip, active && styles.infoChipActive]}>
-                            <Ionicons name="card-outline" size={11} color={active ? '#0F172A' : '#64748B'} />
+                            <Ionicons name="card-outline" size={11} color={active ? COLORS.text : COLORS.muted} />
                             <Text style={[styles.infoChipText, active && styles.infoChipTextActive]}>
                               {user.nim}
                             </Text>
@@ -298,7 +309,7 @@ export default function RoleSelectScreen() {
                         {kelasLabels.length > 0 && (
                           <View style={[styles.infoChipAccent, active && styles.infoChipAccentActive]}>
                             {user.role === 'asisten' && (
-                              <Ionicons name="layers-outline" size={11} color="#2563EB" />
+                              <Ionicons name="layers-outline" size={11} color={COLORS.primary} />
                             )}
                             <Text style={styles.infoChipAccentText}>
                               Kelas {kelasLabels.join(', ')}
@@ -311,47 +322,52 @@ export default function RoleSelectScreen() {
                     {/* Indikator Pilihan (Radio Kapsul Modern) */}
                     <View style={[styles.selectionCircle, active && styles.selectionCircleActive]}>
                       {active && (
-                        <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                        <Ionicons name="checkmark" size={14} color={COLORS.white} />
                       )}
                     </View>
                   </Pressable>
                 );
               })}
+              {filteredUsers.length === 0 && (
+                <Text style={styles.sectionSub}>Tidak ada hasil untuk &quot;{searchQuery}&quot;.</Text>
+              )}
             </View>
           </View>
         )}
-      </ScrollView>
+        </ScrollView>
 
-      {/* Footer Sticky: Tombol Bergaya "Book Now" (Mirip Screen 3 Referensi) */}
-      <View style={styles.footer}>
-        {showValidation && !isFormValid && (
-          <View style={styles.validationBox}>
-            <Ionicons name="alert-circle" size={16} color="#DC2626" />
-            <Text style={styles.validationText}>{validationMessage}</Text>
-          </View>
-        )}
+        {/* Footer Sticky: Tombol Lanjut */}
+        <View style={styles.footer}>
+          {showValidation && !isFormValid && (
+            <View style={styles.validationBox}>
+              <Ionicons name="alert-circle" size={16} color={COLORS.danger} />
+              <Text style={styles.validationText}>{validationMessage}</Text>
+            </View>
+          )}
 
-        <Pressable
-          style={({ pressed }) => [
-            styles.button,
-            pressed && styles.buttonPressed,
-          ]}
-          onPress={handleLanjut}
-          accessibilityRole="button"
-          accessibilityLabel="Lanjut ke aplikasi"
-        >
-          <Text style={styles.buttonText}>
-            Lanjut ke Aplikasi
-          </Text>
-          <View style={styles.buttonIconBox}>
-            <Ionicons
-              name="arrow-forward"
-              size={16}
-              color="#FFFFFF"
-            />
-          </View>
-        </Pressable>
-      </View>
+          <Pressable
+            style={({ pressed }) => [
+              styles.button,
+              pressed && styles.buttonPressed,
+            ]}
+            onPress={handleLanjut}
+            accessibilityRole="button"
+            accessibilityLabel="Lanjut ke aplikasi"
+            accessibilityState={{ disabled: !isFormValid }}
+          >
+            <Text style={styles.buttonText}>
+              Lanjut ke Aplikasi
+            </Text>
+            <View style={styles.buttonIconBox}>
+              <Ionicons
+                name="arrow-forward"
+                size={16}
+                color={COLORS.white}
+              />
+            </View>
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -359,7 +375,10 @@ export default function RoleSelectScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.background,
+  },
+  flex: {
+    flex: 1,
   },
   scroll: {
     flex: 1,
@@ -370,7 +389,6 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     gap: 24,
   },
-
 
   header: {
     flexDirection: 'row',
@@ -391,43 +409,29 @@ const styles = StyleSheet.create({
   appName: {
     fontSize: 16,
     fontFamily: 'PlusJakartaSans_800ExtraBold',
-    color: '#0F172A',
+    color: COLORS.text,
     letterSpacing: -0.3,
-  },
-  appPill: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-  },
-  appPillText: {
-    fontSize: 11,
-    fontFamily: 'PlusJakartaSans_700Bold',
-    color: '#2563EB',
   },
   greetingTitle: {
     fontSize: 24,
     fontFamily: 'PlusJakartaSans_800ExtraBold',
-    color: '#0F172A',
+    color: COLORS.text,
     letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 13,
     fontFamily: 'PlusJakartaSans_400Regular',
-    color: '#64748B',
+    color: COLORS.muted,
   },
-
 
   stepContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.card,
     padding: 6,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
     gap: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -443,13 +447,14 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    borderRadius: 18,
+    borderRadius: 999,
+    overflow: 'hidden',
   },
   stepPillActive: {
-    backgroundColor: '#0F172A',
+    backgroundColor: COLORS.text,
   },
   stepPillDone: {
-    backgroundColor: '#F0FDF4',
+    backgroundColor: COLORS.successLight,
   },
   stepPillInactive: {
     backgroundColor: 'transparent',
@@ -459,13 +464,13 @@ const styles = StyleSheet.create({
     fontFamily: 'PlusJakartaSans_600SemiBold',
   },
   stepPillTextActive: {
-    color: '#FFFFFF',
+    color: COLORS.white,
   },
   stepPillTextDone: {
-    color: '#16A34A',
+    color: COLORS.success,
   },
   stepPillTextInactive: {
-    color: '#94A3B8',
+    color: COLORS.mutedLight,
   },
 
   // ── Section ──
@@ -483,16 +488,16 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontFamily: 'PlusJakartaSans_700Bold',
-    color: '#0F172A',
+    color: COLORS.text,
     letterSpacing: -0.3,
   },
   sectionSub: {
     fontSize: 13,
     fontFamily: 'PlusJakartaSans_400Regular',
-    color: '#64748B',
+    color: COLORS.muted,
   },
   countBadge: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: COLORS.surface,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 12,
@@ -500,9 +505,8 @@ const styles = StyleSheet.create({
   countBadgeText: {
     fontSize: 11,
     fontFamily: 'PlusJakartaSans_600SemiBold',
-    color: '#64748B',
+    color: COLORS.muted,
   },
-
 
   roleRow: {
     flexDirection: 'row',
@@ -510,10 +514,10 @@ const styles = StyleSheet.create({
   },
   roleCard: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.card,
     borderRadius: 22,
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
     padding: 16,
     gap: 12,
     shadowColor: '#000',
@@ -524,8 +528,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   roleCardActive: {
-    borderColor: '#0F172A',
-    backgroundColor: '#FFFFFF',
+    borderColor: COLORS.text,
+    backgroundColor: COLORS.card,
     shadowOpacity: 0.08,
     shadowRadius: 14,
     elevation: 4,
@@ -543,21 +547,21 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.background,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
     justifyContent: 'center',
     alignItems: 'center',
   },
   roleIconBoxActive: {
-    backgroundColor: '#0F172A',
-    borderColor: '#0F172A',
+    backgroundColor: COLORS.text,
+    borderColor: COLORS.text,
   },
   activeCheckBadge: {
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#0F172A',
+    backgroundColor: COLORS.text,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -567,47 +571,67 @@ const styles = StyleSheet.create({
   roleLabel: {
     fontSize: 16,
     fontFamily: 'PlusJakartaSans_700Bold',
-    color: '#0F172A',
+    color: COLORS.text,
   },
   roleLabelActive: {
-    color: '#0F172A',
+    color: COLORS.text,
   },
   roleDesc: {
     fontSize: 12,
     fontFamily: 'PlusJakartaSans_400Regular',
-    color: '#64748B',
+    color: COLORS.muted,
     lineHeight: 17,
   },
   rolePillBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: COLORS.surface,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
   },
   rolePillBadgeActive: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: COLORS.primaryLight,
   },
   rolePillText: {
     fontSize: 11,
     fontFamily: 'PlusJakartaSans_600SemiBold',
-    color: '#64748B',
+    color: COLORS.muted,
   },
   rolePillTextActive: {
-    color: '#2563EB',
+    color: COLORS.primary,
   },
 
+  // ── Search ──
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.card,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: 'PlusJakartaSans_400Regular',
+    color: COLORS.text,
+    padding: 0,
+  },
 
+  // ── Identity List ──
   identityList: {
     gap: 10,
   },
   identityCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.card,
     borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
     padding: 14,
     gap: 12,
     shadowColor: '#000',
@@ -617,8 +641,8 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   identityCardActive: {
-    borderColor: '#0F172A',
-    backgroundColor: '#FAFAFA',
+    borderColor: COLORS.text,
+    backgroundColor: COLORS.background,
     shadowOpacity: 0.06,
     elevation: 3,
   },
@@ -629,23 +653,23 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: COLORS.surface,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
   },
   avatarActive: {
-    backgroundColor: '#0F172A',
-    borderColor: '#0F172A',
+    backgroundColor: COLORS.text,
+    borderColor: COLORS.text,
   },
   avatarText: {
     fontSize: 17,
     fontFamily: 'PlusJakartaSans_700Bold',
-    color: '#0F172A',
+    color: COLORS.text,
   },
   avatarTextActive: {
-    color: '#FFFFFF',
+    color: COLORS.white,
   },
   identityInfo: {
     flex: 1,
@@ -654,10 +678,10 @@ const styles = StyleSheet.create({
   identityName: {
     fontSize: 15,
     fontFamily: 'PlusJakartaSans_700Bold',
-    color: '#0F172A',
+    color: COLORS.text,
   },
   identityNameActive: {
-    color: '#0F172A',
+    color: COLORS.text,
   },
   chipRow: {
     flexDirection: 'row',
@@ -669,60 +693,60 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: COLORS.surface,
     paddingVertical: 2,
     paddingHorizontal: 8,
     borderRadius: 8,
   },
   infoChipActive: {
-    backgroundColor: '#E2E8F0',
+    backgroundColor: COLORS.border,
   },
   infoChipText: {
     fontSize: 11,
     fontFamily: 'PlusJakartaSans_500Medium',
-    color: '#475569',
+    color: COLORS.textSecondary,
   },
   infoChipTextActive: {
-    color: '#0F172A',
+    color: COLORS.text,
   },
   infoChipAccent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: COLORS.primaryLight,
     paddingVertical: 2,
     paddingHorizontal: 8,
     borderRadius: 8,
   },
   infoChipAccentActive: {
-    backgroundColor: '#DBEAFE',
+    backgroundColor: COLORS.primaryBorder,
   },
   infoChipAccentText: {
     fontSize: 11,
     fontFamily: 'PlusJakartaSans_600SemiBold',
-    color: '#2563EB',
+    color: COLORS.primary,
   },
   selectionCircle: {
     width: 24,
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#CBD5E1',
+    borderColor: COLORS.borderLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
   selectionCircleActive: {
-    backgroundColor: '#0F172A',
-    borderColor: '#0F172A',
+    backgroundColor: COLORS.text,
+    borderColor: COLORS.text,
   },
 
   footer: {
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.card,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: COLORS.surface,
     gap: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -3 },
@@ -734,21 +758,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: COLORS.dangerLight,
     borderRadius: 12,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: '#FEE2E2',
+    borderColor: COLORS.dangerBorder,
   },
   validationText: {
     fontSize: 12,
     fontFamily: 'PlusJakartaSans_600SemiBold',
-    color: '#DC2626',
+    color: COLORS.danger,
     flex: 1,
   },
   button: {
-    backgroundColor: '#0F172A',
+    backgroundColor: COLORS.text,
     paddingVertical: 16,
     paddingHorizontal: 22,
     borderRadius: 30,
@@ -756,27 +780,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    shadowColor: '#0F172A',
+    shadowColor: COLORS.text,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.18,
     shadowRadius: 10,
     elevation: 4,
   },
   buttonPressed: {
-    backgroundColor: '#1E293B',
+    backgroundColor: COLORS.pressed,
     transform: [{ scale: 0.99 }],
   },
   buttonText: {
     fontSize: 15,
     fontFamily: 'PlusJakartaSans_700Bold',
-    color: '#FFFFFF',
+    color: COLORS.white,
     letterSpacing: 0.2,
   },
   buttonIconBox: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#1E293B',
+    backgroundColor: COLORS.pressed,
     justifyContent: 'center',
     alignItems: 'center',
   },
