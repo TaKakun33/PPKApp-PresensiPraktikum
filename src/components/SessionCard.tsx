@@ -23,7 +23,7 @@ export default function SessionCard({ session, onPress }: Props) {
     >
       <View style={styles.topRow}>
         <StatusBadge status={session.status} />
-        {onPress ? <Ionicons name="chevron-forward" size={18} color="#94A3B8" /> : null}
+        {onPress ? <Ionicons name="chevron-forward" size={18} color={COLORS.mutedLight} /> : null}
       </View>
 
       <Text style={styles.title} numberOfLines={2}>
@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 10,
   },
-  cardPressed: { backgroundColor: '#F1F5F9' },
+  cardPressed: { backgroundColor: COLORS.surface },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   title: { fontSize: 16, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 6 },

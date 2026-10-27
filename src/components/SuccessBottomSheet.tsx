@@ -1,7 +1,7 @@
 // STUB dari PM - pemilik: Damar (feat/student-checkin-history). Boleh diganti total,
 // tapi pertahankan props agar layar lain tidak rusak.
 // Bottom sheet dibuat dari Modal bawaan React Native (tanpa library tambahan).
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text } from 'react-native';
 
 import { COLORS } from '../constants/colors';
 
@@ -38,8 +38,14 @@ const styles = StyleSheet.create({
     padding: 24,
     gap: 8,
   },
-  title: { fontSize: 18, fontWeight: '700', color: COLORS.success },
-  text: { fontSize: 14, color: COLORS.text },
-  button: { marginTop: 12, backgroundColor: COLORS.primary, paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
-  buttonText: { color: '#FFFFFF', fontWeight: '600' },
+  title: { fontSize: 18, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.success },
+  text: { fontSize: 14, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.text },
+  button: {
+    marginTop: 12,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  buttonText: { color: COLORS.white, fontFamily: 'PlusJakartaSans_600SemiBold' },
 });

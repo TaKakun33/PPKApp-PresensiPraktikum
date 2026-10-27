@@ -4,14 +4,14 @@
 import { useRef, useState } from 'react';
 import { Alert, FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import StatusBadge from '../components/StatusBadge';
 import SuccessBottomSheet from '../components/SuccessBottomSheet';
-import { COLORS, STATUS_COLORS, STATUS_LABEL } from '../constants/colors';
+import { COLORS } from '../constants/colors';
 import { useApp } from '../context/AppContext';
 import { formatJam } from '../utils/format';
 
 export default function CheckInScreen() {
-  const { currentUser } = useApp();
-  const { getVisibleSessions, checkIn, hasCheckedIn } = useApp();
+  const { currentUser, getVisibleSessions, checkIn, hasCheckedIn } = useApp();
 
   const [sheet, setSheet] = useState({
     visible: false,
@@ -101,15 +101,9 @@ export default function CheckInScreen() {
             canPress = true;
           }
 
-          const statusColor = STATUS_COLORS[item.status];
-
           return (
             <View style={styles.card}>
-              <View style={[styles.badge, { backgroundColor: statusColor.bg }]}>
-                <Text style={[styles.badgeText, { color: statusColor.text }]}>
-                  {STATUS_LABEL[item.status]}
-                </Text>
-              </View>
+              <StatusBadge status={item.status} />
 
               <Text style={styles.title}>{item.praktikum}</Text>
               <Text style={styles.text}>Kelas: {item.kelas} · {item.tanggal}</Text>
@@ -127,7 +121,14 @@ export default function CheckInScreen() {
                   pressed && canPress && styles.buttonPressed,
                 ]}
               >
-                <Text style={styles.buttonText}>{label}</Text>
+                <Text
+                  style={[
+                    styles.buttonText,
+                    !canPress && !checked && styles.buttonTextDisabled,
+                  ]}
+                >
+                  {label}
+                </Text>
               </Pressable>
 
               {reason ? <Text style={styles.reason}>{reason}</Text> : null}
@@ -188,8 +189,8 @@ export default function CheckInScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 24, gap: 8, backgroundColor: COLORS.background },
-  title: { fontSize: 18, fontWeight: '700', color: COLORS.text },
-  text: { fontSize: 14, color: COLORS.muted },
+  title: { fontSize: 18, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
+  text: { fontSize: 14, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
   list: { backgroundColor: COLORS.background },
   listContent: { padding: 16, gap: 12 },
   card: {
@@ -200,8 +201,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  badge: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
-  badgeText: { fontSize: 12, fontWeight: '700' },
   button: {
     marginTop: 8,
     backgroundColor: COLORS.primary,
@@ -210,10 +209,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   buttonSuccess: { backgroundColor: COLORS.success },
-  buttonDisabled: { backgroundColor: COLORS.muted },
+  buttonDisabled: { backgroundColor: COLORS.border },
   buttonPressed: { opacity: 0.85 },
-  buttonText: { color: '#FFFFFF', fontWeight: '600' },
-  reason: { fontSize: 12, color: COLORS.muted, marginTop: 4 },
+  buttonText: { color: COLORS.white, fontFamily: 'PlusJakartaSans_600SemiBold' },
+  buttonTextDisabled: { color: COLORS.mutedLight },
+  reason: { fontSize: 12, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted, marginTop: 4 },
   confirmBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
@@ -229,8 +229,8 @@ const styles = StyleSheet.create({
     padding: 20,
     gap: 12,
   },
-  confirmTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
-  confirmText: { fontSize: 14, color: COLORS.text },
+  confirmTitle: { fontSize: 16, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
+  confirmText: { fontSize: 14, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.text },
   confirmRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
   confirmButton: {
     flex: 1,
@@ -240,6 +240,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.border,
   },
   confirmButtonPrimary: { backgroundColor: COLORS.primary },
-  confirmButtonText: { color: COLORS.text, fontWeight: '600' },
-  confirmButtonTextPrimary: { color: '#FFFFFF', fontWeight: '600' },
+  confirmButtonText: { color: COLORS.text, fontFamily: 'PlusJakartaSans_600SemiBold' },
+  confirmButtonTextPrimary: { color: COLORS.white, fontFamily: 'PlusJakartaSans_600SemiBold' },
 });
