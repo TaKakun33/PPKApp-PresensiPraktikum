@@ -130,15 +130,19 @@ File layar berada di `src/screens/` dan komponen di `src/components/`.
 
 ### Sprint 2
 
-| Programmer | SRS | Deskripsi Tugas | File Milik Sendiri | Branch |
-|---|---|---|---|---|
-| Akmal Kafli Anan | SRS-11, 12, 13, 14 | Registrasi, login, logout, navigasi per peran, form pengajuan izin, dan integrasi API AI | `LoginScreen.js`, `RegisterScreen.js`, `LeaveRequestScreen.js`, `AuthContext.js`, `authService.js`, `leaveService.js`, `aiService.js`, folder `navigation/` | `feat/auth-leave-ai` |
-| Hadrian Shandhy Yudha | SRS-15, 16, 17, 18 | CRUD kelas, peserta, dan sesi; jadwal dan detail sesi real-time dengan empty dan error state | `ScheduleScreen.js`, `SessionDetailScreen.js`, `ManageClassScreen.js`, `SessionFormScreen.js`, `SessionCard.js`, `classService.js`, `sessionService.js` | `feat/class-session-crud` |
-| Damar Ilham Adhitama | SRS-19, 20, 21, 22 | Presensi Firestore dengan cegah ganda, status tombol real-time, Bottom Sheet sukses, riwayat kehadiran dan izin, serta Security Rules | `CheckInScreen.js`, `HistoryScreen.js`, `SuccessBottomSheet.js`, `attendanceService.js`, `historyService.js`, `firestore.rules` | `feat/checkin-history-rules` |
-| Naufal Rayan Attallah | SRS-23, 24, 25 | Buka dan tutup sesi dengan Modal konfirmasi, rekap real-time, dan pemeriksaan izin oleh asisten | `ManageSessionScreen.js`, `RecapScreen.js`, `LeaveReviewScreen.js`, `ConfirmModal.js`, `sessionStatusService.js`, `recapService.js`, `leaveReviewService.js` | `feat/session-recap-review` |
+| Anggota | Peran | SRS | Cakupan | File | Branch |
+|---|---|---|---|---|---|
+| Aqiatillah Rezi Zhafran | Project Manager | - | Konfigurasi Firebase, kontrak data Firestore, stub `useAuth()` dan service, komponen `LoadingState` & `ErrorState`, data awal, repo GitHub, review PR, merge, Security Rules final, G-form | `firebase.js`, `.env`, skema koleksi, `useAuth()` stub, `LoadingState.js`, `ErrorState.js` | `main` |
+| Akmal Kafli Anan | Programmer | SRS-11, 12, 13, 14 | Registrasi, login, logout, navigasi per peran, form pengajuan izin, dan integrasi API AI | `LoginScreen.js`, `RegisterScreen.js`, `LeaveRequestScreen.js`, `AuthContext.js`, `authService.js`, `leaveService.js`, `aiService.js`, folder `navigation/` | `feat/auth-leave-ai` |
+| Hadrian Shandhy Yudha | Programmer | SRS-15, 16, 17, 18 | CRUD kelas, peserta, dan sesi; jadwal dan detail sesi real-time dengan empty dan error state | `ScheduleScreen.js`, `SessionDetailScreen.js`, `ManageClassScreen.js`, `SessionFormScreen.js`, `SessionCard.js`, `classService.js`, `sessionService.js` | `feat/class-session-crud` |
+| Damar Ilham Adhitama | Programmer | SRS-19, 20, 21, 22 | Presensi Firestore dengan cegah ganda, status tombol real-time, Bottom Sheet sukses, riwayat kehadiran dan izin, serta Security Rules | `CheckInScreen.js`, `HistoryScreen.js`, `SuccessBottomSheet.js`, `attendanceService.js`, `historyService.js`, `firestore.rules` | `feat/checkin-history-rules` |
+| Naufal Rayan Attallah | Programmer | SRS-23, 24, 25 | Buka dan tutup sesi dengan Modal konfirmasi, rekap real-time, dan pemeriksaan izin oleh asisten | `ManageSessionScreen.js`, `RecapScreen.js`, `LeaveReviewScreen.js`, `ConfirmModal.js`, `sessionStatusService.js`, `recapService.js`, `leaveReviewService.js` | `feat/session-recap-review` |
+
+File layar berada di `src/screens/`, komponen di `src/components/`, dan akses data di `src/services/`.
 
 > [!NOTE]
 > Semua layar tidak memanggil Firestore atau API AI secara langsung; akses data hanya lewat file **service** milik masing-masing.
+
 **Urutan merge paling aman:** `Akmal → Hadrian → Naufal → Damar`
 _(Urutan ini hanya untuk penggabungan; pengerjaan kode tetap berjalan bersamaan.)_
 
