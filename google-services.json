@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "59892419107",
+    "project_id": "praktikumppk-app",
+    "storage_bucket": "praktikumppk-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:59892419107:android:ed40b1767d00bbbdf87f96",
+        "android_client_info": {
+          "package_name": "com.takakun33steam.PPKAppPresensiPraktikum"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA0jpm2fKhV5iEMqFAL6xYB81VKIj--0kA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
