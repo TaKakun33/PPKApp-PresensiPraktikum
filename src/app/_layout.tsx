@@ -12,6 +12,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 
 import { AppProvider } from '../context/AppContext';
+import { AuthProvider } from '../context/AuthContext';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -33,13 +34,16 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <AppProvider>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="praktikan" />
-        <Stack.Screen name="asisten" />
-        <Stack.Screen name="session/[id]" options={{ headerShown: true, title: 'Detail Sesi' }} />
-      </Stack>
-    </AppProvider>
+    <AuthProvider>
+      <AppProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="login" />
+          <Stack.Screen name="praktikan" />
+          <Stack.Screen name="asisten" />
+          <Stack.Screen name="session/[id]" options={{ headerShown: true, title: 'Detail Sesi' }} />
+        </Stack>
+      </AppProvider>
+    </AuthProvider>
   );
 }
