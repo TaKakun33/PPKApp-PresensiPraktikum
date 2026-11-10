@@ -23,7 +23,7 @@ Aplikasi mobile berbasis React Native (Expo) untuk mendemonstrasikan alur prakti
 - [Struktur Folder](#struktur-folder)
 - [Ketergantungan & Solusi Paralel](#ketergantungan--solusi-paralel)
 - [Aturan Tim](#aturan-tim)
-- [Linimasa](#linimasa)
+
 
 ---
 
@@ -232,16 +232,8 @@ src/
 4. Satu fitur satu branch; push ke branch sendiri, **bukan** `main`.
 5. Commit message jelas dengan head dan body, tanpa co-author.
 6. File `.env` dan kunci API **tidak pernah** di-commit.
-7. Setiap listener Firestore di-unsubscribe saat layar ditutup, dan setiap pemanggilan Firestore atau API AI memakai `try/catch` dengan pesan ramah.
+7. Setiap listener Firestore di-unsubscribe saat layar ditutup, dan setiap pemanggilan Firestore memakai `try/catch` dengan pesan ramah.
 8. Terkendala lebih dari satu hari: segera lapor ke PM.
 
 ---
 
-## Linimasa
-
-| Fase | Kegiatan |
-|---|---|
-| **Awal** | PM memecah SRS, mengisi G-form, menyiapkan fondasi (Firebase, stub, data awal), membuat repo, dan push ke `main` |
-| **Eksekusi** | Keempat programmer mengerjakan SRS masing-masing secara paralel; PM mengatur workflow dan menangani konflik; merge ke `main` bertahap |
-| **Integrasi** | PM mempublikasikan Security Rules final, lalu tim menguji dua alur demo bersama (termasuk kondisi internet mati dan AI tidak merespons) |
-| **Akhir** | PM mengoordinasikan kondisi akhir dan mengisi form akhir; programmer menulis flow kode di kertas dan mengirimkannya ke asisten praktikum |
