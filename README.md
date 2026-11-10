@@ -139,21 +139,6 @@ File layar berada di `src/screens/` dan komponen di `src/components/`.
 
 > [!NOTE]
 > Semua layar tidak memanggil Firestore atau API AI secara langsung; akses data hanya lewat file **service** milik masing-masing.
-
-### Peran PM (Sprint 2)
-
-PM tidak mengerjakan SRS di atas. PM menyiapkan fondasi supaya keempat programmer dapat bekerja bersamaan sejak awal.
-
-| Yang Disiapkan | Isi | Manfaat |
-|---|---|---|
-| Konfigurasi | Project Firebase, API AI, dan inisialisasi (`firebase.js`) disiapkan PM; anggota menerima file `.env` dari PM | Semua memakai satu database yang sama |
-| Kontrak data | Skema koleksi `users`, `classes`, `sessions`, `attendances`, `leaveRequests` dan konstanta status | Semua memakai nama field yang sama |
-| Stub | `useAuth()` dengan pengguna dummy tetap, serta stub `subscribeSessionsForUser`, `StatusBadge`, `EmptyState`, `LoadingState`, `ErrorState` | Tidak ada yang menunggu file orang lain |
-| Data awal | 2 asisten, 6 praktikan (2 kelas), 5 sesi termasuk satu yang sudah Dibuka dan satu kelas tanpa sesi | Presensi dan empty state langsung bisa dites |
-| Repo GitHub | Push ke `main`, undang anggota | Titik awal yang sama untuk semua branch |
-
-Setelah itu PM mengatur workflow, me-review Pull Request, menangani konflik, melakukan merge, mempublikasikan Security Rules final dari Damar, serta mengisi G-form awal dan akhir.
-
 **Urutan merge paling aman:** `Akmal → Hadrian → Naufal → Damar`
 _(Urutan ini hanya untuk penggabungan; pengerjaan kode tetap berjalan bersamaan.)_
 
