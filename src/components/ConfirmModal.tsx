@@ -42,14 +42,27 @@ export default function ConfirmModal({
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 24 },
-  box: { backgroundColor: COLORS.card, borderRadius: 14, padding: 20, gap: 10 },
-  title: { fontSize: 18, fontWeight: '700', color: COLORS.text },
-  message: { fontSize: 14, color: COLORS.muted },
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  box: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: COLORS.card,
+    borderRadius: 14,
+    padding: 20,
+    gap: 10,
+  },
+  title: { fontSize: 18, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
+  message: { fontSize: 14, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
   row: { flexDirection: 'row', gap: 10, marginTop: 8 },
   button: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
   cancel: { backgroundColor: COLORS.border },
   confirm: { backgroundColor: COLORS.primary },
-  cancelText: { color: COLORS.text, fontWeight: '600' },
-  confirmText: { color: '#FFFFFF', fontWeight: '600' },
+  cancelText: { color: COLORS.text, fontFamily: 'PlusJakartaSans_600SemiBold' },
+  confirmText: { color: COLORS.white, fontFamily: 'PlusJakartaSans_600SemiBold' },
 });

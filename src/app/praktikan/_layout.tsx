@@ -16,7 +16,7 @@ function GantiPeranButton() {
       accessibilityRole="button"
       accessibilityLabel="Ganti Peran"
     >
-      <Ionicons name="swap-horizontal" size={14} color="#0F172A" />
+      <Ionicons name="swap-horizontal" size={14} color={COLORS.text} />
       <Text style={btnStyles.text}>Ganti Peran</Text>
     </Pressable>
   );
@@ -32,15 +32,15 @@ const btnStyles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.background,
   },
   btnPressed: {
-    backgroundColor: '#E2E8F0',
+    backgroundColor: COLORS.border,
     opacity: 0.85,
   },
   text: {
-    color: '#0F172A',
+    color: COLORS.text,
     fontFamily: 'PlusJakartaSans_600SemiBold',
     fontSize: 12,
   },
@@ -61,15 +61,14 @@ export default function PraktikanLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#0F172A',
-        tabBarInactiveTintColor: '#94A3B8',
+        tabBarActiveTintColor: COLORS.text,
+        tabBarInactiveTintColor: COLORS.mutedLight,
         tabBarStyle: {
-          backgroundColor: '#FFFFFF',
-          borderTopColor: '#F1F5F9',
+          backgroundColor: COLORS.card,
+          borderTopColor: COLORS.surface,
           borderTopWidth: 1,
-          height: 60 + bottomPadding,
-          paddingBottom: bottomPadding,
           paddingTop: 8,
+          paddingBottom: bottomPadding,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: -3 },
           shadowOpacity: 0.05,
@@ -81,9 +80,9 @@ export default function PraktikanLayout() {
           fontFamily: 'PlusJakartaSans_600SemiBold',
           marginTop: 2,
         },
-        headerStyle: { backgroundColor: '#FFFFFF' },
+        headerStyle: { backgroundColor: COLORS.card },
         headerTitleStyle: {
-          color: '#0F172A',
+          color: COLORS.text,
           fontFamily: 'PlusJakartaSans_700Bold',
           fontSize: 17,
         },

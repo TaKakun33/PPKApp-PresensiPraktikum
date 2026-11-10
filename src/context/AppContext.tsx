@@ -26,6 +26,7 @@ import type {
   RecapItem,
   Session,
   SessionData,
+  SessionStatus,
   User,
 } from '../data/types';
 import { formatRentangWaktu, formatTanggal } from '../utils/format';
@@ -33,6 +34,9 @@ import { formatRentangWaktu, formatTanggal } from '../utils/format';
 // Bandingkan waktu sebagai ANGKA, bukan string: ISO dengan offset berbeda
 // ('+07:00' vs 'Z') salah urut kalau dibandingkan sebagai teks.
 const ms = (iso: string) => Date.parse(iso);
+
+// Urutan prioritas status: sesi yang sedang dibuka tampil paling atas.
+const STATUS_ORDER: Record<SessionStatus, number> = { dibuka: 0, belum_dibuka: 1, ditutup: 2 };
 
 // ID tahun ajaran yang sedang aktif.
 const aktifIds = new Set(TAHUN_AJARAN.filter((t) => t.isAktif).map((t) => t.id));
@@ -85,7 +89,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [sessionData, setSessionData] = useState<SessionData[]>(INITIAL_SESSIONS);
   // Urut berdasarkan waktu mulai.
   const sessions: Session[] = [...sessionData]
-    .sort((a, b) => ms(a.startAt) - ms(b.startAt))
+    .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || ms(a.startAt) - ms(b.startAt))
     .map(toSession);
   const [attendances, setAttendances] = useState<Attendance[]>(INITIAL_ATTENDANCES);
 
