@@ -4,10 +4,14 @@
 //   sessions     : dokumen sesi (Session)
 //   attendances  : dokumen presensi (Attendance)
 //   leaveRequests: pengajuan izin (LeaveRequest)
+// Bagian "KELOLA JADWAL" di akhir file ditambahkan Hadrian (feat/classsessioncrud, SRS-16).
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
+  getDocs,
+  limit,
   onSnapshot,
   query,
   serverTimestamp,
@@ -23,6 +27,7 @@ import {
 import type { StatusIzin, StatusSesi } from "../app/constants";
 import { db } from "../app/firebase";
 import type { Attendance, LeaveRequest, Profile, Session } from "../app/types";
+import { formatTanggal } from "../utils/format";
 
 export type LeaveClassifier = (alasan: string) => Promise<string | null> | string | null;
 
@@ -290,4 +295,129 @@ export async function updateLeaveStatus(
     status,
     catatanAsisten: catatanAsisten?.trim() ?? "",
   });
+}
+
+// ─── KELOLA JADWAL (Hadrian, SRS-16) ──────────────────────────────────────────
+// Format simpan: tanggal "2026-11-20", waktuMulai/waktuSelesai "08:00" (jam lokal lab).
+// Jadwal hanya bisa diubah atau dihapus selama sesi masih Belum Dibuka.
+
+export type SessionInput = Pick<
+  Session,
+  "praktikum" | "kelasId" | "tanggal" | "waktuMulai" | "waktuSelesai" | "ruangan"
+>;
+
+const POLA_TANGGAL = /^(\d{4})-(\d{2})-(\d{2})$/;
+const POLA_JAM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+// "8.00" / "8:00" -> "08:00"
+function rapikanJam(jam: string): string {
+  const [h = "", m = ""] = jam.trim().replace(".", ":").split(":");
+  return `${h.padStart(2, "0")}:${m}`;
+}
+
+function tanggalValid(tanggal: string): boolean {
+  const cocok = POLA_TANGGAL.exec(tanggal);
+  if (!cocok) return false;
+  const [y, m, d] = cocok.slice(1).map(Number);
+  const tgl = new Date(y, m - 1, d);
+  return tgl.getFullYear() === y && tgl.getMonth() === m - 1 && tgl.getDate() === d;
+}
+
+/** Validasi dan rapikan input jadwal. Melempar Error berisi pesan siap tampil. */
+export function validasiSesi(input: SessionInput): SessionInput {
+  const data: SessionInput = {
+    kelasId: input.kelasId,
+    praktikum: input.praktikum.trim(),
+    tanggal: input.tanggal.trim(),
+    waktuMulai: rapikanJam(input.waktuMulai),
+    waktuSelesai: rapikanJam(input.waktuSelesai),
+    ruangan: input.ruangan.trim(),
+  };
+  if (!data.kelasId) throw new Error("Pilih kelas terlebih dahulu.");
+  if (!data.praktikum) throw new Error("Nama praktikum harus diisi.");
+  if (!tanggalValid(data.tanggal)) {
+    throw new Error("Tanggal harus berformat TTTT-BB-HH, contoh 2026-11-20.");
+  }
+  if (!POLA_JAM.test(data.waktuMulai) || !POLA_JAM.test(data.waktuSelesai)) {
+    throw new Error("Waktu harus berformat JJ:MM, contoh 08:00.");
+  }
+  if (data.waktuMulai >= data.waktuSelesai) {
+    throw new Error("Waktu selesai harus setelah waktu mulai.");
+  }
+  if (!data.ruangan) throw new Error("Ruangan harus diisi.");
+  return data;
+}
+
+async function pastikanKelasMilik(kelasId: string, asistenId: string) {
+  const snap = await getDoc(doc(db, "classes", kelasId));
+  if (!snap.exists()) throw new Error("Kelas tidak ditemukan.");
+  if (snap.data()?.asistenId !== asistenId) {
+    throw new Error("Kamu hanya bisa membuat sesi untuk kelas yang kamu ampu.");
+  }
+}
+
+async function getEditableSession(sessionId: string, asistenId: string) {
+  const owned = await getOwnedSession(sessionId, asistenId);
+  if (owned.sesi.status !== "belum_dibuka") {
+    throw new Error("Jadwal tidak bisa diubah atau dihapus setelah sesi dibuka.");
+  }
+  return owned;
+}
+
+/** Tambah sesi baru (status Belum Dibuka). Mengembalikan id sesi. */
+export async function createSession(asistenId: string, input: SessionInput): Promise<string> {
+  const data = validasiSesi(input);
+  await pastikanKelasMilik(data.kelasId, asistenId);
+
+  const ref = doc(collection(db, "sessions"));
+  const sesi: Omit<Session, "id"> = { ...data, asistenId, status: "belum_dibuka" };
+  await setDoc(ref, sesi);
+  return ref.id;
+}
+
+/** Ubah jadwal sesi. Hanya asisten pengampu dan hanya saat Belum Dibuka. */
+export async function updateSession(
+  sessionId: string,
+  asistenId: string,
+  input: SessionInput
+): Promise<void> {
+  const data = validasiSesi(input);
+  const { ref } = await getEditableSession(sessionId, asistenId);
+  await pastikanKelasMilik(data.kelasId, asistenId);
+  await updateDoc(ref, data);
+}
+
+/** Hapus sesi. Ditolak jika sudah dibuka atau sudah ada pengajuan izin untuknya. */
+export async function deleteSession(sessionId: string, asistenId: string): Promise<void> {
+  const { ref } = await getEditableSession(sessionId, asistenId);
+  const izin = await getDocs(
+    query(
+      collection(db, "leaveRequests"),
+      where("asistenId", "==", asistenId),
+      where("sessionId", "==", sessionId),
+      limit(1)
+    )
+  );
+  if (!izin.empty) {
+    throw new Error("Sesi ini sudah punya pengajuan izin, jadi tidak bisa dihapus.");
+  }
+  await deleteDoc(ref);
+}
+
+/** "2026-11-20" -> "20 Nov 2026". Format lain ditampilkan apa adanya. */
+export function labelTanggal(tanggal: string): string {
+  return tanggalValid(tanggal) ? formatTanggal(`${tanggal}T00:00:00`) : tanggal;
+}
+
+/** "08:00", "10:00" -> "08.00 - 10.00" */
+export function labelWaktu(sesi: Pick<Session, "waktuMulai" | "waktuSelesai">): string {
+  const fmt = (jam: string) => (jam ?? "").replace(":", ".");
+  return `${fmt(sesi.waktuMulai)} - ${fmt(sesi.waktuSelesai)}`;
+}
+
+/** Urutkan sesi berdasarkan tanggal lalu waktu mulai (terdekat lebih dulu). */
+export function urutkanSesi(list: Session[]): Session[] {
+  return [...list].sort((a, b) =>
+    `${a.tanggal} ${a.waktuMulai}`.localeCompare(`${b.tanggal} ${b.waktuMulai}`)
+  );
 }
