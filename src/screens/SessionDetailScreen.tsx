@@ -1,16 +1,30 @@
-// Pemilik: Hadrian (feat/schedule-detail), SRS-04.
-// Detail satu sesi: praktikum, kelas, tanggal, waktu, ruangan, asisten, dan status.
+// Pemilik: Hadrian (feat/classsessioncrud), SRS-18 (+ aksi ubah/hapus SRS-16).
+// Detail satu sesi, ter-update real-time lewat listener Firestore (tanpa restart):
+// praktikum, kelas, tanggal, waktu, ruangan, asisten, dan status.
 // Di bawahnya ada kartu kehadiran: praktikan melihat status presensinya, asisten melihat jumlah hadir.
-// Id sesi diambil dari URL: /session/s2. Id yang tidak ada (mis. /session/s99) menampilkan EmptyState.
+// Asisten pengampu bisa mengubah atau menghapus jadwal selama sesi Belum Dibuka.
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { router, useLocalSearchParams } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import EmptyState from '../components/EmptyState';
+import ErrorState from '../components/ErrorState';
+import LoadingState from '../components/LoadingState';
 import StatusBadge from '../components/StatusBadge';
+import type { Role } from '../app/constants';
+import type { ClassDoc, Session } from '../app/types';
 import { COLORS } from '../constants/colors';
-import { useApp } from '../context/AppContext';
-import type { Role, Session } from '../data/types';
+import { useAuth } from '../context/AuthContext';
+import { getNamaPengguna, pesanFirestore, subscribeClass } from '../services/classService';
+import {
+  deleteSession,
+  labelTanggal,
+  labelWaktu,
+  subscribeAttendances,
+  subscribeMyAttendances,
+  subscribeSession,
+} from '../services/sessionService';
 import { formatJam } from '../utils/format';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
@@ -24,22 +38,29 @@ const TONE = {
 };
 
 type Presence = { icon: IoniconsName; tone: keyof typeof TONE; title: string; message: string };
+type Hadir = { ada: boolean; waktu: Date | null };
+type Muat = { status: 'loading' } | { status: 'ok'; session: Session | null } | { status: 'error'; message: string };
+// openedAt/closedAt diisi serverTimestamp() oleh service buka/tutup sesi.
+type SessionWaktu = Session & { openedAt?: unknown; closedAt?: unknown };
 
-// session.waktu diformat dengan zona waktu perangkat, jadi labelnya juga mengikuti perangkat.
-function zonaWaktu(iso: string): string {
-  const offset = -new Date(iso).getTimezoneOffset() / 60;
-  const nama: Record<number, string> = { 7: 'WIB', 8: 'WITA', 9: 'WIT' };
-  return nama[offset] ?? `GMT${offset >= 0 ? '+' : ''}${offset}`;
+// Firestore Timestamp / string ISO -> Date. Nilai lain (mis. serverTimestamp yang belum selesai) -> null.
+function toDate(value: unknown): Date | null {
+  if (!value) return null;
+  if (typeof value === 'string') return new Date(value);
+  const ts = value as { toDate?: () => Date };
+  return typeof ts.toDate === 'function' ? ts.toDate() : null;
 }
 
+const jam = (d: Date) => formatJam(d.toISOString());
+
 // Isi kartu kehadiran sesuai peran dan status sesi.
-// milikSaya = sesi ada di kelas praktikan / diampu asisten (getVisibleSessions).
+// milikSaya = sesi ada di kelas praktikan / diampu asisten.
 function describePresence(
   session: Session,
   role: Role,
   milikSaya: boolean,
-  waktuHadir: string | undefined,
-  jumlahHadir: number,
+  hadir: Hadir,
+  jumlahHadir: number | null,
 ): Presence {
   if (!milikSaya) {
     return {
@@ -48,7 +69,7 @@ function describePresence(
       title: role === 'asisten' ? 'Bukan sesi yang kamu ampu' : 'Bukan sesi kelasmu',
       message:
         role === 'asisten'
-          ? `Sesi ini diampu oleh ${session.asistenNama}, jadi kamu tidak dapat membuka atau menutupnya.`
+          ? 'Sesi ini diampu asisten lain, jadi kamu tidak dapat membuka atau menutupnya.'
           : 'Kamu tidak terdaftar di kelas ini, jadi tidak dapat presensi di sesi ini.',
     };
   }
@@ -64,19 +85,19 @@ function describePresence(
     return {
       icon: 'people-outline',
       tone: session.status === 'dibuka' ? 'success' : 'neutral',
-      title: `${jumlahHadir} praktikan hadir`,
+      title: jumlahHadir === null ? 'Jumlah hadir belum tersedia' : `${jumlahHadir} praktikan hadir`,
       message:
         session.status === 'dibuka'
-          ? 'Sesi masih dibuka, jumlah hadir bisa bertambah.'
+          ? 'Sesi masih dibuka, jumlah hadir bertambah otomatis.'
           : 'Sesi sudah ditutup. Daftar lengkap ada di tab Rekap.',
     };
   }
-  if (waktuHadir) {
+  if (hadir.ada) {
     return {
       icon: 'checkmark-circle-outline',
       tone: 'success',
       title: 'Kamu sudah presensi',
-      message: `Tercatat pukul ${formatJam(waktuHadir)}.`,
+      message: hadir.waktu ? `Tercatat pukul ${jam(hadir.waktu)}.` : 'Waktu hadir sedang dicatat server.',
     };
   }
   if (session.status === 'belum_dibuka') {
@@ -119,9 +140,89 @@ function InfoRow({ icon, label, value }: { icon: IoniconsName; label: string; va
 
 export default function SessionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { currentUser, getSessionById, getVisibleSessions, getHistory, getRecap } = useApp();
-  const session = getSessionById(id);
+  const { profile } = useAuth();
+  const uid = profile?.id;
+  const role = profile?.role;
 
+  const [muat, setMuat] = useState<Muat>({ status: 'loading' });
+  const [retryKey, setRetryKey] = useState(0);
+  const [kelas, setKelas] = useState<ClassDoc | null>(null);
+  const [namaAsistenLain, setNamaAsistenLain] = useState<string | null>(null);
+  const [hadir, setHadir] = useState<Hadir>({ ada: false, waktu: null });
+  const [jumlahHadir, setJumlahHadir] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // Listener utama: setiap perubahan dokumen sesi langsung tampil.
+  useEffect(() => {
+    if (!id) return;
+    return subscribeSession(
+      id,
+      (session) => setMuat({ status: 'ok', session }),
+      (e) => setMuat({ status: 'error', message: pesanFirestore(e, 'Gagal memuat detail sesi.') }),
+    );
+  }, [id, retryKey]);
+
+  const session = muat.status === 'ok' ? muat.session : null;
+  const kelasId = session?.kelasId;
+  const asistenId = session?.asistenId;
+  const pengampu = role === 'asisten' && !!asistenId && asistenId === uid;
+
+  useEffect(() => {
+    if (!kelasId) return;
+    return subscribeClass(kelasId, setKelas, () => setKelas(null));
+  }, [kelasId]);
+
+  // Nama asisten lain dibaca sekali; asisten pengampu memakai nama dari profilnya sendiri.
+  useEffect(() => {
+    if (!asistenId || asistenId === uid) return;
+    let aktif = true;
+    getNamaPengguna(asistenId).then((nama) => aktif && setNamaAsistenLain(nama));
+    return () => {
+      aktif = false;
+    };
+  }, [asistenId, uid]);
+
+  // Kehadiran: praktikan -> presensinya sendiri, asisten pengampu -> jumlah hadir.
+  useEffect(() => {
+    if (!uid || !id) return;
+    if (role === 'praktikan') {
+      return subscribeMyAttendances(
+        uid,
+        (list) => {
+          const att = list.find((a) => a.sessionId === id);
+          setHadir({ ada: !!att, waktu: toDate(att?.waktuHadir) });
+        },
+        () => setHadir({ ada: false, waktu: null }),
+      );
+    }
+    if (pengampu) {
+      return subscribeAttendances(
+        id,
+        (list) => setJumlahHadir(list.length),
+        () => setJumlahHadir(null),
+      );
+    }
+  }, [uid, role, id, pengampu]);
+
+  if (!profile) return <Redirect href="/" />;
+
+  const kembali = () => (router.canGoBack() ? router.back() : router.replace('/'));
+
+  if (deleting) return <LoadingState message="Menghapus sesi..." />;
+  if (muat.status === 'loading') return <LoadingState message="Memuat detail sesi..." />;
+  if (muat.status === 'error') {
+    return (
+      <View style={styles.notFound}>
+        <ErrorState
+          message={muat.message}
+          onRetry={() => {
+            setMuat({ status: 'loading' });
+            setRetryKey((k) => k + 1);
+          }}
+        />
+      </View>
+    );
+  }
   if (!session) {
     return (
       <View style={styles.notFound}>
@@ -130,8 +231,8 @@ export default function SessionDetailScreen() {
           message={`Sesi dengan ID "${id ?? '-'}" tidak ada atau sudah dihapus.`}
         />
         <Pressable
-          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+          style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+          onPress={kembali}
           accessibilityRole="button"
         >
           <Text style={styles.backButtonText}>Kembali</Text>
@@ -140,38 +241,56 @@ export default function SessionDetailScreen() {
     );
   }
 
-  const waktuHadir = getHistory().find((h) => h.session.id === session.id)?.attendance.waktuHadir;
-  const milikSaya = getVisibleSessions().some((s) => s.id === session.id);
-  const presence = describePresence(
-    session,
-    currentUser.role,
-    milikSaya,
-    waktuHadir,
-    getRecap(session.id).length,
-  );
+  const milikSaya =
+    profile.role === 'asisten' ? pengampu : (profile.kelasIds ?? []).includes(session.kelasId);
+  const presence = describePresence(session, profile.role, milikSaya, hadir, jumlahHadir);
   const tone = TONE[presence.tone];
+  const namaKelas = kelas?.namaKelas ?? session.kelasId;
+  const namaAsisten = pengampu ? profile.nama : namaAsistenLain;
+  const { openedAt, closedAt } = session as SessionWaktu;
+  const dibuka = toDate(openedAt);
+  const ditutup = toDate(closedAt);
+
+  const hapus = () =>
+    Alert.alert('Hapus sesi?', `${session.praktikum} (${namaKelas}, ${labelTanggal(session.tanggal)}) akan dihapus.`, [
+      { text: 'Batal', style: 'cancel' },
+      {
+        text: 'Hapus',
+        style: 'destructive',
+        onPress: async () => {
+          setDeleting(true);
+          try {
+            await deleteSession(session.id, profile.id);
+            kembali();
+          } catch (e) {
+            setDeleting(false);
+            Alert.alert('Gagal menghapus', pesanFirestore(e, 'Gagal menghapus sesi.'));
+          }
+        },
+      },
+    ]);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.hero}>
         <StatusBadge status={session.status} />
         <Text style={styles.title}>{session.praktikum}</Text>
-        <Text style={styles.subtitle}>{session.judulModul}</Text>
+        <Text style={styles.subtitle}>
+          {namaKelas} · {labelTanggal(session.tanggal)}
+        </Text>
       </View>
 
       <View style={styles.card}>
         <InfoRow icon="book-outline" label="Praktikum" value={session.praktikum} />
-        <InfoRow icon="people-outline" label="Kelas" value={`Kelas ${session.kelas}`} />
-        <InfoRow icon="calendar-outline" label="Tanggal" value={session.tanggal} />
-        <InfoRow icon="time-outline" label="Waktu" value={`${session.waktu} ${zonaWaktu(session.startAt)}`} />
+        <InfoRow icon="people-outline" label="Kelas" value={namaKelas} />
+        <InfoRow icon="calendar-outline" label="Tanggal" value={labelTanggal(session.tanggal)} />
+        <InfoRow icon="time-outline" label="Waktu" value={labelWaktu(session)} />
         <InfoRow icon="location-outline" label="Ruangan" value={session.ruangan} />
-        <InfoRow icon="person-outline" label="Asisten" value={session.asistenNama} />
+        <InfoRow icon="person-outline" label="Asisten" value={namaAsisten ?? 'Asisten pengampu'} />
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionLabel}>
-          {currentUser.role === 'asisten' ? 'Kehadiran' : 'Presensi Kamu'}
-        </Text>
+        <Text style={styles.sectionLabel}>{profile.role === 'asisten' ? 'Kehadiran' : 'Presensi Kamu'}</Text>
         <View style={styles.presence} accessibilityLiveRegion="polite">
           <View style={[styles.presenceIcon, { backgroundColor: tone.bg }]}>
             <Ionicons name={presence.icon} size={22} color={tone.color} />
@@ -181,17 +300,43 @@ export default function SessionDetailScreen() {
             <Text style={styles.presenceMessage}>{presence.message}</Text>
           </View>
         </View>
-        {session.openedAt || session.closedAt ? (
+        {dibuka || ditutup ? (
           <View style={styles.timeline}>
-            {session.openedAt ? (
-              <Text style={styles.timelineText}>Dibuka pukul {formatJam(session.openedAt)}</Text>
-            ) : null}
-            {session.closedAt ? (
-              <Text style={styles.timelineText}>Ditutup pukul {formatJam(session.closedAt)}</Text>
-            ) : null}
+            {dibuka ? <Text style={styles.timelineText}>Dibuka pukul {jam(dibuka)}</Text> : null}
+            {ditutup ? <Text style={styles.timelineText}>Ditutup pukul {jam(ditutup)}</Text> : null}
           </View>
         ) : null}
       </View>
+
+      {pengampu ? (
+        <View style={styles.card}>
+          <Text style={styles.sectionLabel}>Kelola Jadwal</Text>
+          {session.status === 'belum_dibuka' ? (
+            <View style={styles.manageRow}>
+              <Pressable
+                style={({ pressed }) => [styles.manageButton, pressed && styles.pressed]}
+                onPress={() => router.push({ pathname: '/session-form', params: { id: session.id } })}
+                accessibilityRole="button"
+              >
+                <Ionicons name="create-outline" size={16} color={COLORS.text} />
+                <Text style={styles.manageText}>Ubah Jadwal</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.manageButton, styles.manageDanger, pressed && styles.pressed]}
+                onPress={hapus}
+                accessibilityRole="button"
+              >
+                <Ionicons name="trash-outline" size={16} color={COLORS.danger} />
+                <Text style={[styles.manageText, { color: COLORS.danger }]}>Hapus Sesi</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Text style={styles.manageNote}>
+              Jadwal terkunci karena sesi sudah dibuka. Buka atau tutup sesi lewat tab Kelola Sesi.
+            </Text>
+          )}
+        </View>
+      ) : null}
     </ScrollView>
   );
 }
@@ -253,6 +398,27 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.border,
   },
   timelineText: { fontSize: 12, fontFamily: 'PlusJakartaSans_500Medium', color: COLORS.muted },
+  manageRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 10 },
+  manageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.background,
+  },
+  manageDanger: { borderColor: COLORS.dangerBorder, backgroundColor: COLORS.dangerLight },
+  manageText: { fontSize: 13, fontFamily: 'PlusJakartaSans_600SemiBold', color: COLORS.text },
+  manageNote: {
+    paddingVertical: 10,
+    fontSize: 13,
+    lineHeight: 19,
+    fontFamily: 'PlusJakartaSans_400Regular',
+    color: COLORS.muted,
+  },
   notFound: { flex: 1, padding: 24, backgroundColor: COLORS.background },
   backButton: {
     alignSelf: 'center',
@@ -262,6 +428,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: COLORS.text,
   },
-  backButtonPressed: { opacity: 0.85 },
-  backButtonText: { color: '#FFFFFF', fontSize: 14, fontFamily: 'PlusJakartaSans_600SemiBold' },
+  pressed: { opacity: 0.85 },
+  backButtonText: { color: COLORS.white, fontSize: 14, fontFamily: 'PlusJakartaSans_600SemiBold' },
 });
