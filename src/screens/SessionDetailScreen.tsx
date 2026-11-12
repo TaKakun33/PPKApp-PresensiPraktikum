@@ -42,6 +42,8 @@ type Hadir = { ada: boolean; waktu: Date | null };
 type Muat = { status: 'loading' } | { status: 'ok'; session: Session | null } | { status: 'error'; message: string };
 // openedAt/closedAt diisi serverTimestamp() oleh service buka/tutup sesi.
 type SessionWaktu = Session & { openedAt?: unknown; closedAt?: unknown };
+// Skema presensi belum final: service PM memakai waktuHadir, attendanceService Damar memakai checkedInAt.
+type AttendanceWaktu = { waktuHadir?: unknown; checkedInAt?: unknown };
 
 // Firestore Timestamp / string ISO -> Date. Nilai lain (mis. serverTimestamp yang belum selesai) -> null.
 function toDate(value: unknown): Date | null {
@@ -189,8 +191,8 @@ export default function SessionDetailScreen() {
       return subscribeMyAttendances(
         uid,
         (list) => {
-          const att = list.find((a) => a.sessionId === id);
-          setHadir({ ada: !!att, waktu: toDate(att?.waktuHadir) });
+          const att = list.find((a) => a.sessionId === id) as AttendanceWaktu | undefined;
+          setHadir({ ada: !!att, waktu: toDate(att?.checkedInAt ?? att?.waktuHadir) });
         },
         () => setHadir({ ada: false, waktu: null }),
       );
