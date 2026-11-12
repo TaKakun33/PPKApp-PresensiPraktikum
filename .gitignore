@@ -12,28 +12,65 @@ expo-env.d.ts
 # Native
 .kotlin/
 *.orig.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
 
 # Metro
 .metro-health-check*
 
-# debug
+# debug & log
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+*.log
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
 
-# macOS
+# macOS / editor
 .DS_Store
-*.pem
+.idea/
 
-# local env files
+# ── Env lokal (semua varian: .env, .env.local, .env.production, dst.) ─────────
+# .env.example SATU-SATUNYA yang boleh di-commit.
 .env
-.env*.local
+.env*
 !.env.example
+
+# ── Kunci, sertifikat & kredensial — JANGAN pernah di-commit ──────────────────
+# Android signing
+*.jks
+*.keystore
+# iOS signing / push
+*.p8
+*.p12
+*.mobileprovision
+# Private key / sertifikat
+*.pem
+*.key
+# Firebase Admin SDK / Google service account (RAHASIA, beda dengan google-services.json)
+serviceAccount*.json
+service-account*.json
+*-service-account*.json
+*-firebase-adminsdk-*.json
+# Kredensial lokal EAS
+credentials.json
+# Folder rahasia umum
+secrets/
+*.secret
+
+# ── OPSIONAL: config Firebase klien ───────────────────────────────────────────
+# google-services.json / GoogleService-Info.plist BUKAN rahasia kuat (hanya
+# identitas project), jadi aman di repo PRIVAT. Untuk repo PUBLIK, aktifkan
+# baris di bawah, lalu kirim file ke EAS lewat file environment variable
+# (lihat docs/PANDUAN_AKMAL_SPRINT2.md bagian 8).
+# CATATAN: file ini SUDAH ter-track Git (ada di riwayat commit), jadi
+# .gitignore saja tidak cukup — jalankan juga `git rm --cached google-services.json`.
+# google-services.json
+# GoogleService-Info.plist
+
+# ── Hasil build ───────────────────────────────────────────────────────────────
+*.apk
+*.aab
+*.ipa
 
 # typescript
 *.tsbuildinfo
