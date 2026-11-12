@@ -52,6 +52,7 @@ const ICON: Record<string, IoniconsName> = {
   jadwal: 'calendar-outline',
   kelola: 'settings-outline',
   rekap: 'list-outline',
+  izin: 'document-text-outline',
 };
 
 export default function AsistenLayout() {
@@ -114,6 +115,15 @@ export default function AsistenLayout() {
           title: 'Rekap',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name={ICON.rekap} size={size} color={color as string} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="izin"
+        options={{
+          title: 'Izin',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name={ICON.izin} size={size} color={color as string} />
           ),
         }}
       />

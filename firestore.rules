@@ -88,6 +88,7 @@ service cloud.firestore {
       // Asisten pengampu boleh mengubah status (ke diterima/ditolak) dan catatanAsisten saja.
       allow update: if isAsisten()
         && resource.data.asistenId == request.auth.uid
+        && resource.data.status == 'menunggu'
         && request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['status', 'catatanAsisten'])
         && request.resource.data.status in ['diterima', 'ditolak'];
