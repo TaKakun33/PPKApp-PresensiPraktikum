@@ -61,14 +61,14 @@ export default function SessionCard({ session, onPress, kelasNama }: Props) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
+    backgroundColor: COLORS.background,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: COLORS.border,
     padding: 16,
     gap: 10,
   },
-  cardPressed: { backgroundColor: COLORS.surface },
+  cardPressed: { backgroundColor: COLORS.surface, opacity: 0.88 },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   title: { fontSize: 16, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 6 },

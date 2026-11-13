@@ -35,15 +35,12 @@ export default function CheckInScreen({ route }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [successTime, setSuccessTime] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!sessionId || !uid) {
-      setLoading(false);
       return;
     }
-
-    setLoading(true);
-    setError(null);
 
     const unsubscribe = subscribeCheckInState(
       sessionId,
@@ -62,7 +59,7 @@ export default function CheckInScreen({ route }: Props) {
     return () => {
       unsubscribe();
     };
-  }, [sessionId, uid]);
+  }, [sessionId, uid, reloadKey]);
 
   if (!sessionId) {
     return (
@@ -75,7 +72,7 @@ export default function CheckInScreen({ route }: Props) {
     );
   }
 
-  if (loading) {
+  if (loading && uid) {
     return <LoadingState message="Memuat informasi sesi..." />;
   }
 
@@ -86,6 +83,7 @@ export default function CheckInScreen({ route }: Props) {
         onRetry={() => {
           setLoading(true);
           setError(null);
+          setReloadKey((key) => key + 1);
         }}
       />
     );

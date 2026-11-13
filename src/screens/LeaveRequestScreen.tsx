@@ -35,7 +35,7 @@ import {
 import { getFriendlyError } from '../services/serviceUtils';
 
 const STATUS_STYLE: Record<StatusIzin, { label: string; bg: string; text: string }> = {
-  [STATUS_IZIN.MENUNGGU]: { label: 'Menunggu', bg: '#FEF3C7', text: COLORS.warning },
+  [STATUS_IZIN.MENUNGGU]: { label: 'Menunggu', bg: '#FFF4E5', text: COLORS.warning },
   [STATUS_IZIN.DITERIMA]: { label: 'Diterima', bg: COLORS.successLight, text: COLORS.success },
   [STATUS_IZIN.DITOLAK]: { label: 'Ditolak', bg: COLORS.dangerLight, text: COLORS.danger },
 };
@@ -382,8 +382,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
-  noticeOk: { backgroundColor: COLORS.successLight, borderColor: '#BBF7D0' },
-  noticeInfo: { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' },
+  noticeOk: { backgroundColor: COLORS.successLight, borderColor: '#C8F0D5' },
+  noticeInfo: { backgroundColor: '#FFF4E5', borderColor: '#FFE0B2' },
   noticeText: { flex: 1, fontSize: 13, lineHeight: 19, fontFamily: 'PlusJakartaSans_500Medium', color: COLORS.text },
   button: {
     marginTop: 4,
