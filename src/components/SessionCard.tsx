@@ -1,25 +1,32 @@
-// Pemilik: Hadrian (feat/schedule-detail), SRS-03.
-// Kartu satu sesi di daftar jadwal. Props dipertahankan agar layar lain tidak rusak.
+// Pemilik: Hadrian (feat/classsessioncrud), SRS-17.
+// Kartu satu sesi di daftar jadwal. Props session dan onPress dipertahankan agar layar lain tidak rusak;
+// kelasNama opsional (nama kelas dari koleksi classes, fallback ke kelasId).
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import type { Session } from '../app/types';
 import { COLORS } from '../constants/colors';
-import type { Session } from '../data/types';
+import { labelTanggal, labelWaktu } from '../services/sessionService';
 import StatusBadge from './StatusBadge';
 
 type Props = {
   session: Session;
   onPress?: () => void;
+  kelasNama?: string;
 };
 
-export default function SessionCard({ session, onPress }: Props) {
+export default function SessionCard({ session, onPress, kelasNama }: Props) {
+  const kelas = kelasNama ?? session.kelasId;
+  const tanggal = labelTanggal(session.tanggal);
+  const waktu = labelWaktu(session);
+
   return (
     <Pressable
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
       onPress={onPress}
       disabled={!onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${session.praktikum}, kelas ${session.kelas}, ${session.tanggal} ${session.waktu}`}
+      accessibilityLabel={`${session.praktikum}, ${kelas}, ${tanggal} ${waktu}`}
     >
       <View style={styles.topRow}>
         <StatusBadge status={session.status} />
@@ -33,15 +40,19 @@ export default function SessionCard({ session, onPress }: Props) {
       <View style={styles.metaRow}>
         <View style={styles.metaItem}>
           <Ionicons name="people-outline" size={14} color={COLORS.muted} />
-          <Text style={styles.metaText}>Kelas {session.kelas}</Text>
+          <Text style={styles.metaText}>{kelas}</Text>
         </View>
         <View style={styles.metaItem}>
           <Ionicons name="calendar-outline" size={14} color={COLORS.muted} />
-          <Text style={styles.metaText}>{session.tanggal}</Text>
+          <Text style={styles.metaText}>{tanggal}</Text>
         </View>
         <View style={styles.metaItem}>
           <Ionicons name="time-outline" size={14} color={COLORS.muted} />
-          <Text style={styles.metaText}>{session.waktu}</Text>
+          <Text style={styles.metaText}>{waktu}</Text>
+        </View>
+        <View style={styles.metaItem}>
+          <Ionicons name="location-outline" size={14} color={COLORS.muted} />
+          <Text style={styles.metaText}>{session.ruangan}</Text>
         </View>
       </View>
     </Pressable>
