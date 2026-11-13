@@ -12,5 +12,5 @@ export default function IndexScreen() {
   if (state.status === 'unauthenticated') return <Redirect href="/login" />;
 
   const role = state.profile.role;
-  return <Redirect href={role === 'asisten' ? '/asisten/jadwal' : '/praktikan/jadwal'} />;
+  return <Redirect href={role === 'asisten' ? '/asisten/jadwal' : '/praktikan/home'} />;
 }

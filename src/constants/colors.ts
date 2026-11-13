@@ -3,36 +3,36 @@ import type { SessionStatus } from '../data/types';
 
 export const COLORS = {
   // Core palette
-  primary: '#2563EB',
-  primaryLight: '#EFF6FF',
-  primaryBorder: '#DBEAFE',
+  primary: '#007AFF',
+  primaryLight: '#E8F2FF',
+  primaryBorder: '#CFE5FF',
 
   // Backgrounds
-  background: '#F8FAFC',
+  background: '#F5F5F7',
   card: '#FFFFFF',
   white: '#FFFFFF',
-  surface: '#F1F5F9',
+  surface: '#F5F5F7',
 
   // Text
-  text: '#0F172A',
-  textSecondary: '#475569',
-  muted: '#64748B',
-  mutedLight: '#94A3B8',
+  text: '#1D1D1F',
+  textSecondary: '#4A4A4F',
+  muted: '#AAAAAA',
+  mutedLight: '#AAAAAA',
 
   // Borders
-  border: '#E2E8F0',
-  borderLight: '#CBD5E1',
+  border: '#E5E5EA',
+  borderLight: '#D1D1D6',
 
   // Interactive
-  pressed: '#1E293B',
+  pressed: '#1D1D1F',
 
   // Semantic
-  success: '#16A34A',
-  successLight: '#F0FDF4',
-  danger: '#DC2626',
-  dangerLight: '#FEF2F2',
-  dangerBorder: '#FEE2E2',
-  warning: '#D97706',
+  success: '#34C759',
+  successLight: '#E9F9EE',
+  danger: '#FF3B30',
+  dangerLight: '#FFF0EF',
+  dangerBorder: '#FFD9D6',
+  warning: '#FF9500',
 };
 
 // Status disimpan sebagai kode; tampilkan ke pengguna lewat STATUS_LABEL.
@@ -43,7 +43,7 @@ export const STATUS_LABEL: Record<SessionStatus, string> = {
 };
 
 export const STATUS_COLORS: Record<SessionStatus, { bg: string; text: string }> = {
-  belum_dibuka: { bg: '#FEF3C7', text: '#92400E' },
-  dibuka: { bg: '#DCFCE7', text: '#166534' },
-  ditutup: { bg: '#FEE2E2', text: '#DC2626' },
+  belum_dibuka: { bg: '#F5F5F7', text: '#6B6B70' },
+  dibuka: { bg: '#E8F2FF', text: '#007AFF' },
+  ditutup: { bg: '#F5F5F7', text: '#AAAAAA' },
 };

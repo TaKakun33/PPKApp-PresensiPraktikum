@@ -15,8 +15,8 @@ export default function RoleTabs({ tabs }: { tabs: TabDef[] }) {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: COLORS.text,
-        tabBarInactiveTintColor: COLORS.mutedLight,
+        tabBarActiveTintColor: COLORS.primary,
+        tabBarInactiveTintColor: COLORS.muted,
         tabBarStyle: {
           backgroundColor: COLORS.card,
           borderTopColor: COLORS.surface,
