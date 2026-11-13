@@ -24,6 +24,7 @@ import {
   type QuerySnapshot,
 } from "@react-native-firebase/firestore";
 
+import { STATUS_IZIN } from "../app/constants";
 import type { StatusIzin, StatusSesi } from "../app/constants";
 import { db } from "../app/firebase";
 import type { Attendance, LeaveRequest, Profile, Session } from "../app/types";
@@ -288,10 +289,23 @@ export async function submitLeaveRequest(
  */
 export async function updateLeaveStatus(
   leaveId: string,
+  asistenId: string,
   status: Exclude<StatusIzin, "menunggu">,
   catatanAsisten?: string
 ): Promise<void> {
-  await updateDoc(doc(db, "leaveRequests", leaveId), {
+  const ref = doc(db, "leaveRequests", leaveId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error("Pengajuan izin tidak ditemukan.");
+
+  const request = snap.data() as LeaveRequest;
+  if (request.asistenId !== asistenId) {
+    throw new Error("Hanya asisten pengampu yang dapat meninjau pengajuan ini.");
+  }
+  if (request.status !== STATUS_IZIN.MENUNGGU) {
+    throw new Error("Pengajuan izin ini sudah ditinjau.");
+  }
+
+  await updateDoc(ref, {
     status,
     catatanAsisten: catatanAsisten?.trim() ?? "",
   });
