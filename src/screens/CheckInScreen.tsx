@@ -1,243 +1,299 @@
-// STUB dari PM - pemilik: Damar (feat/student-checkin-history), SRS-05 dan SRS-06.
-// Daftar sesi + tombol presensi. Aktif hanya saat Dibuka dan belum presensi.
-// Konfirmasi presensi via Modal, lalu Bottom Sheet sukses.
-import { useRef, useState } from 'react';
-import { Alert, FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useLocalSearchParams } from "expo-router";
+import { useEffect, useState } from "react";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import EmptyState from '../components/EmptyState';
-import StatusBadge from '../components/StatusBadge';
-import SuccessBottomSheet from '../components/SuccessBottomSheet';
-import { COLORS } from '../constants/colors';
-import { useApp } from '../context/AppContext';
-import { formatJam } from '../utils/format';
+import EmptyState from "../components/EmptyState";
+import ErrorState from "../components/ErrorState";
+import LoadingState from "../components/LoadingState";
+import StatusBadge from "../components/StatusBadge";
+import SuccessBottomSheet from "../components/SuccessBottomSheet";
+import { COLORS } from "../constants/colors";
+import { useAuth } from "../context/AuthContext";
+import type { Session } from "../app/types";
+import { checkIn, subscribeCheckInState } from "../services/attendanceService";
+import { formatJam } from "../utils/format";
 
-export default function CheckInScreen() {
-  const { currentUser, getVisibleSessions, checkIn, hasCheckedIn } = useApp();
+type Props = {
+  route?: {
+    params?: {
+      sessionId?: string;
+    };
+  };
+};
 
-  const [sheet, setSheet] = useState({
-    visible: false,
-    sessionName: '',
-    waktuHadir: '',
-  });
+export default function CheckInScreen({ route }: Props) {
+  const localParams = useLocalSearchParams<{ sessionId?: string }>();
+  const sessionId = route?.params?.sessionId ?? localParams?.sessionId;
 
-  const [confirm, setConfirm] = useState({
-    visible: false,
-    sessionId: '',
-    sessionName: '',
-  });
+  const { profile } = useAuth();
+  const uid = profile?.id ?? "";
 
-  const inFlightRef = useRef<Set<string>>(new Set());
+  const [session, setSession] = useState<Session | null>(null);
+  const [attended, setAttended] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [successTime, setSuccessTime] = useState("");
 
-  if (currentUser.role !== 'praktikan') {
+  useEffect(() => {
+    if (!sessionId || !uid) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    const unsubscribe = subscribeCheckInState(
+      sessionId,
+      uid,
+      ({ session: s, attended: a }) => {
+        setSession(s);
+        setAttended(a);
+        setLoading(false);
+      },
+      (err) => {
+        setError(err.message);
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [sessionId, uid]);
+
+  if (!sessionId) {
     return (
       <View style={styles.container}>
-        <Text style={styles.title}>Presensi hanya untuk praktikan</Text>
-        <Text style={styles.text}>Login sebagai praktikan untuk melakukan presensi.</Text>
+        <EmptyState
+          title="Sesi Belum Dipilih"
+          message="Silakan pilih sesi praktikum dari halaman jadwal untuk melakukan presensi."
+        />
       </View>
     );
   }
 
-  const sessions = getVisibleSessions();
+  if (loading) {
+    return <LoadingState message="Memuat informasi sesi..." />;
+  }
 
-  if (sessions.length === 0) {
+  if (error) {
     return (
-      <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-        <EmptyState title="Belum ada sesi" message="Sesi praktikum untuk kelasmu belum tersedia." />
+      <ErrorState
+        message={error}
+        onRetry={() => {
+          setLoading(true);
+          setError(null);
+        }}
+      />
+    );
+  }
+
+  if (!session) {
+    return (
+      <View style={styles.container}>
+        <EmptyState
+          title="Sesi Tidak Ditemukan"
+          message="Data sesi praktikum tidak ditemukan atau telah dihapus."
+        />
       </View>
     );
   }
 
-  const handlePress = (sessionId: string, sessionName: string) => {
-    setConfirm({ visible: true, sessionId, sessionName });
-  };
+  const status = session.status;
+  const isBelumDibuka = status === "belum_dibuka" || (status as string) === "Belum Dibuka";
+  const isDitutup = status === "ditutup" || (status as string) === "Ditutup";
+  const isDibuka = status === "dibuka" || (status as string) === "Dibuka";
 
-  const closeConfirm = () => {
-    setConfirm((c) => ({ ...c, visible: false }));
-  };
+  let buttonLabel = "Presensi Sekarang";
+  let reason = "";
+  let canPress = false;
 
-  const runCheckIn = () => {
-    const { sessionId, sessionName } = confirm;
-    closeConfirm();
+  if (attended) {
+    buttonLabel = "Sudah Hadir";
+    reason = "Kamu sudah melakukan presensi pada sesi ini.";
+    canPress = false;
+  } else if (isBelumDibuka) {
+    buttonLabel = "Belum Dibuka";
+    reason = "Sesi belum dibuka oleh asisten.";
+    canPress = false;
+  } else if (isDitutup) {
+    buttonLabel = "Ditutup";
+    reason = "Sesi sudah ditutup.";
+    canPress = false;
+  } else if (isDibuka) {
+    buttonLabel = isSubmitting ? "Memproses..." : "Presensi Sekarang";
+    canPress = !isSubmitting;
+  }
 
-    if (inFlightRef.current.has(sessionId)) return;
-    inFlightRef.current.add(sessionId);
+  const handleCheckIn = async () => {
+    if (!canPress || isSubmitting) return;
 
-    const result = checkIn(sessionId);
+    setIsSubmitting(true);
+    const result = await checkIn(session.id, {
+      uid: profile?.id,
+      name: profile?.nama,
+      nim: profile?.nim,
+    });
+
+    setIsSubmitting(false);
+
     if (result.ok) {
-      const waktuHadir = formatJam(result.attendance.waktuHadir);
-      setTimeout(() => setSheet({ visible: true, sessionName, waktuHadir }), 350);
+      setSuccessTime(formatJam(new Date().toISOString()));
+      setShowSuccess(true);
     } else {
-      inFlightRef.current.delete(sessionId);
-      Alert.alert('Presensi gagal', result.message);
+      Alert.alert("Presensi Gagal", result.message);
     }
   };
 
+  const waktu =
+    (session as any).waktu ||
+    (session.waktuMulai && session.waktuSelesai
+      ? `${session.waktuMulai} - ${session.waktuSelesai}`
+      : "-");
+
   return (
-    <>
-      <FlatList
-        style={styles.list}
-        contentContainerStyle={styles.listContent}
-        data={sessions}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => {
-          const checked = hasCheckedIn(item.id);
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <View style={styles.card}>
+        <View style={styles.headerRow}>
+          <Text style={styles.title}>{session.praktikum}</Text>
+          <StatusBadge status={session.status} />
+        </View>
 
-          let label: string;
-          let reason = '';
-          let canPress = false;
-          if (checked) {
-            label = 'Sudah hadir';
-          } else if (item.status === 'belum_dibuka') {
-            label = 'Belum dibuka';
-            reason = 'Sesi belum dibuka oleh asisten.';
-          } else if (item.status === 'ditutup') {
-            label = 'Ditutup';
-            reason = 'Sesi sudah ditutup.';
-          } else {
-            label = 'Presensi';
-            canPress = true;
-          }
+        <View style={styles.infoSection}>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Tanggal</Text>
+            <Text style={styles.infoValue}>{session.tanggal}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Waktu</Text>
+            <Text style={styles.infoValue}>{waktu}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Ruangan</Text>
+            <Text style={styles.infoValue}>{session.ruangan}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Status</Text>
+            <Text style={styles.infoValue}>{session.status}</Text>
+          </View>
+        </View>
 
-          return (
-            <View style={styles.card}>
-              <StatusBadge status={item.status} />
-
-              <Text style={styles.title}>{item.praktikum}</Text>
-              <Text style={styles.text}>Kelas: {item.kelas} · {item.tanggal}</Text>
-              <Text style={styles.text}>Waktu: {item.waktu}</Text>
-              <Text style={styles.text}>Ruangan: {item.ruangan}</Text>
-              <Text style={styles.text}>Asisten: {item.asistenNama}</Text>
-
-              <Pressable
-                onPress={() => handlePress(item.id, item.praktikum)}
-                disabled={!canPress}
-                accessibilityState={{ disabled: !canPress }}
-                style={({ pressed }) => [
-                  styles.button,
-                  checked && styles.buttonSuccess,
-                  !canPress && !checked && styles.buttonDisabled,
-                  pressed && canPress && styles.buttonPressed,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.buttonText,
-                    !canPress && !checked && styles.buttonTextDisabled,
-                  ]}
-                >
-                  {label}
-                </Text>
-              </Pressable>
-
-              {reason ? <Text style={styles.reason}>{reason}</Text> : null}
-            </View>
-          );
-        }}
-      />
-
-      {/* Konfirmasi presensi (popup di atas layar) */}
-      <Modal
-        visible={confirm.visible}
-        transparent
-        animationType="fade"
-        onRequestClose={closeConfirm}
-      >
-        <Pressable style={styles.confirmBackdrop} onPress={closeConfirm}>
-          <Pressable style={styles.confirmCard}>
-            <Text style={styles.confirmTitle}>Konfirmasi Presensi</Text>
-            <Text style={styles.confirmText}>
-              Presensi untuk {confirm.sessionName}?
-            </Text>
-
-            <View style={styles.confirmRow}>
-              <Pressable
-                onPress={closeConfirm}
-                style={({ pressed }) => [
-                  styles.confirmButton,
-                  pressed && styles.buttonPressed,
-                ]}
-              >
-                <Text style={styles.confirmButtonText}>Batal</Text>
-              </Pressable>
-
-              <Pressable
-                onPress={runCheckIn}
-                style={({ pressed }) => [
-                  styles.confirmButton,
-                  styles.confirmButtonPrimary,
-                  pressed && styles.buttonPressed,
-                ]}
-              >
-                <Text style={styles.confirmButtonTextPrimary}>Presensi</Text>
-              </Pressable>
-            </View>
-          </Pressable>
+        <Pressable
+          onPress={handleCheckIn}
+          disabled={!canPress}
+          style={({ pressed }) => [
+            styles.button,
+            attended && styles.buttonSuccess,
+            !canPress && !attended && styles.buttonDisabled,
+            pressed && canPress && styles.buttonPressed,
+          ]}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !canPress }}
+        >
+          <Text
+            style={[
+              styles.buttonText,
+              !canPress && !attended && styles.buttonTextDisabled,
+            ]}
+          >
+            {buttonLabel}
+          </Text>
         </Pressable>
-      </Modal>
+
+        {reason ? <Text style={styles.reason}>{reason}</Text> : null}
+      </View>
 
       <SuccessBottomSheet
-        visible={sheet.visible}
-        sessionName={sheet.sessionName}
-        waktuHadir={sheet.waktuHadir}
-        onClose={() => setSheet((s) => ({ ...s, visible: false }))}
+        visible={showSuccess}
+        sessionName={session.praktikum}
+        waktuHadir={successTime}
+        onClose={() => setShowSuccess(false)}
       />
-    </>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24, gap: 8, backgroundColor: COLORS.background },
-  title: { fontSize: 18, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
-  text: { fontSize: 14, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
-  list: { backgroundColor: COLORS.background },
-  listContent: { padding: 16, gap: 12 },
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  content: {
+    padding: 20,
+    gap: 16,
+  },
   card: {
     backgroundColor: COLORS.card,
     borderRadius: 16,
-    padding: 16,
-    gap: 6,
     borderWidth: 1,
     borderColor: COLORS.border,
+    padding: 20,
+    gap: 16,
+  },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  title: {
+    flex: 1,
+    fontSize: 18,
+    fontFamily: "PlusJakartaSans_700Bold",
+    color: COLORS.text,
+  },
+  infoSection: {
+    gap: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.surface,
+  },
+  infoRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 2,
+  },
+  infoLabel: {
+    fontSize: 14,
+    fontFamily: "PlusJakartaSans_400Regular",
+    color: COLORS.muted,
+  },
+  infoValue: {
+    fontSize: 14,
+    fontFamily: "PlusJakartaSans_600SemiBold",
+    color: COLORS.text,
   },
   button: {
     marginTop: 8,
     backgroundColor: COLORS.primary,
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderRadius: 10,
-    alignItems: 'center',
+    alignItems: "center",
   },
-  buttonSuccess: { backgroundColor: COLORS.success },
-  buttonDisabled: { backgroundColor: COLORS.surface },
-  buttonPressed: { opacity: 0.85 },
-  buttonText: { color: COLORS.white, fontFamily: 'PlusJakartaSans_600SemiBold' },
-  buttonTextDisabled: { color: COLORS.muted },
-  reason: { fontSize: 12, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted, marginTop: 4 },
-  confirmBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
+  buttonSuccess: {
+    backgroundColor: COLORS.success,
   },
-  confirmCard: {
-    width: '100%',
-    maxWidth: 400,
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    padding: 20,
-    gap: 12,
+  buttonDisabled: {
+    backgroundColor: COLORS.surface,
   },
-  confirmTitle: { fontSize: 16, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
-  confirmText: { fontSize: 14, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.text },
-  confirmRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
-  confirmButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    backgroundColor: COLORS.border,
+  buttonPressed: {
+    opacity: 0.85,
   },
-  confirmButtonPrimary: { backgroundColor: COLORS.primary },
-  confirmButtonText: { color: COLORS.text, fontFamily: 'PlusJakartaSans_600SemiBold' },
-  confirmButtonTextPrimary: { color: COLORS.white, fontFamily: 'PlusJakartaSans_600SemiBold' },
+  buttonText: {
+    color: COLORS.white,
+    fontFamily: "PlusJakartaSans_600SemiBold",
+    fontSize: 15,
+  },
+  buttonTextDisabled: {
+    color: COLORS.muted,
+  },
+  reason: {
+    fontSize: 12,
+    fontFamily: "PlusJakartaSans_400Regular",
+    color: COLORS.muted,
+    textAlign: "center",
+  },
 });
