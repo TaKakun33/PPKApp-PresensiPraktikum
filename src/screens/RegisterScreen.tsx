@@ -1,5 +1,5 @@
-// FILE AKMAL (feat/auth-leave-ai) — SRS-11. Layar registrasi PRAKTIKAN: nama, NIM, email, password.
-// Akun asisten tidak dibuat di sini, tetapi oleh admin lewat Firebase Console.
+// FILE AKMAL (feat/auth-leave-ai) — SRS-11. Layar registrasi: peran, nama, NIM (praktikan), email, password.
+// Peran asisten hanya berhasil jika email-nya terdaftar di `allowedAssistants` (diisi admin di Firebase Console).
 // Profil disimpan ke Firestore oleh authService.registerUser.
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Link, Redirect } from 'expo-router';
@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import type { Role } from '../app/constants';
 import { COLORS } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import { useScrollKeFieldFokus } from './useScrollKeFieldFokus';
@@ -29,6 +30,7 @@ import {
 
 export default function RegisterScreen() {
   const { register, state } = useAuth();
+  const [role, setRole] = useState<Role>('praktikan');
   const [nama, setNama] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -55,11 +57,17 @@ export default function RegisterScreen() {
     setFieldErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev));
   };
 
+  const pilihPeran = (r: Role) => {
+    setRole(r);
+    setFormError('');
+    setFieldErrors((prev) => (prev.nim ? { ...prev, nim: undefined } : prev));
+  };
+
   const handleRegister = async () => {
     if (submitting) return;
     setFormError('');
 
-    const input = { nama, email, password, confirmPassword, nim };
+    const input = { role, nama, email, password, confirmPassword, nim };
     const errors = validateRegisterInput(input);
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) return;
@@ -91,10 +99,34 @@ export default function RegisterScreen() {
           <View style={styles.header}>
             <Text style={styles.appName}>PPKApp</Text>
             <Text style={styles.title}>Buat Akun Baru</Text>
-            <Text style={styles.subtitle}>Isi data di bawah untuk mendaftar sebagai praktikan.</Text>
+            <Text style={styles.subtitle}>Pilih peran, lalu isi data di bawah untuk mendaftar.</Text>
           </View>
 
           <View style={styles.form} onLayout={saatLayoutForm}>
+            {/* Peran */}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Daftar sebagai</Text>
+              <View style={styles.roleRow}>
+                {(['praktikan', 'asisten'] as const).map((r) => {
+                  const aktif = role === r;
+                  return (
+                    <Pressable
+                      key={r}
+                      style={[styles.roleChip, aktif && styles.roleChipActive]}
+                      onPress={() => pilihPeran(r)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: aktif }}
+                      accessibilityLabel={`Daftar sebagai ${r}`}
+                    >
+                      <Text style={[styles.roleChipText, aktif && styles.roleChipTextActive]}>
+                        {r === 'praktikan' ? 'Praktikan' : 'Asisten'}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
             {/* Nama */}
             <View style={styles.fieldGroup} onLayout={saatLayoutField('nama')}>
               <Text style={styles.label}>Nama lengkap</Text>
@@ -112,13 +144,14 @@ export default function RegisterScreen() {
                   }}
                   autoCapitalize="words"
                   returnKeyType="next"
-                  onSubmitEditing={() => nimRef.current?.focus()}
+                  onSubmitEditing={() => (role === 'praktikan' ? nimRef.current : emailRef.current)?.focus()}
                 />
               </View>
               {fieldErrors.nama ? <Text style={styles.fieldError}>{fieldErrors.nama}</Text> : null}
             </View>
 
-            {/* NIM */}
+            {/* NIM (hanya praktikan) */}
+            {role === 'praktikan' ? (
             <View style={styles.fieldGroup} onLayout={saatLayoutField('nim')}>
                 <Text style={styles.label}>NIM</Text>
                 <View style={[styles.inputBox, fieldErrors.nim && styles.inputBoxError]}>
@@ -141,6 +174,7 @@ export default function RegisterScreen() {
                 </View>
                 {fieldErrors.nim ? <Text style={styles.fieldError}>{fieldErrors.nim}</Text> : null}
               </View>
+            ) : null}
 
             {/* Email */}
             <View style={styles.fieldGroup} onLayout={saatLayoutField('email')}>
@@ -241,7 +275,9 @@ export default function RegisterScreen() {
           <View style={styles.catatanBox}>
             <Ionicons name="information-circle-outline" size={16} color={COLORS.muted} />
             <Text style={styles.catatanText}>
-              Pendaftaran ini khusus praktikan. Akun asisten dibuat oleh admin; hubungi PM jika kamu asisten.
+              {role === 'asisten'
+                ? 'Pendaftaran asisten hanya berhasil dengan email yang sudah didaftarkan admin. Gunakan email tersebut.'
+                : 'Praktikan mendaftar dengan NIM. Jika kamu asisten, pilih "Asisten" dan pakai email yang didaftarkan admin.'}
             </Text>
           </View>
 
@@ -288,6 +324,19 @@ const styles = StyleSheet.create({
   inputBoxError: { borderColor: COLORS.danger },
   input: { flex: 1, fontSize: 15, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.text, padding: 0 },
   fieldError: { fontSize: 12, fontFamily: 'PlusJakartaSans_500Medium', color: COLORS.danger },
+  roleRow: { flexDirection: 'row', gap: 10 },
+  roleChip: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+  },
+  roleChipActive: { backgroundColor: COLORS.primaryLight, borderColor: COLORS.primary },
+  roleChipText: { fontSize: 14, fontFamily: 'PlusJakartaSans_600SemiBold', color: COLORS.muted },
+  roleChipTextActive: { color: COLORS.primary },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
