@@ -2,10 +2,12 @@
 // seperti layout Sprint 1), isi tab ditentukan oleh daftar TabDef.
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router';
+import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { COLORS } from '../constants/colors';
 import LogoutButton from './LogoutButton';
+import ProfileButton from './ProfileButton';
 import type { TabDef } from './tabConfig';
 
 export default function RoleTabs({ tabs }: { tabs: TabDef[] }) {
@@ -33,7 +35,12 @@ export default function RoleTabs({ tabs }: { tabs: TabDef[] }) {
         headerStyle: { backgroundColor: COLORS.card },
         headerTitleStyle: { color: COLORS.text, fontFamily: 'PlusJakartaSans_700Bold', fontSize: 17 },
         headerShadowVisible: false,
-        headerRight: () => <LogoutButton />,
+        headerRight: () => (
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <ProfileButton />
+            <LogoutButton />
+          </View>
+        ),
       }}
     >
       {tabs.map((tab) => (
