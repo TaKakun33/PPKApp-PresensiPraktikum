@@ -2,10 +2,14 @@
 // Form tambah/ubah sesi oleh asisten: kelas, praktikum, tanggal, waktu, dan ruangan.
 // /session-form        -> tambah sesi baru
 // /session-form?id=xx  -> ubah jadwal sesi xx (hanya selama Belum Dibuka)
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { DateTimePicker } from '@expo/ui/community/datetime-picker';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
+  Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -30,6 +34,7 @@ import {
   validasiSesi,
   type SessionInput,
 } from '../services/sessionService';
+import { formatTanggal } from '../utils/format';
 
 const KOSONG: SessionInput = {
   kelasId: '',
@@ -39,6 +44,32 @@ const KOSONG: SessionInput = {
   waktuSelesai: '',
   ruangan: '',
 };
+
+const JAM_AWAL = 7;
+const JAM_AKHIR = 21;
+const OPSI_JAM = Array.from({ length: (JAM_AKHIR - JAM_AWAL) * 2 + 1 }, (_, i) => {
+  const totalMenit = JAM_AWAL * 60 + i * 30;
+  return `${String(Math.floor(totalMenit / 60)).padStart(2, '0')}:${String(totalMenit % 60).padStart(2, '0')}`;
+});
+
+function awalHariIni(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+function tanggalKeYmd(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function ymdKeTanggal(value: string): Date {
+  const cocok = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!cocok) return awalHariIni();
+  return new Date(Number(cocok[1]), Number(cocok[2]) - 1, Number(cocok[3]));
+}
+
+function labelJam(jam: string): string {
+  return jam.replace(':', '.');
+}
 
 function Field({
   label,
@@ -72,6 +103,93 @@ function Field({
   );
 }
 
+function TimeField({
+  label,
+  value,
+  onChange,
+  disabled,
+  minJam,
+}: {
+  label: string;
+  value: string;
+  onChange: (jam: string) => void;
+  disabled: boolean;
+  minJam?: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <View style={styles.field}>
+      <Text style={styles.label}>{label}</Text>
+      <Pressable
+        style={({ pressed }) => [
+          styles.input,
+          styles.selectInput,
+          pressed && styles.selectPressed,
+          disabled && styles.selectDisabled,
+        ]}
+        onPress={() => setOpen(true)}
+        disabled={disabled}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityValue={{ text: value ? labelJam(value) : 'Belum dipilih' }}
+      >
+        <Text style={[styles.selectText, !value && styles.selectPlaceholder]}>
+          {value ? labelJam(value) : 'Pilih jam'}
+        </Text>
+        <Ionicons name="chevron-down" size={16} color={colors.primary} />
+      </Pressable>
+
+      <Modal transparent animationType="fade" visible={open} onRequestClose={() => setOpen(false)}>
+        <View style={styles.timeBackdrop}>
+          <Pressable
+            style={styles.timeBackdropPress}
+            onPress={() => setOpen(false)}
+            accessibilityLabel="Tutup pilihan jam"
+          />
+          <View style={styles.timeCard}>
+            <Text style={styles.timeTitle}>{label}</Text>
+            <ScrollView style={styles.timeList} showsVerticalScrollIndicator={false}>
+              {OPSI_JAM.map((jam) => {
+                const aktif = jam === value;
+                const nonaktif = Boolean(minJam && jam <= minJam);
+                return (
+                  <Pressable
+                    key={jam}
+                    style={({ pressed }) => [
+                      styles.timeOption,
+                      aktif && styles.timeOptionActive,
+                      pressed && !nonaktif && styles.timeOptionPressed,
+                    ]}
+                    onPress={() => {
+                      onChange(jam);
+                      setOpen(false);
+                    }}
+                    disabled={nonaktif}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: aktif, disabled: nonaktif }}
+                  >
+                    <Text
+                      style={[
+                        styles.timeOptionText,
+                        aktif && styles.timeOptionTextActive,
+                        nonaktif && styles.timeOptionTextDisabled,
+                      ]}
+                    >
+                      {labelJam(jam)}
+                    </Text>
+                    {aktif ? <Ionicons name="checkmark" size={18} color={colors.primary} /> : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
 export default function SessionFormScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { profile } = useAuth();
@@ -84,6 +202,7 @@ export default function SessionFormScreen() {
   const [retryKey, setRetryKey] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   useEffect(() => {
     if (!asistenId) return;
@@ -123,6 +242,16 @@ export default function SessionFormScreen() {
   }, [id, asistenId, retryKey]);
 
   const set = (key: keyof SessionInput) => (value: string) => setForm((f) => ({ ...f, [key]: value }));
+
+  const pilihMulai = (jam: string) =>
+    setForm((f) => ({
+      ...f,
+      waktuMulai: jam,
+      waktuSelesai: f.waktuSelesai && f.waktuSelesai <= jam ? '' : f.waktuSelesai,
+    }));
+
+  const pilihTanggal = (date: Date) =>
+    setForm((f) => ({ ...f, tanggal: tanggalKeYmd(date) }));
 
   const pilihKelas = (cls: ClassDoc) =>
     setForm((f) => ({ ...f, kelasId: cls.id, praktikum: f.praktikum || cls.praktikum }));
@@ -180,6 +309,10 @@ export default function SessionFormScreen() {
     );
   }
 
+  const batasTanggal = awalHariIni();
+  const tanggalForm = form.tanggal ? ymdKeTanggal(form.tanggal) : batasTanggal;
+  const nilaiTanggal = tanggalForm < batasTanggal ? batasTanggal : tanggalForm;
+
   return wrap(
     <KeyboardAvoidingView style={styles.flex} behavior="height">
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -214,33 +347,80 @@ export default function SessionFormScreen() {
           placeholder="Contoh: Praktikum PPK - Modul 3"
           editable={!saving}
         />
-        <Field
-          label="Tanggal (TTTT-BB-HH)"
-          value={form.tanggal}
-          onChangeText={set('tanggal')}
-          placeholder="2026-11-20"
-          keyboardType="numbers-and-punctuation"
-          editable={!saving}
-        />
+        <View style={styles.field}>
+          <Text style={styles.label}>Tanggal</Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.input,
+              styles.selectInput,
+              pressed && styles.selectPressed,
+              saving && styles.selectDisabled,
+            ]}
+            onPress={() => setShowDatePicker(true)}
+            disabled={saving}
+            accessibilityRole="button"
+            accessibilityLabel={form.tanggal ? `Tanggal ${formatTanggal(`${form.tanggal}T00:00:00`)}` : 'Pilih tanggal'}
+          >
+            <Text style={[styles.selectText, !form.tanggal && styles.selectPlaceholder]}>
+              {form.tanggal ? formatTanggal(`${form.tanggal}T00:00:00`) : 'Pilih tanggal'}
+            </Text>
+            <Ionicons name="calendar-outline" size={18} color={colors.primary} />
+          </Pressable>
+        </View>
+        {showDatePicker ? (
+          Platform.OS === 'android' ? (
+            <DateTimePicker
+              value={nilaiTanggal}
+              mode="date"
+              presentation="dialog"
+              minimumDate={batasTanggal}
+              onValueChange={(_, date) => {
+                setShowDatePicker(false);
+                pilihTanggal(date);
+              }}
+              onDismiss={() => setShowDatePicker(false)}
+            />
+          ) : (
+            <Modal
+              transparent
+              animationType="fade"
+              visible
+              onRequestClose={() => setShowDatePicker(false)}
+            >
+              <View style={styles.pickerBackdrop}>
+                <View style={styles.pickerCard}>
+                  <Text style={styles.pickerTitle}>Pilih Tanggal</Text>
+                  <DateTimePicker
+                    value={nilaiTanggal}
+                    mode="date"
+                    display="compact"
+                    minimumDate={batasTanggal}
+                    accentColor={colors.primary}
+                    style={styles.nativePicker}
+                    onValueChange={(_, date) => pilihTanggal(date)}
+                  />
+                  <PrimaryButton label="Selesai" onPress={() => setShowDatePicker(false)} />
+                </View>
+              </View>
+            </Modal>
+          )
+        ) : null}
         <View style={styles.row}>
           <View style={styles.flex}>
-            <Field
-              label="Mulai (JJ:MM)"
+            <TimeField
+              label="Jam mulai"
               value={form.waktuMulai}
-              onChangeText={set('waktuMulai')}
-              placeholder="08:00"
-              keyboardType="numbers-and-punctuation"
-              editable={!saving}
+              onChange={pilihMulai}
+              disabled={saving}
             />
           </View>
           <View style={styles.flex}>
-            <Field
-              label="Selesai (JJ:MM)"
+            <TimeField
+              label="Jam selesai"
               value={form.waktuSelesai}
-              onChangeText={set('waktuSelesai')}
-              placeholder="10:00"
-              keyboardType="numbers-and-punctuation"
-              editable={!saving}
+              onChange={set('waktuSelesai')}
+              disabled={saving}
+              minJam={form.waktuMulai || undefined}
             />
           </View>
         </View>
@@ -302,6 +482,60 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 14, fontFamily: font.semibold, color: colors.text },
   chipSub: { fontSize: 11, fontFamily: font.medium, color: colors.textSecondary },
   chipTextActive: { color: colors.white },
+  selectInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+  },
+  selectPressed: { opacity: 0.85 },
+  selectDisabled: { opacity: 0.5 },
+  selectText: { flex: 1, fontSize: 14, fontFamily: font.medium, color: colors.text },
+  selectPlaceholder: { color: colors.placeholder },
+  nativePicker: { alignSelf: 'stretch' },
+  pickerBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 24,
+    backgroundColor: 'rgba(20, 35, 74, 0.48)',
+  },
+  pickerCard: {
+    backgroundColor: colors.card,
+    borderRadius: radius.card,
+    padding: 20,
+    gap: 14,
+  },
+  pickerTitle: { fontSize: 17, fontFamily: font.bold, color: colors.text },
+  timeBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 24,
+    backgroundColor: 'rgba(20, 35, 74, 0.48)',
+  },
+  timeBackdropPress: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
+  timeCard: {
+    backgroundColor: colors.card,
+    borderRadius: radius.card,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+    maxHeight: '75%',
+  },
+  timeTitle: { fontSize: 16, fontFamily: font.bold, color: colors.text },
+  timeList: { marginTop: 8 },
+  timeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: radius.input,
+  },
+  timeOptionActive: { backgroundColor: colors.tint },
+  timeOptionPressed: { backgroundColor: colors.surface },
+  timeOptionText: { fontSize: 15, fontFamily: font.medium, color: colors.text },
+  timeOptionTextActive: { fontFamily: font.semibold, color: colors.primary },
+  timeOptionTextDisabled: { color: colors.placeholder, opacity: 0.5 },
   error: { fontSize: 13, fontFamily: font.medium, color: colors.danger },
   submit: { marginTop: 6 },
   centerButton: { alignSelf: 'center', minWidth: 180, marginBottom: 32 },
