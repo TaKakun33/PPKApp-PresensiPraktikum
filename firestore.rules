@@ -210,44 +210,64 @@ service cloud.firestore {
     }
 
     // --- leaveRequests ------------------------------------------------------
-    // Baca: pemilik atau asisten pengampu. Buat: praktikan untuk sesi kelasnya.
-    // Ubah: hanya asisten pengampu, status menunggu -> diterima/ditolak.
+    // ID dokumen WAJIB `{sessionId}_{uid}` → satu pengajuan per praktikan per sesi; keunikan
+    // ditegakkan server (pengajuan ganda dari dua perangkat / saat offline tidak bisa lolos).
+    // Baca   : pemilik atau asisten pengampu.
+    // Buat   : praktikan untuk sesi kelasnya, status menunggu.
+    // Ajukan ulang (update oleh praktikan): hanya jika pengajuan sebelumnya berstatus ditolak,
+    //          dengan isian yang lolos pemeriksaan yang sama seperti saat membuat.
+    // Putuskan (update oleh asisten): asisten pengampu, menunggu -> diterima/ditolak.
+    // Batalkan (hapus): praktikan pemilik, hanya selagi status masih menunggu.
     match /leaveRequests/{leaveId} {
+      function validLeavePayload(docId) {
+        return request.resource.data.keys().hasOnly([
+                 'sessionId', 'kelasId', 'asistenId', 'praktikum', 'userId',
+                 'nama', 'nim', 'alasan', 'kategoriAI', 'aiStatus', 'status', 'createdAt'
+               ])
+          && request.resource.data.keys().hasAll([
+                 'sessionId', 'kelasId', 'asistenId', 'userId', 'alasan', 'aiStatus', 'status'
+               ])
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.status == 'menunggu'
+          && request.resource.data.sessionId is string
+          && docId == request.resource.data.sessionId + '_' + request.auth.uid
+          && request.resource.data.alasan is string
+          && request.resource.data.alasan.size() >= 10
+          && request.resource.data.alasan.size() <= 300
+          && request.resource.data.nama == myProfile().nama
+          && request.resource.data.nim == myProfile().get('nim', '')
+          && request.resource.data.kelasId in myProfile().get('kelasIds', [])
+          && sessionOf(request.resource.data.sessionId).kelasId == request.resource.data.kelasId
+          && sessionOf(request.resource.data.sessionId).asistenId == request.resource.data.asistenId
+          && sessionOf(request.resource.data.sessionId).status != 'ditutup'
+          && request.resource.data.aiStatus in ['berhasil', 'gagal']
+          && (
+            request.resource.data.kategoriAI == null
+            || request.resource.data.kategoriAI in [
+                 'positif', 'netral', 'negatif'
+               ]
+          )
+          && (
+            !('createdAt' in request.resource.data)
+            || request.resource.data.createdAt == request.time
+          );
+      }
+
       allow read: if signedIn() && (
         resource.data.userId == request.auth.uid
         || (isAsisten() && resource.data.asistenId == request.auth.uid)
       );
 
       allow create: if isPraktikan()
-        && request.resource.data.keys().hasOnly([
-             'sessionId', 'kelasId', 'asistenId', 'praktikum', 'userId',
-             'nama', 'nim', 'alasan', 'kategoriAI', 'aiStatus', 'status', 'createdAt'
-           ])
-        && request.resource.data.keys().hasAll([
-             'sessionId', 'kelasId', 'asistenId', 'userId', 'alasan', 'aiStatus', 'status'
-           ])
-        && request.resource.data.userId == request.auth.uid
-        && request.resource.data.status == 'menunggu'
-        && request.resource.data.sessionId is string
-        && request.resource.data.alasan is string
-        && request.resource.data.alasan.size() >= 10
-        && request.resource.data.alasan.size() <= 300
-        && request.resource.data.nama == myProfile().nama
-        && request.resource.data.nim == myProfile().get('nim', '')
-        && request.resource.data.kelasId in myProfile().get('kelasIds', [])
-        && sessionOf(request.resource.data.sessionId).kelasId == request.resource.data.kelasId
-        && sessionOf(request.resource.data.sessionId).asistenId == request.resource.data.asistenId
-        && sessionOf(request.resource.data.sessionId).status != 'ditutup'
-        && request.resource.data.aiStatus in ['berhasil', 'gagal']
-        && (
-          request.resource.data.kategoriAI == null
-          || request.resource.data.kategoriAI in ['negatif', 'netral', 'positif']
-        )
-        && (
-          !('createdAt' in request.resource.data)
-          || request.resource.data.createdAt == request.time
-        );
+        && validLeavePayload(leaveId);
 
+      // Praktikan mengajukan ulang setelah ditolak (menimpa dokumen yang sama).
+      allow update: if isPraktikan()
+        && resource.data.userId == request.auth.uid
+        && resource.data.status == 'ditolak'
+        && validLeavePayload(leaveId);
+
+      // Asisten pengampu memutuskan pengajuan.
       allow update: if isAsisten()
         && resource.data.asistenId == request.auth.uid
         && resource.data.status == 'menunggu'
@@ -262,7 +282,10 @@ service cloud.firestore {
           )
         );
 
-      allow delete: if false;
+      // Praktikan membatalkan pengajuannya sendiri selagi masih menunggu.
+      allow delete: if isPraktikan()
+        && resource.data.userId == request.auth.uid
+        && resource.data.status == 'menunggu';
     }
 
     // --- Default: tolak koleksi lain ----------------------------------------
