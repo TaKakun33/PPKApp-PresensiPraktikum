@@ -6,7 +6,6 @@ import { Link, Redirect } from 'expo-router';
 import { useRef, useState, type ComponentRef } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Pressable,
   ScrollView,
@@ -21,7 +20,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { COLORS } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import { useScrollKeFieldFokus } from './useScrollKeFieldFokus';
-import { getAuthErrorMessage } from '../services/authService';
+import { getAuthErrorMessage, sendPasswordReset } from '../services/authService';
 import AuthLoadingGate from '../navigation/AuthLoadingGate';
 
 const NAVY = '#0B2447';
@@ -36,6 +35,8 @@ export default function LoginScreen() {
   const [remember, setRemember] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [info, setInfo] = useState('');
+  const [resetting, setResetting] = useState(false);
   const passwordRef = useRef<ComponentRef<typeof TextInput>>(null);
   const insets = useSafeAreaInsets();
   const { scrollRef, saatLayoutForm, saatLayoutField, fokusKe } = useScrollKeFieldFokus();
@@ -56,7 +57,28 @@ export default function LoginScreen() {
 
   const clearErrors = () => {
     setError('');
+    setInfo('');
     clearAuthError();
+  };
+
+  // Lupa password: kirim tautan reset ke email yang sudah diketik di kolom email.
+  const handleForgotPassword = async () => {
+    if (resetting || loading) return;
+    clearErrors();
+    if (!email.trim()) {
+      setError('Isi email kamu dulu, lalu tekan "Lupa password?".');
+      return;
+    }
+    setResetting(true);
+    try {
+      await sendPasswordReset(email);
+      // Pesan sengaja netral supaya tidak membocorkan apakah email terdaftar atau tidak.
+      setInfo('Jika email terdaftar, tautan untuk membuat password baru sudah dikirim. Cek inbox atau folder spam.');
+    } catch (e: unknown) {
+      setError(getAuthErrorMessage(e, 'Gagal mengirim email reset. Coba lagi.'));
+    } finally {
+      setResetting(false);
+    }
   };
 
   const handleLogin = async () => {
@@ -74,13 +96,6 @@ export default function LoginScreen() {
       setError(getAuthErrorMessage(e, 'Login gagal. Coba lagi.'));
       setLoading(false);
     }
-  };
-
-  const handleLupaPassword = () => {
-    Alert.alert(
-      'Lupa Password',
-      'Fitur atur ulang password belum tersedia. Hubungi admin praktikum untuk bantuan.',
-    );
   };
 
   return (
@@ -192,10 +207,25 @@ export default function LoginScreen() {
                 <Text style={styles.rememberText}>Ingat Saya</Text>
               </Pressable>
 
-              <Pressable onPress={handleLupaPassword} hitSlop={8} accessibilityRole="link">
-                <Text style={styles.forgotText}>Lupa Password?</Text>
+              <Pressable
+                onPress={handleForgotPassword}
+                disabled={resetting || loading}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Lupa password"
+              >
+                <Text style={styles.forgotText}>
+                  {resetting ? 'Mengirim...' : 'Lupa Password?'}
+                </Text>
               </Pressable>
             </View>
+
+            {info ? (
+              <View style={styles.infoBox}>
+                <Ionicons name="checkmark-circle" size={15} color={COLORS.success} />
+                <Text style={styles.infoBoxText}>{info}</Text>
+              </View>
+            ) : null}
 
             {displayedError ? (
               <View style={styles.errorBox}>
@@ -314,6 +344,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'PlusJakartaSans_600SemiBold',
     color: NAVY,
+  },
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.successLight,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  infoBoxText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: 'PlusJakartaSans_500Medium',
+    color: COLORS.textSecondary,
   },
   errorBox: {
     flexDirection: 'row',

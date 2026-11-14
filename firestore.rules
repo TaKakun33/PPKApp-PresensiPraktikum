@@ -61,6 +61,9 @@ service cloud.firestore {
         || (isPraktikan() && resource.data.role == 'asisten')
       );
 
+      // Cek NIM unik saat registrasi: pengguna login boleh query users, tapi maksimal 1 dokumen per query.
+      allow list: if signedIn() && request.query.limit <= 1;
+
       allow create: if signedIn()
         && request.auth.uid == uid
         && request.resource.data.keys().hasAll(['nama', 'email', 'role'])
@@ -88,6 +91,14 @@ service cloud.firestore {
         && resource.data.role == 'praktikan'
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['kelasIds'])
         && request.resource.data.kelasIds is list;
+
+      // Pengguna boleh mengubah NAMA miliknya sendiri (email, NIM, peran, kelasIds tidak boleh).
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nama'])
+        && request.resource.data.nama is string
+        && request.resource.data.nama.size() >= 3
+        && request.resource.data.nama.size() <= 100;
 
       allow delete: if false;
     }

@@ -49,6 +49,7 @@ export default function RootLayout() {
         <Stack.Screen name="login" />
         <Stack.Screen name="praktikan" />
         <Stack.Screen name="asisten" />
+        <Stack.Screen name="profile" options={{ headerShown: true, title: 'Profil' }} />
         <Stack.Screen name="session/[id]" options={{ headerShown: true, title: 'Detail Sesi' }} />
       </Stack>
     </AuthProvider>
