@@ -7,15 +7,25 @@
 import {
   createUserWithEmailAndPassword,
   deleteUser,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut as fbSignOut,
 } from '@react-native-firebase/auth';
 import {
+  collection,
   doc,
   getDoc,
+  getDocs,
+  limit,
+  query,
+  where,
   onSnapshot,
   serverTimestamp,
   setDoc,
+  updateDoc,
   type DocumentSnapshot,
   type FirestoreError,
 } from '@react-native-firebase/firestore';
@@ -109,10 +119,62 @@ export async function signInUser(email: string, password: string): Promise<void>
   await signInWithEmailAndPassword(auth, email.trim(), password);
 }
 
+/**
+ * Lupa password: Firebase mengirim email berisi tautan untuk membuat password baru.
+ * Pengaturan template email ada di Firebase Console > Authentication > Templates.
+ */
+export async function sendPasswordReset(email: string): Promise<void> {
+  const clean = email.trim();
+  if (!clean) throw createAppError('app/invalid-input', 'Email harus diisi.');
+  if (!EMAIL_PATTERN.test(clean)) throw createAppError('auth/invalid-email', 'Format email tidak valid.');
+  await withTimeout(sendPasswordResetEmail(auth, clean), PROFILE_WRITE_TIMEOUT_MS);
+}
+
+// ─── profil: ubah nama & password ─────────────────────────────────────────────
+
+export const NAMA_MIN = 3;
+export const NAMA_MAX = 100; // selaras dengan firestore.rules
+
+/** Ubah nama pada dokumen profil sendiri. Field lain (email, NIM, peran) tidak bisa diubah dari sini. */
+export async function updateProfileName(uid: string, nama: string): Promise<void> {
+  const clean = nama.trim();
+  if (clean.length < NAMA_MIN) throw createAppError('app/invalid-input', `Nama minimal ${NAMA_MIN} karakter.`);
+  if (clean.length > NAMA_MAX) throw createAppError('app/invalid-input', `Nama maksimal ${NAMA_MAX} karakter.`);
+  await withTimeout(updateDoc(doc(db, 'users', uid), { nama: clean }), PROFILE_WRITE_TIMEOUT_MS);
+}
+
+/** Ubah password. Firebase mewajibkan login ulang (password lama) sebelum password diganti. */
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  const user = auth.currentUser;
+  if (!user || !user.email) throw createAppError('app/not-signed-in', 'Sesi login berakhir. Silakan login kembali.');
+  if (!currentPassword) throw createAppError('app/invalid-input', 'Password lama harus diisi.');
+  if (newPassword.length < PASSWORD_MIN) {
+    throw createAppError('app/invalid-input', `Password baru minimal ${PASSWORD_MIN} karakter.`);
+  }
+  if (newPassword === currentPassword) {
+    throw createAppError('app/invalid-input', 'Password baru harus berbeda dari password lama.');
+  }
+
+  try {
+    await withTimeout(
+      reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, currentPassword)),
+      PROFILE_WRITE_TIMEOUT_MS,
+    );
+  } catch (e) {
+    const code = getErrorCode(e);
+    if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+      throw createAppError('app/wrong-current-password', 'Password lama salah.');
+    }
+    throw e;
+  }
+  await withTimeout(updatePassword(user, newPassword), PROFILE_WRITE_TIMEOUT_MS);
+}
+
 export async function signOutUser(): Promise<void> {
   await fbSignOut(auth);
 }
 
+const NIM_TAKEN_MESSAGE = 'NIM ini sudah terdaftar pada akun lain.';
 const NOT_ALLOWED_ASSISTANT_MESSAGE =
   'Email ini tidak terdaftar sebagai asisten. Hubungi admin atau daftar sebagai praktikan.';
 
@@ -186,6 +248,28 @@ export async function registerUser(input: RegisterInput): Promise<void> {
           kelasIds: [] as string[], // diisi asisten saat menambah peserta kelas
           createdAt: serverTimestamp(),
         };
+
+    // NIM harus unik. Akun Auth sudah dibuat (jadi pengguna sudah login dan boleh query dengan limit 1),
+    // jadi cek di sini; jika sudah dipakai, akun dibatalkan. Cek ini hanya di sisi aplikasi.
+    if (!isAsisten) {
+      try {
+        const dup = await withTimeout(
+          getDocs(query(collection(db, 'users'), where('nim', '==', input.nim.trim()), limit(1))),
+          PROFILE_WRITE_TIMEOUT_MS,
+        );
+        if (!dup.empty) {
+          await rollback();
+          throw createAppError('app/nim-taken', NIM_TAKEN_MESSAGE);
+        }
+      } catch (e) {
+        if (getErrorCode(e) === 'app/nim-taken') throw e;
+        await rollback();
+        throw createAppError(
+          'app/profile-save-failed',
+          getFriendlyError(e, 'Gagal memeriksa NIM. Periksa koneksi internet lalu coba lagi.'),
+        );
+      }
+    }
 
     try {
       await withTimeout(setDoc(doc(db, 'users', cred.user.uid), profile), PROFILE_WRITE_TIMEOUT_MS);
