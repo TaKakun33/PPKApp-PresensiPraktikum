@@ -1,39 +1,18 @@
 // FILE AKMAL (feat/auth-leave-ai) — SRS-12. Bottom Tab bersama untuk kedua peran (tampilan sama
 // seperti layout Sprint 1), isi tab ditentukan oleh daftar TabDef.
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Tabs } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Tabs } from 'expo-router/js-tabs';
 
-import { COLORS } from '../constants/colors';
-import LogoutButton from './LogoutButton';
+import FloatingTabBar from '../components/FloatingTabBar';
 import type { TabDef } from './tabConfig';
 
 export default function RoleTabs({ tabs }: { tabs: TabDef[] }) {
-  const insets = useSafeAreaInsets();
-  const bottomPadding = Math.max(insets.bottom, 24);
-
   return (
     <Tabs
+      tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{
-        tabBarActiveTintColor: COLORS.primary,
-        tabBarInactiveTintColor: COLORS.muted,
-        tabBarStyle: {
-          backgroundColor: COLORS.card,
-          borderTopColor: COLORS.surface,
-          borderTopWidth: 1,
-          paddingTop: 8,
-          paddingBottom: bottomPadding,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -3 },
-          shadowOpacity: 0.05,
-          shadowRadius: 10,
-          elevation: 8,
-        },
-        tabBarLabelStyle: { fontSize: 11, fontFamily: 'PlusJakartaSans_600SemiBold', marginTop: 2 },
-        headerStyle: { backgroundColor: COLORS.card },
-        headerTitleStyle: { color: COLORS.text, fontFamily: 'PlusJakartaSans_700Bold', fontSize: 17 },
-        headerShadowVisible: false,
-        headerRight: () => <LogoutButton />,
+        headerShown: false,
+        tabBarHideOnKeyboard: true,
       }}
     >
       {tabs.map((tab) => (

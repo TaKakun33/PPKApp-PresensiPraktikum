@@ -6,8 +6,9 @@ import type { Attendance, Session } from '../lib/types';
 import { subscribeAttendances, subscribeSessions } from '../services/sessionService';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';
+import ScreenHeader from '../components/ScreenHeader';
 import StatusBadge from '../components/StatusBadge';
-import { COLORS } from '../constants/colors';
+import { colors, font, layout, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { formatTanggalJam } from '../utils/format';
 
@@ -170,210 +171,250 @@ export default function RecapScreen() {
   }));
 
   if (authLoading) {
-    return <LoadingState message="Memuat profil asisten..." />;
+    return (
+      <View style={styles.screen}>
+        <ScreenHeader title="Rekap" />
+        <View style={styles.state}>
+          <LoadingState message="Memuat profil asisten..." />
+        </View>
+      </View>
+    );
   }
 
   if (role !== 'asisten') {
     return (
-      <EmptyState
-        title="Fitur khusus asisten"
-        message="Pilih identitas asisten untuk melihat rekap kehadiran."
-      />
+      <View style={styles.screen}>
+        <ScreenHeader title="Rekap" />
+        <View style={styles.state}>
+          <EmptyState
+            icon="lock-closed-outline"
+            title="Fitur khusus asisten"
+            message="Pilih identitas asisten untuk melihat rekap kehadiran."
+          />
+        </View>
+      </View>
     );
   }
 
   return (
-    <FlatList
-      data={attendanceRows}
-      keyExtractor={(item) => item.id}
-      contentContainerStyle={styles.content}
-      ListHeaderComponent={
-        <View style={styles.header}>
-          <Text style={styles.title}>Rekap Kehadiran</Text>
-          <Text style={styles.subtitle}>
-            Pilih sesi untuk melihat daftar praktikan yang hadir.
-          </Text>
+    <View style={styles.screen}>
+      <ScreenHeader title="Rekap" />
+      <FlatList
+        data={attendanceRows}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.content}
+        ListHeaderComponent={
+          <View style={styles.header}>
+            <Text style={styles.subtitle}>
+              Pilih sesi untuk melihat daftar praktikan yang hadir.
+            </Text>
 
-          {loadError ? (
-            <View style={[styles.feedback, styles.errorFeedback]}>
-              <Text style={styles.feedbackText}>{loadError}</Text>
-            </View>
-          ) : null}
+            {loadError ? (
+              <View style={[styles.feedback, styles.errorFeedback]}>
+                <Text style={styles.feedbackText}>{loadError}</Text>
+              </View>
+            ) : null}
 
-          {sessions.length > 0 ? (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.sessionSelector}
-            >
-              {sessions.map((session) => {
-                const selected = session.id === selectedSessionId;
-                return (
-                  <Pressable
-                    key={session.id}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${session.praktikum}, kelas ${session.kelasId}, ${session.tanggal}`}
-                    accessibilityState={{ selected }}
-                    onPress={() => setSelectedSessionId(session.id)}
-                    style={({ pressed }) => [
-                      styles.sessionOption,
-                      selected && styles.sessionOptionSelected,
-                      pressed && styles.optionPressed,
-                    ]}
-                  >
-                    <Text
-                      numberOfLines={2}
-                      style={[
-                        styles.sessionOptionTitle,
-                        selected && styles.sessionOptionTitleSelected,
+            {sessions.length > 0 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.sessionSelector}
+              >
+                {sessions.map((session) => {
+                  const selected = session.id === selectedSessionId;
+                  return (
+                    <Pressable
+                      key={session.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${session.praktikum}, kelas ${session.kelasId}, ${session.tanggal}`}
+                      accessibilityState={{ selected }}
+                      onPress={() => setSelectedSessionId(session.id)}
+                      style={({ pressed }) => [
+                        styles.sessionOption,
+                        selected && styles.sessionOptionSelected,
+                        pressed && styles.optionPressed,
                       ]}
                     >
-                      {session.praktikum}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.sessionOptionDetails,
-                        selected && styles.sessionOptionTitleSelected,
-                      ]}
-                    >
-                      {session.kelasId} · {session.tanggal}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          ) : null}
+                      <Text
+                        numberOfLines={2}
+                        style={[
+                          styles.sessionOptionTitle,
+                          selected && styles.sessionOptionTitleSelected,
+                        ]}
+                      >
+                        {session.praktikum}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.sessionOptionDetails,
+                          selected && styles.sessionOptionTitleSelected,
+                        ]}
+                      >
+                        {session.kelasId} · {session.tanggal}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            ) : null}
 
-          {selectedSession ? (
-            <View style={styles.selectedSessionCard}>
-              <View style={styles.selectedSessionInfo}>
-                <Text style={styles.selectedSessionTitle}>{selectedSession.praktikum}</Text>
-                <Text style={styles.selectedSessionDetails}>Kelas {selectedSession.kelasId}</Text>
+            {selectedSession ? (
+              <View style={styles.selectedSessionCard}>
+                <View style={styles.selectedSessionTop}>
+                  <View style={styles.selectedSessionInfo}>
+                    <Text style={styles.selectedSessionTitle}>{selectedSession.praktikum}</Text>
+                    <Text style={styles.selectedSessionDetails}>Kelas {selectedSession.kelasId}</Text>
+                  </View>
+                  <StatusBadge status={selectedSession.status} />
+                </View>
                 <Text style={styles.selectedSessionDetails}>
                   {selectedSession.tanggal}, {selectedSession.waktuMulai} - {selectedSession.waktuSelesai}
                 </Text>
                 <Text style={styles.selectedSessionDetails}>Ruangan: {selectedSession.ruangan}</Text>
+                {!isLoadingAttendances && selectedSession.status !== STATUS_SESI.BELUM ? (
+                  <View style={styles.countContainer}>
+                    <Text style={styles.countValue}>{attendanceRows.length}</Text>
+                    <Text style={styles.countLabel}>praktikan hadir</Text>
+                  </View>
+                ) : null}
               </View>
-              <StatusBadge status={selectedSession.status} />
-              {!isLoadingAttendances && selectedSession.status !== STATUS_SESI.BELUM ? (
-                <View style={styles.countContainer}>
-                  <Text style={[styles.countValue, styles.countValueSmall]}>{attendanceRows.length}</Text>
-                  <Text style={styles.countLabel}>praktikan hadir</Text>
-                </View>
-              ) : null}
+            ) : null}
+          </View>
+        }
+        ListEmptyComponent={
+          isLoadingSessions ? (
+            <LoadingState message="Memuat sesi aktif..." />
+          ) : sessions.length === 0 ? (
+            <EmptyState
+              icon="calendar-outline"
+              title="Belum ada sesi yang ditugaskan"
+              message="Sesi yang ditugaskan kepadamu akan muncul di sini."
+            />
+          ) : selectedSession?.status === STATUS_SESI.BELUM ? (
+            <EmptyState
+              icon="lock-closed-outline"
+              title="Sesi belum dibuka"
+              message="Rekap kehadiran tersedia setelah sesi dibuka."
+            />
+          ) : isLoadingAttendances ? (
+            <LoadingState message="Memuat rekap kehadiran..." />
+          ) : attendanceError ? (
+            <EmptyState title="Tidak dapat memuat rekap" message={attendanceError} />
+          ) : (
+            <EmptyState
+              icon="people-outline"
+              title="Belum ada praktikan yang hadir"
+              message="Daftar kehadiran untuk sesi ini masih kosong."
+            />
+          )
+        }
+        renderItem={({ item }) => (
+          <View style={styles.attendanceCard}>
+            <View style={styles.studentBadge}>
+              <Text style={styles.studentInitial}>{item.nama?.trim().charAt(0).toUpperCase() || '?'}</Text>
             </View>
-          ) : null}
-        </View>
-      }
-      ListEmptyComponent={
-        isLoadingSessions ? (
-          <LoadingState message="Memuat sesi aktif..." />
-        ) : sessions.length === 0 ? (
-          <EmptyState
-            title="Belum ada sesi yang ditugaskan"
-            message="Sesi yang ditugaskan kepadamu akan muncul di sini."
-          />
-        ) : selectedSession?.status === STATUS_SESI.BELUM ? (
-          <EmptyState
-            title="Sesi belum dibuka"
-            message="Rekap kehadiran tersedia setelah sesi dibuka."
-          />
-        ) : isLoadingAttendances ? (
-          <LoadingState message="Memuat rekap kehadiran..." />
-        ) : attendanceError ? (
-          <EmptyState title="Tidak dapat memuat rekap" message={attendanceError} />
-        ) : (
-          <EmptyState
-            title="Belum ada praktikan yang hadir"
-            message="Daftar kehadiran untuk sesi ini masih kosong."
-          />
-        )
-      }
-      renderItem={({ item }) => (
-        <View style={styles.attendanceCard}>
-          <View style={styles.studentInfo}>
-            <Text style={styles.studentName}>{item.nama}</Text>
-            <Text style={styles.studentNim}>NIM: {item.nim}</Text>
+            <View style={styles.studentInfo}>
+              <Text style={styles.studentName}>{item.nama}</Text>
+              <Text style={styles.studentNim}>NIM: {item.nim}</Text>
+            </View>
+            <View style={styles.timeContainer}>
+              <Text style={styles.timeLabel}>Waktu hadir</Text>
+              <Text style={styles.timeValue}>{item.waktuTampil}</Text>
+            </View>
           </View>
-          <View style={styles.timeContainer}>
-            <Text style={styles.timeLabel}>Waktu hadir</Text>
-            <Text style={styles.timeValue}>{item.waktuTampil}</Text>
-          </View>
-        </View>
-      )}
-    />
+        )}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { flexGrow: 1, padding: 20, gap: 12, backgroundColor: COLORS.background },
-  header: { gap: 8, marginBottom: 8 },
-  title: { fontSize: 22, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
-  subtitle: { fontSize: 14, lineHeight: 20, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
+  screen: { flex: 1, backgroundColor: colors.bg },
+  state: { flex: 1 },
+  content: {
+    flexGrow: 1,
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: 8,
+    paddingBottom: layout.tabBarSpace,
+    gap: 12,
+  },
+  header: { gap: 10, marginBottom: 4 },
+  subtitle: { ...text.body },
   feedback: {
-    marginTop: 8,
     padding: 12,
     borderWidth: 1,
-    borderRadius: 10,
-    backgroundColor: COLORS.card,
+    borderRadius: 14,
+    backgroundColor: colors.card,
   },
-  errorFeedback: { borderColor: COLORS.danger },
-  feedbackText: {
-    fontSize: 14,
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    color: COLORS.text,
-  },
-  sessionSelector: { gap: 8, paddingVertical: 8 },
+  errorFeedback: { borderColor: colors.danger, backgroundColor: colors.dangerTint },
+  feedbackText: { fontSize: 13, lineHeight: 19, fontFamily: font.medium, color: colors.text },
+  sessionSelector: { gap: 8, paddingVertical: 4 },
   sessionOption: {
     width: 190,
-    padding: 12,
+    padding: 13,
     gap: 6,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    backgroundColor: COLORS.card,
+    borderColor: colors.border,
+    borderRadius: radius.input,
+    backgroundColor: colors.card,
   },
-  sessionOptionSelected: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryLight },
+  sessionOptionSelected: { borderColor: colors.primary, backgroundColor: colors.tint },
   optionPressed: { opacity: 0.8 },
-  sessionOptionTitle: { fontSize: 13, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
-  sessionOptionTitleSelected: { color: COLORS.primary },
-  sessionOptionDetails: { fontSize: 12, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
+  sessionOptionTitle: { fontSize: 13, fontFamily: font.bold, color: colors.text },
+  sessionOptionTitleSelected: { color: colors.primary },
+  sessionOptionDetails: { fontSize: 12, fontFamily: font.medium, color: colors.textSecondary },
   selectedSessionCard: {
-    padding: 14,
-    gap: 10,
+    padding: 16,
+    gap: 8,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 14,
-    backgroundColor: COLORS.card,
+    borderColor: colors.border,
+    borderRadius: radius.card,
+    backgroundColor: colors.card,
   },
-  selectedSessionInfo: { gap: 4 },
-  selectedSessionTitle: { fontSize: 16, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
-  selectedSessionDetails: { fontSize: 13, lineHeight: 19, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
+  selectedSessionTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  selectedSessionInfo: { flex: 1, gap: 3 },
+  selectedSessionTitle: { fontSize: 16, fontFamily: font.bold, color: colors.text },
+  selectedSessionDetails: { ...text.caption },
   countContainer: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: 6,
-    paddingTop: 8,
+    marginTop: 4,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    borderTopColor: colors.border,
   },
-  countValue: { fontSize: 20, fontFamily: 'PlusJakartaSans_800ExtraBold', color: COLORS.primary },
-  countValueSmall: { fontSize: 16 },
-  countLabel: { fontSize: 13, fontFamily: 'PlusJakartaSans_600SemiBold', color: COLORS.muted },
+  countValue: { fontSize: 22, fontFamily: font.extraBold, color: colors.primary },
+  countLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.textSecondary },
   attendanceCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     padding: 14,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    backgroundColor: COLORS.card,
+    borderColor: colors.border,
+    borderRadius: 18,
+    backgroundColor: colors.card,
   },
-  studentInfo: { flex: 1, gap: 5 },
-  studentName: { fontSize: 14, lineHeight: 20, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
-  studentNim: { fontSize: 13, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
+  studentBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.tint,
+  },
+  studentInitial: { fontSize: 14, fontFamily: font.extraBold, color: colors.primary },
+  studentInfo: { flex: 1, gap: 4 },
+  studentName: { fontSize: 14, lineHeight: 20, fontFamily: font.bold, color: colors.text },
+  studentNim: { ...text.caption },
   timeContainer: { alignItems: 'flex-end', gap: 4 },
-  timeLabel: { fontSize: 11, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
-  timeValue: { fontSize: 13, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
+  timeLabel: { ...text.caption },
+  timeValue: { fontSize: 12, fontFamily: font.bold, color: colors.text, textAlign: 'right' },
 });

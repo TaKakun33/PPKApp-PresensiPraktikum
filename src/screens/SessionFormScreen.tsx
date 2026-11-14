@@ -5,7 +5,6 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Pressable,
   ScrollView,
@@ -19,8 +18,9 @@ import {
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import LoadingState from '../components/LoadingState';
+import PrimaryButton from '../components/PrimaryButton';
 import type { ClassDoc } from '../lib/types';
-import { COLORS } from '../constants/colors';
+import { colors, font, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { pesanFirestore, subscribeClassesForAsisten } from '../services/classService';
 import {
@@ -63,7 +63,7 @@ function Field({
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={COLORS.mutedLight}
+        placeholderTextColor={colors.placeholder}
         keyboardType={keyboardType}
         editable={editable}
         accessibilityLabel={label}
@@ -170,14 +170,12 @@ export default function SessionFormScreen() {
   if (classes.length === 0) {
     return wrap(
       <View style={styles.flex}>
-        <EmptyState title="Belum ada kelas" message="Buat kelas terlebih dahulu sebelum menambah sesi." />
-        <Pressable
-          style={({ pressed }) => [styles.submit, styles.centerButton, pressed && styles.pressed]}
+        <EmptyState icon="people-outline" title="Belum ada kelas" message="Buat kelas terlebih dahulu sebelum menambah sesi." />
+        <PrimaryButton
+          label="Kelola Kelas"
           onPress={() => router.push('/kelas')}
-          accessibilityRole="button"
-        >
-          <Text style={styles.submitText}>Kelola Kelas</Text>
-        </Pressable>
+          style={styles.centerButton}
+        />
       </View>,
     );
   }
@@ -260,66 +258,51 @@ export default function SessionFormScreen() {
           </Text>
         ) : null}
 
-        <Pressable
-          style={({ pressed }) => [styles.submit, pressed && styles.pressed, saving && styles.disabled]}
+        <PrimaryButton
+          label={id ? 'Simpan Perubahan' : 'Tambah Sesi'}
           onPress={simpan}
           disabled={saving}
-          accessibilityRole="button"
-        >
-          {saving ? (
-            <ActivityIndicator color={COLORS.white} />
-          ) : (
-            <Text style={styles.submitText}>{id ? 'Simpan Perubahan' : 'Tambah Sesi'}</Text>
-          )}
-        </Pressable>
+          loading={saving}
+          style={styles.submit}
+        />
       </ScrollView>
     </KeyboardAvoidingView>,
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+  container: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
-  content: { padding: 20, gap: 14 },
+  content: { padding: 20, paddingTop: 8, paddingBottom: 32, gap: 14 },
   field: { gap: 6 },
   row: { flexDirection: 'row', gap: 12 },
-  label: { fontSize: 13, fontFamily: 'PlusJakartaSans_600SemiBold', color: COLORS.textSecondary },
+  label: { ...text.bodyStrong, color: colors.textSecondary },
   input: {
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
-    fontFamily: 'PlusJakartaSans_500Medium',
-    color: COLORS.text,
-    backgroundColor: COLORS.card,
+    borderColor: colors.border,
+    borderRadius: radius.input,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    fontFamily: font.medium,
+    color: colors.text,
+    backgroundColor: colors.surface,
   },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     maxWidth: '100%',
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 12,
+    paddingVertical: 9,
+    borderRadius: radius.input,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
   },
-  chipActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primary },
-  chipText: { fontSize: 14, fontFamily: 'PlusJakartaSans_600SemiBold', color: COLORS.text },
-  chipSub: { fontSize: 11, fontFamily: 'PlusJakartaSans_500Medium', color: COLORS.muted },
-  chipTextActive: { color: COLORS.white },
-  error: { fontSize: 13, fontFamily: 'PlusJakartaSans_500Medium', color: COLORS.danger },
-  submit: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 48,
-    marginTop: 6,
-    borderRadius: 999,
-    backgroundColor: COLORS.primary,
-  },
-  centerButton: { alignSelf: 'center', paddingHorizontal: 24, marginBottom: 32 },
-  submitText: { color: COLORS.white, fontSize: 15, fontFamily: 'PlusJakartaSans_700Bold' },
-  pressed: { opacity: 0.85 },
-  disabled: { opacity: 0.6 },
+  chipActive: { borderColor: colors.primary, backgroundColor: colors.primary },
+  chipText: { fontSize: 14, fontFamily: font.semibold, color: colors.text },
+  chipSub: { fontSize: 11, fontFamily: font.medium, color: colors.textSecondary },
+  chipTextActive: { color: colors.white },
+  error: { fontSize: 13, fontFamily: font.medium, color: colors.danger },
+  submit: { marginTop: 6 },
+  centerButton: { alignSelf: 'center', minWidth: 180, marginBottom: 32 },
 });

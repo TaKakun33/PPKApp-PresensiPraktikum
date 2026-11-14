@@ -2,10 +2,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text } from 'react-native';
+import { Alert, Pressable, StyleSheet } from 'react-native';
 
 import ConfirmModal from '../components/ConfirmModal';
-import { COLORS } from '../constants/colors';
+import { colors, radius } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 
 export default function LogoutButton() {
@@ -30,8 +30,7 @@ export default function LogoutButton() {
         accessibilityRole="button"
         accessibilityLabel="Keluar dari akun"
       >
-        <Ionicons name="log-out-outline" size={14} color={COLORS.text} />
-        <Text style={styles.text}>Keluar</Text>
+        <Ionicons name="log-out-outline" size={18} color={colors.primary} />
       </Pressable>
       <ConfirmModal
         visible={confirmVisible}
@@ -47,17 +46,12 @@ export default function LogoutButton() {
 
 const styles = StyleSheet.create({
   btn: {
-    flexDirection: 'row',
+    width: 40,
+    height: 40,
     alignItems: 'center',
-    gap: 6,
-    marginRight: 16,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.background,
+    justifyContent: 'center',
+    borderRadius: radius.icon,
+    backgroundColor: colors.surface,
   },
-  btnPressed: { backgroundColor: COLORS.border, opacity: 0.85 },
-  text: { color: COLORS.text, fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12 },
+  btnPressed: { backgroundColor: colors.tint, opacity: 0.9 },
 });

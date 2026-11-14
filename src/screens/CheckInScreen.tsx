@@ -1,17 +1,22 @@
-import { useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import EmptyState from "../components/EmptyState";
-import ErrorState from "../components/ErrorState";
-import LoadingState from "../components/LoadingState";
-import StatusBadge from "../components/StatusBadge";
-import SuccessBottomSheet from "../components/SuccessBottomSheet";
-import { COLORS } from "../constants/colors";
-import { useAuth } from "../context/AuthContext";
-import type { Session } from "../lib/types";
-import { checkIn, subscribeCheckInState } from "../services/attendanceService";
-import { formatJam } from "../utils/format";
+import Card from '../components/Card';
+import EmptyState from '../components/EmptyState';
+import ErrorState from '../components/ErrorState';
+import LoadingState from '../components/LoadingState';
+import PrimaryButton from '../components/PrimaryButton';
+import ScreenHeader from '../components/ScreenHeader';
+import StatusBadge from '../components/StatusBadge';
+import SuccessBottomSheet from '../components/SuccessBottomSheet';
+import { STATUS_LABEL } from '../constants/colors';
+import { colors, font, layout, text } from '../constants/theme';
+import { useAuth } from '../context/AuthContext';
+import type { Session } from '../lib/types';
+import { checkIn, subscribeCheckInState } from '../services/attendanceService';
+import { formatJam } from '../utils/format';
 
 type Props = {
   route?: {
@@ -26,7 +31,7 @@ export default function CheckInScreen({ route }: Props) {
   const sessionId = route?.params?.sessionId ?? localParams?.sessionId;
 
   const { profile } = useAuth();
-  const uid = profile?.id ?? "";
+  const uid = profile?.id ?? '';
 
   const [session, setSession] = useState<Session | null>(null);
   const [attended, setAttended] = useState(false);
@@ -34,7 +39,7 @@ export default function CheckInScreen({ route }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [successTime, setSuccessTime] = useState("");
+  const [successTime, setSuccessTime] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -63,39 +68,59 @@ export default function CheckInScreen({ route }: Props) {
 
   if (!sessionId) {
     return (
-      <View style={styles.container}>
-        <EmptyState
-          title="Sesi Belum Dipilih"
-          message="Silakan pilih sesi praktikum dari halaman jadwal untuk melakukan presensi."
-        />
+      <View style={styles.screen}>
+        <ScreenHeader title="Presensi" />
+        <View style={styles.state}>
+          <EmptyState
+            compact
+            icon="checkbox-outline"
+            title="Sesi Belum Dipilih"
+            message="Silakan pilih sesi praktikum dari halaman jadwal untuk melakukan presensi."
+          />
+        </View>
       </View>
     );
   }
 
   if (loading && uid) {
-    return <LoadingState message="Memuat informasi sesi..." />;
+    return (
+      <View style={styles.screen}>
+        <ScreenHeader title="Presensi" />
+        <View style={styles.state}>
+          <LoadingState message="Memuat informasi sesi..." />
+        </View>
+      </View>
+    );
   }
 
   if (error) {
     return (
-      <ErrorState
-        message={error}
-        onRetry={() => {
-          setLoading(true);
-          setError(null);
-          setReloadKey((key) => key + 1);
-        }}
-      />
+      <View style={styles.screen}>
+        <ScreenHeader title="Presensi" />
+        <View style={styles.state}>
+          <ErrorState
+            message={error}
+            onRetry={() => {
+              setLoading(true);
+              setError(null);
+              setReloadKey((key) => key + 1);
+            }}
+          />
+        </View>
+      </View>
     );
   }
 
   if (!session) {
     return (
-      <View style={styles.container}>
-        <EmptyState
-          title="Sesi Tidak Ditemukan"
-          message="Data sesi praktikum tidak ditemukan atau telah dihapus."
-        />
+      <View style={styles.screen}>
+        <ScreenHeader title="Presensi" />
+        <View style={styles.state}>
+          <EmptyState
+            title="Sesi Tidak Ditemukan"
+            message="Data sesi praktikum tidak ditemukan atau telah dihapus."
+          />
+        </View>
       </View>
     );
   }
@@ -153,56 +178,57 @@ export default function CheckInScreen({ route }: Props) {
       : "-");
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.card}>
-        <View style={styles.headerRow}>
-          <Text style={styles.title}>{session.praktikum}</Text>
-          <StatusBadge status={session.status} />
-        </View>
+    <View style={styles.screen}>
+      <ScreenHeader title="Presensi" />
+      <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
+        <Card style={styles.card}>
+          <View style={styles.headerRow}>
+            <Text style={styles.title}>{session.praktikum}</Text>
+            <StatusBadge status={session.status} />
+          </View>
 
-        <View style={styles.infoSection}>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Tanggal</Text>
-            <Text style={styles.infoValue}>{session.tanggal}</Text>
+          <View style={styles.infoSection}>
+            <View style={styles.infoRow}>
+              <View style={styles.infoLabelWrap}>
+                <Ionicons name="calendar-outline" size={15} color={colors.textSecondary} />
+                <Text style={styles.infoLabel}>Tanggal</Text>
+              </View>
+              <Text style={styles.infoValue}>{session.tanggal}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <View style={styles.infoLabelWrap}>
+                <Ionicons name="time-outline" size={15} color={colors.textSecondary} />
+                <Text style={styles.infoLabel}>Waktu</Text>
+              </View>
+              <Text style={styles.infoValue}>{waktu}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <View style={styles.infoLabelWrap}>
+                <Ionicons name="location-outline" size={15} color={colors.textSecondary} />
+                <Text style={styles.infoLabel}>Ruangan</Text>
+              </View>
+              <Text style={styles.infoValue}>{session.ruangan}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <View style={styles.infoLabelWrap}>
+                <Ionicons name="information-circle-outline" size={15} color={colors.textSecondary} />
+                <Text style={styles.infoLabel}>Status</Text>
+              </View>
+              <Text style={styles.infoValue}>{STATUS_LABEL[session.status]}</Text>
+            </View>
           </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Waktu</Text>
-            <Text style={styles.infoValue}>{waktu}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Ruangan</Text>
-            <Text style={styles.infoValue}>{session.ruangan}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Status</Text>
-            <Text style={styles.infoValue}>{session.status}</Text>
-          </View>
-        </View>
 
-        <Pressable
-          onPress={handleCheckIn}
-          disabled={!canPress}
-          style={({ pressed }) => [
-            styles.button,
-            attended && styles.buttonSuccess,
-            !canPress && !attended && styles.buttonDisabled,
-            pressed && canPress && styles.buttonPressed,
-          ]}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: !canPress }}
-        >
-          <Text
-            style={[
-              styles.buttonText,
-              !canPress && !attended && styles.buttonTextDisabled,
-            ]}
-          >
-            {buttonLabel}
-          </Text>
-        </Pressable>
+          <PrimaryButton
+            label={buttonLabel}
+            onPress={handleCheckIn}
+            disabled={!canPress}
+            loading={isSubmitting}
+            style={styles.button}
+          />
 
-        {reason ? <Text style={styles.reason}>{reason}</Text> : null}
-      </View>
+          {reason ? <Text style={styles.reason}>{reason}</Text> : null}
+        </Card>
+      </ScrollView>
 
       <SuccessBottomSheet
         visible={showSuccess}
@@ -210,27 +236,21 @@ export default function CheckInScreen({ route }: Props) {
         waktuHadir={successTime}
         onClose={() => setShowSuccess(false)}
       />
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
+  screen: { flex: 1, backgroundColor: colors.bg },
+  flex: { flex: 1 },
+  state: { flex: 1 },
   content: {
-    padding: 20,
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: 8,
+    paddingBottom: layout.tabBarSpace,
     gap: 16,
   },
-  card: {
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 20,
-    gap: 16,
-  },
+  card: { padding: 20, gap: 16 },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -240,58 +260,36 @@ const styles = StyleSheet.create({
   title: {
     flex: 1,
     fontSize: 18,
-    fontFamily: "PlusJakartaSans_700Bold",
-    color: COLORS.text,
+    lineHeight: 24,
+    fontFamily: font.extraBold,
+    color: colors.text,
   },
   infoSection: {
-    gap: 8,
+    gap: 2,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: COLORS.surface,
+    borderTopColor: colors.border,
   },
   infoRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 2,
-  },
-  infoLabel: {
-    fontSize: 14,
-    fontFamily: "PlusJakartaSans_400Regular",
-    color: COLORS.muted,
-  },
-  infoValue: {
-    fontSize: 14,
-    fontFamily: "PlusJakartaSans_600SemiBold",
-    color: COLORS.text,
-  },
-  button: {
-    marginTop: 8,
-    backgroundColor: COLORS.primary,
-    paddingVertical: 14,
-    borderRadius: 10,
     alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingVertical: 8,
   },
-  buttonSuccess: {
-    backgroundColor: COLORS.success,
+  infoLabelWrap: { flexDirection: "row", alignItems: "center", gap: 7 },
+  infoLabel: { ...text.body },
+  infoValue: {
+    flexShrink: 1,
+    fontSize: 13,
+    fontFamily: font.semibold,
+    color: colors.text,
+    textAlign: "right",
   },
-  buttonDisabled: {
-    backgroundColor: COLORS.surface,
-  },
-  buttonPressed: {
-    opacity: 0.85,
-  },
-  buttonText: {
-    color: COLORS.white,
-    fontFamily: "PlusJakartaSans_600SemiBold",
-    fontSize: 15,
-  },
-  buttonTextDisabled: {
-    color: COLORS.muted,
-  },
+  button: { marginTop: 4 },
   reason: {
-    fontSize: 12,
-    fontFamily: "PlusJakartaSans_400Regular",
-    color: COLORS.muted,
+    ...text.caption,
     textAlign: "center",
+    color: colors.textSecondary,
   },
 });

@@ -6,7 +6,9 @@ import type { Attendance, LeaveRequest, Session } from '../lib/types';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import LoadingState from '../components/LoadingState';
-import { COLORS } from '../constants/colors';
+import ScreenHeader from '../components/ScreenHeader';
+import StatusBadge from '../components/StatusBadge';
+import { colors, font, layout, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import {
   subscribeAttendanceHistory,
@@ -42,17 +44,6 @@ function formatTimestamp(value: unknown): string {
   const jam = String(date.getHours()).padStart(2, '0');
   const menit = String(date.getMinutes()).padStart(2, '0');
   return `${date.getDate()} ${BULAN[date.getMonth()]} ${date.getFullYear()} • ${jam}.${menit}`;
-}
-
-function getLeaveStatusStyle(status: string) {
-  const s = status?.toLowerCase();
-  if (s === 'diterima') {
-    return { bg: COLORS.successLight, text: COLORS.success, label: 'Diterima' };
-  }
-  if (s === 'ditolak') {
-    return { bg: COLORS.dangerLight, text: COLORS.danger, label: 'Ditolak' };
-  }
-  return { bg: '#FFF4E5', text: COLORS.warning, label: 'Menunggu' };
 }
 
 function getAttendanceDate(attendance: Attendance): Date | null {
@@ -154,21 +145,33 @@ export default function HistoryScreen() {
   const isLoading = Boolean(uid) && (!attLoaded || !leaveLoaded || !sessionLoaded);
 
   if (isLoading) {
-    return <LoadingState message="Memuat riwayat..." />;
+    return (
+      <View style={styles.screen}>
+        <ScreenHeader title="Riwayat" />
+        <View style={styles.state}>
+          <LoadingState message="Memuat riwayat..." />
+        </View>
+      </View>
+    );
   }
 
   if (error) {
     return (
-      <ErrorState
-        message={error}
-        onRetry={() => {
-          setAttLoaded(false);
-          setLeaveLoaded(false);
-          setSessionLoaded(false);
-          setError(null);
-          setReloadKey((key) => key + 1);
-        }}
-      />
+      <View style={styles.screen}>
+        <ScreenHeader title="Riwayat" />
+        <View style={styles.state}>
+          <ErrorState
+            message={error}
+            onRetry={() => {
+              setAttLoaded(false);
+              setLeaveLoaded(false);
+              setSessionLoaded(false);
+              setError(null);
+              setReloadKey((key) => key + 1);
+            }}
+          />
+        </View>
+      </View>
     );
   }
 
@@ -176,11 +179,16 @@ export default function HistoryScreen() {
 
   if (isBothEmpty) {
     return (
-      <View style={styles.container}>
-        <EmptyState
-          title="Belum Ada Riwayat"
-          message="Riwayat presensi dan permohonan izin kamu akan muncul di sini."
-        />
+      <View style={styles.screen}>
+        <ScreenHeader title="Riwayat" />
+        <View style={styles.state}>
+          <EmptyState
+            compact
+            icon="time-outline"
+            title="Belum Ada Riwayat"
+            message="Riwayat presensi dan permohonan izin kamu akan muncul di sini."
+          />
+        </View>
       </View>
     );
   }
@@ -189,199 +197,162 @@ export default function HistoryScreen() {
   const jumlahCatatan = dataAktif.length;
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.header}>
-        <Text style={styles.eyebrow}>ACTIVITY LOG</Text>
-        <Text style={styles.title}>Riwayat</Text>
+    <View style={styles.screen}>
+      <ScreenHeader title="Riwayat" />
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.subtitle}>
           Pantau semua aktivitas presensi dan pengajuan izinmu.
         </Text>
-      </View>
 
-      <View style={styles.segmented}>
-        {(['presensi', 'perizinan'] as const).map((tab) => {
-          const active = activeTab === tab;
-          return (
-            <Pressable
-              key={tab}
-              style={[styles.segment, active && styles.segmentActive]}
-              onPress={() => setActiveTab(tab)}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: active }}
-            >
-              <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
-                {tab === 'presensi' ? 'Presensi' : 'Perizinan'}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <View style={styles.banner}>
-        <View style={styles.bannerIcon}>
-          <Ionicons name="checkmark-sharp" size={24} color={COLORS.white} />
-        </View>
-        <View style={styles.bannerBody}>
-          <Text style={styles.bannerValue}>{persentaseHadir}%</Text>
-          <Text style={styles.bannerLabel}>tingkat kehadiran semester ini</Text>
-        </View>
-        <Ionicons
-          name="sparkles"
-          size={54}
-          color="rgba(255,255,255,0.16)"
-          style={styles.bannerSparkle}
-        />
-      </View>
-
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>
-          {activeTab === 'presensi' ? 'Presensi terbaru' : 'Perizinan terbaru'}
-        </Text>
-        <Text style={styles.sectionCount}>{jumlahCatatan} catatan</Text>
-      </View>
-
-      {jumlahCatatan === 0 ? (
-        <View style={styles.emptyBox}>
-          <View style={styles.emptyIcon}>
-            <Ionicons
-              name={activeTab === 'presensi' ? 'checkbox-outline' : 'document-text-outline'}
-              size={24}
-              color={COLORS.muted}
-            />
-          </View>
-          <Text style={styles.emptyTitle}>
-            {activeTab === 'presensi' ? 'Belum ada presensi' : 'Belum ada pengajuan izin'}
-          </Text>
-          <Text style={styles.emptyText}>
-            {activeTab === 'presensi'
-              ? 'Catatan kehadiranmu akan muncul di sini.'
-              : 'Pengajuan izin yang kamu kirim akan muncul di sini.'}
-          </Text>
-        </View>
-      ) : activeTab === 'presensi' ? (
-        <View style={styles.list}>
-          {attendances.map((attendance) => {
-            const session = sessionById.get(attendance.sessionId);
-            const terlambat = isTerlambat(attendance, session);
+        <View style={styles.segmented}>
+          {(['presensi', 'perizinan'] as const).map((tab) => {
+            const active = activeTab === tab;
             return (
-              <View key={attendance.id} style={styles.itemCard}>
-                <View style={styles.itemIcon}>
-                  <Ionicons name="checkmark" size={17} color={COLORS.primary} />
-                </View>
-                <View style={styles.itemBody}>
-                  <Text style={styles.itemTitle} numberOfLines={1}>
-                    {session?.praktikum || attendance.nama || 'Presensi Praktikum'}
-                  </Text>
-                  <Text style={styles.itemMeta} numberOfLines={1}>
-                    {formatTimestamp(attendance.waktuHadir ?? (attendance as any).checkedInAt)}
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.badge,
-                    terlambat ? styles.badgeTerlambat : styles.badgeHadir,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.badgeText,
-                      terlambat ? styles.badgeTextTerlambat : styles.badgeTextHadir,
-                    ]}
-                  >
-                    {terlambat ? 'Terlambat' : 'Hadir'}
-                  </Text>
-                </View>
-              </View>
+              <Pressable
+                key={tab}
+                style={[styles.segment, active && styles.segmentActive]}
+                onPress={() => setActiveTab(tab)}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+              >
+                <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
+                  {tab === 'presensi' ? 'Presensi' : 'Perizinan'}
+                </Text>
+              </Pressable>
             );
           })}
         </View>
-      ) : (
-        <View style={styles.list}>
-          {leaves.map((leave) => {
-            const status = getLeaveStatusStyle(leave.status);
-            const kategori = leave.kategoriAI || (leave as any).category;
-            const waktu = (leave as any).createdAt ?? (leave as any).waktuPengajuan;
 
-            return (
-              <View key={leave.id} style={styles.leaveCard}>
-                <View style={styles.leaveTop}>
+        <View style={styles.banner}>
+          <View style={styles.bannerCircle} />
+          <View style={styles.bannerIcon}>
+            <Ionicons name="checkmark" size={23} color={colors.white} />
+          </View>
+          <View style={styles.bannerBody}>
+            <Text style={styles.bannerValue}>{persentaseHadir}%</Text>
+            <Text style={styles.bannerLabel}>tingkat kehadiran semester ini</Text>
+          </View>
+        </View>
+
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>
+            {activeTab === 'presensi' ? 'Presensi terbaru' : 'Perizinan terbaru'}
+          </Text>
+          <Text style={styles.sectionCount}>{jumlahCatatan} catatan</Text>
+        </View>
+
+        {jumlahCatatan === 0 ? (
+          <View style={styles.emptyBox}>
+            <View style={styles.emptyIcon}>
+              <Ionicons
+                name={activeTab === 'presensi' ? 'checkbox-outline' : 'document-text-outline'}
+                size={24}
+                color={colors.primary}
+              />
+            </View>
+            <Text style={styles.emptyTitle}>
+              {activeTab === 'presensi' ? 'Belum ada presensi' : 'Belum ada pengajuan izin'}
+            </Text>
+            <Text style={styles.emptyText}>
+              {activeTab === 'presensi'
+                ? 'Catatan kehadiranmu akan muncul di sini.'
+                : 'Pengajuan izin yang kamu kirim akan muncul di sini.'}
+            </Text>
+          </View>
+        ) : activeTab === 'presensi' ? (
+          <View style={styles.list}>
+            {attendances.map((attendance) => {
+              const session = sessionById.get(attendance.sessionId);
+              const terlambat = isTerlambat(attendance, session);
+              return (
+                <View key={attendance.id} style={styles.itemCard}>
                   <View style={styles.itemIcon}>
-                    <Ionicons name="document-text" size={16} color={COLORS.primary} />
+                    <Ionicons name="checkmark" size={17} color={colors.primary} />
                   </View>
                   <View style={styles.itemBody}>
                     <Text style={styles.itemTitle} numberOfLines={1}>
-                      {leave.praktikum || `Sesi: ${leave.sessionId}`}
+                      {session?.praktikum || attendance.nama || 'Presensi Praktikum'}
                     </Text>
                     <Text style={styles.itemMeta} numberOfLines={1}>
-                      {formatTimestamp(waktu)}
+                      {formatTimestamp(attendance.waktuHadir ?? (attendance as any).checkedInAt)}
                     </Text>
                   </View>
-                  <View style={[styles.badge, { backgroundColor: status.bg }]}>
-                    <Text style={[styles.badgeText, { color: status.text }]}>
-                      {status.label}
-                    </Text>
-                  </View>
+                  <StatusBadge status={terlambat ? 'terlambat' : 'hadir'} />
                 </View>
+              );
+            })}
+          </View>
+        ) : (
+          <View style={styles.list}>
+            {leaves.map((leave) => {
+              const kategori = leave.kategoriAI || (leave as any).category;
+              const waktu = (leave as any).createdAt ?? (leave as any).waktuPengajuan;
 
-                <Text style={styles.leaveReason}>
-                  {leave.alasan || (leave as any).reason || '-'}
-                </Text>
-
-                {kategori ? (
-                  <View style={styles.aiBadge}>
-                    <Ionicons name="sparkles-outline" size={12} color={COLORS.primary} />
-                    <Text style={styles.aiBadgeText}>Kategori AI: {labelKategori(kategori)}</Text>
+              return (
+                <View key={leave.id} style={styles.leaveCard}>
+                  <View style={styles.leaveTop}>
+                    <View style={styles.itemIcon}>
+                      <Ionicons name="document-text" size={16} color={colors.primary} />
+                    </View>
+                    <View style={styles.itemBody}>
+                      <Text style={styles.itemTitle} numberOfLines={1}>
+                        {leave.praktikum || `Sesi: ${leave.sessionId}`}
+                      </Text>
+                      <Text style={styles.itemMeta} numberOfLines={1}>
+                        {formatTimestamp(waktu)}
+                      </Text>
+                    </View>
+                    <StatusBadge status={leave.status} />
                   </View>
-                ) : null}
 
-                {leave.catatanAsisten ? (
-                  <View style={styles.noteBox}>
-                    <Text style={styles.noteLabel}>Catatan asisten</Text>
-                    <Text style={styles.noteText}>{leave.catatanAsisten}</Text>
-                  </View>
-                ) : null}
-              </View>
-            );
-          })}
-        </View>
-      )}
-    </ScrollView>
+                  <Text style={styles.leaveReason}>
+                    {leave.alasan || (leave as any).reason || '-'}
+                  </Text>
+
+                  {kategori ? (
+                    <View style={styles.aiBadge}>
+                      <Ionicons name="sparkles-outline" size={12} color={colors.primary} />
+                      <Text style={styles.aiBadgeText}>Kategori AI: {labelKategori(kategori)}</Text>
+                    </View>
+                  ) : null}
+
+                  {leave.catatanAsisten ? (
+                    <View style={styles.noteBox}>
+                      <Text style={styles.noteLabel}>Catatan asisten</Text>
+                      <Text style={styles.noteText}>{leave.catatanAsisten}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  content: { padding: 20, paddingTop: 18, paddingBottom: 36, gap: 16 },
-  header: { gap: 3 },
-  eyebrow: {
-    fontSize: 10,
-    letterSpacing: 1.4,
-    fontFamily: 'PlusJakartaSans_700Bold',
-    color: COLORS.muted,
+  screen: { flex: 1, backgroundColor: colors.bg },
+  flex: { flex: 1 },
+  state: { flex: 1 },
+  content: {
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: 2,
+    paddingBottom: layout.tabBarSpace,
+    gap: 16,
   },
-  title: {
-    fontSize: 30,
-    lineHeight: 37,
-    fontFamily: 'PlusJakartaSans_800ExtraBold',
-    color: COLORS.text,
-    letterSpacing: -0.8,
-  },
-  subtitle: {
-    fontSize: 13,
-    lineHeight: 19,
-    fontFamily: 'PlusJakartaSans_400Regular',
-    color: COLORS.muted,
-  },
+  subtitle: { ...text.body },
   segmented: {
     flexDirection: 'row',
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 16,
+    borderColor: colors.border,
+    borderRadius: radius.input,
     padding: 4,
     gap: 4,
   },
@@ -390,30 +361,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
-    borderRadius: 13,
+    borderRadius: 14,
   },
-  segmentActive: {
-    backgroundColor: COLORS.card,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 5,
-    elevation: 2,
-  },
-  segmentText: {
-    fontSize: 13,
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    color: COLORS.muted,
-  },
-  segmentTextActive: { color: COLORS.text, fontFamily: 'PlusJakartaSans_700Bold' },
+  segmentActive: { backgroundColor: colors.primary },
+  segmentText: { fontSize: 13, fontFamily: font.semibold, color: colors.textSecondary },
+  segmentTextActive: { color: colors.white, fontFamily: font.bold },
   banner: {
     overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    backgroundColor: COLORS.primary,
-    borderRadius: 22,
+    backgroundColor: colors.primary,
+    borderRadius: radius.card,
     padding: 18,
+  },
+  bannerCircle: {
+    position: 'absolute',
+    right: -30,
+    bottom: -60,
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   bannerIcon: {
     width: 46,
@@ -427,145 +396,94 @@ const styles = StyleSheet.create({
   bannerValue: {
     fontSize: 27,
     lineHeight: 32,
-    fontFamily: 'PlusJakartaSans_800ExtraBold',
-    color: COLORS.white,
+    fontFamily: font.extraBold,
+    color: colors.white,
     letterSpacing: -0.6,
   },
   bannerLabel: {
     fontSize: 11,
-    fontFamily: 'PlusJakartaSans_500Medium',
+    fontFamily: font.medium,
     color: 'rgba(255,255,255,0.82)',
   },
-  bannerSparkle: { position: 'absolute', right: -8, bottom: -10 },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: 2,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontFamily: 'PlusJakartaSans_700Bold',
-    color: COLORS.text,
-  },
-  sectionCount: {
-    fontSize: 11,
-    fontFamily: 'PlusJakartaSans_500Medium',
-    color: COLORS.muted,
-  },
+  sectionTitle: { ...text.sectionTitle },
+  sectionCount: { ...text.caption },
   list: { gap: 10 },
   itemCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 11,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
     borderRadius: 18,
-    padding: 13,
+    padding: 14,
   },
   itemIcon: {
     width: 38,
     height: 38,
     borderRadius: 13,
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: colors.tint,
     alignItems: 'center',
     justifyContent: 'center',
   },
   itemBody: { flex: 1, gap: 2 },
-  itemTitle: {
-    fontSize: 13,
-    fontFamily: 'PlusJakartaSans_700Bold',
-    color: COLORS.text,
-  },
-  itemMeta: {
-    fontSize: 11,
-    fontFamily: 'PlusJakartaSans_400Regular',
-    color: COLORS.muted,
-  },
-  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
-  badgeHadir: { backgroundColor: COLORS.primaryLight },
-  badgeTerlambat: { backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border },
-  badgeText: { fontSize: 10, fontFamily: 'PlusJakartaSans_700Bold' },
-  badgeTextHadir: { color: COLORS.primary },
-  badgeTextTerlambat: { color: COLORS.text },
+  itemTitle: { fontSize: 13, fontFamily: font.bold, color: colors.text },
+  itemMeta: { ...text.caption },
   leaveCard: {
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
     borderRadius: 18,
-    padding: 13,
+    padding: 14,
     gap: 9,
   },
   leaveTop: { flexDirection: 'row', alignItems: 'center', gap: 11 },
-  leaveReason: {
-    fontSize: 12,
-    lineHeight: 18,
-    fontFamily: 'PlusJakartaSans_400Regular',
-    color: COLORS.textSecondary,
-  },
+  leaveReason: { ...text.body, color: colors.textSecondary },
   aiBadge: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: COLORS.primaryLight,
-    borderWidth: 1,
-    borderColor: COLORS.primaryBorder,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    backgroundColor: colors.tint,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
   },
-  aiBadgeText: {
-    fontSize: 10,
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    color: COLORS.primary,
-  },
+  aiBadgeText: { fontSize: 10, fontFamily: font.semibold, color: colors.primary },
   noteBox: {
-    padding: 10,
-    borderRadius: 11,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    padding: 11,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
     gap: 2,
   },
-  noteLabel: {
-    fontSize: 10,
-    fontFamily: 'PlusJakartaSans_700Bold',
-    color: COLORS.muted,
-  },
-  noteText: {
-    fontSize: 12,
-    lineHeight: 18,
-    fontFamily: 'PlusJakartaSans_400Regular',
-    color: COLORS.text,
-  },
+  noteLabel: { fontSize: 10, fontFamily: font.bold, color: colors.textSecondary },
+  noteText: { ...text.body, color: colors.text },
   emptyBox: {
-    alignItems: 'center',
-    gap: 7,
-    padding: 26,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: COLORS.borderLight,
-  },
-  emptyIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 17,
+    minHeight: 144,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.surface,
+    gap: 6,
+    padding: 16,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.dashed,
+    backgroundColor: colors.card,
   },
-  emptyTitle: {
-    fontSize: 13,
-    fontFamily: 'PlusJakartaSans_700Bold',
-    color: COLORS.text,
+  emptyIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.tint,
   },
-  emptyText: {
-    fontSize: 12,
-    textAlign: 'center',
-    fontFamily: 'PlusJakartaSans_400Regular',
-    color: COLORS.muted,
-  },
+  emptyTitle: { fontSize: 14, fontFamily: font.bold, color: colors.text },
+  emptyText: { fontSize: 12, lineHeight: 17, fontFamily: font.medium, textAlign: 'center', color: colors.textSecondary },
 });

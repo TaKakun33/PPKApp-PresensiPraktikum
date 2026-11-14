@@ -20,8 +20,9 @@ import {
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import LoadingState from '../components/LoadingState';
+import PrimaryButton from '../components/PrimaryButton';
 import type { ClassDoc, Profile } from '../lib/types';
-import { COLORS } from '../constants/colors';
+import { colors, font, layout, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import {
   addPesertaByNim,
@@ -53,10 +54,16 @@ function ActionButton({
   tone?: 'default' | 'danger' | 'primary';
   disabled?: boolean;
 }) {
-  const color = tone === 'danger' ? COLORS.danger : tone === 'primary' ? COLORS.primary : COLORS.text;
+  const color = tone === 'primary' ? colors.primary : colors.text;
   return (
     <Pressable
-      style={({ pressed }) => [styles.action, pressed && styles.actionPressed, disabled && styles.disabled]}
+      style={({ pressed }) => [
+        styles.action,
+        tone === 'primary' && styles.actionPrimary,
+        tone === 'danger' && styles.actionDanger,
+        pressed && styles.actionPressed,
+        disabled && styles.disabled,
+      ]}
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
@@ -129,40 +136,39 @@ function PesertaPanel({ cls }: { cls: ClassDoc }) {
           value={nim}
           onChangeText={setNim}
           placeholder="NIM praktikan"
-          placeholderTextColor={COLORS.mutedLight}
+          placeholderTextColor={colors.placeholder}
           keyboardType="number-pad"
           returnKeyType="done"
           onSubmitEditing={tambah}
           editable={!saving}
           accessibilityLabel="NIM praktikan yang ditambahkan"
         />
-        <Pressable
-          style={({ pressed }) => [styles.addButton, pressed && styles.actionPressed, (saving || !nim.trim()) && styles.disabled]}
+        <PrimaryButton
+          label="Tambah"
+          size="sm"
           onPress={tambah}
           disabled={saving || !nim.trim()}
-          accessibilityRole="button"
+          loading={saving}
           accessibilityLabel="Tambah peserta"
-        >
-          {saving ? (
-            <ActivityIndicator size="small" color={COLORS.white} />
-          ) : (
-            <Text style={styles.addButtonText}>Tambah</Text>
-          )}
-        </Pressable>
+          style={styles.addButton}
+        />
       </View>
       {info ? (
-        <Text style={[styles.info, { color: info.ok ? COLORS.success : COLORS.danger }]}>{info.text}</Text>
+        <Text style={[styles.info, { color: info.ok ? colors.success : colors.danger }]}>{info.text}</Text>
       ) : null}
 
       {error ? (
-        <Text style={[styles.info, { color: COLORS.danger }]}>{error}</Text>
+        <Text style={[styles.info, { color: colors.danger }]}>{error}</Text>
       ) : peserta === null ? (
-        <ActivityIndicator style={styles.panelLoading} color={COLORS.primary} />
+        <ActivityIndicator style={styles.panelLoading} color={colors.primary} />
       ) : peserta.length === 0 ? (
         <Text style={styles.emptyText}>Belum ada peserta. Tambahkan lewat NIM.</Text>
       ) : (
         peserta.map((p) => (
           <View key={p.id} style={styles.pesertaRow}>
+            <View style={styles.pesertaAvatar}>
+              <Text style={styles.pesertaInitial}>{p.nama?.trim().charAt(0).toUpperCase() || '?'}</Text>
+            </View>
             <View style={styles.flex}>
               <Text style={styles.pesertaNama}>{p.nama}</Text>
               <Text style={styles.pesertaNim}>NIM {p.nim ?? '-'}</Text>
@@ -173,7 +179,7 @@ function PesertaPanel({ cls }: { cls: ClassDoc }) {
               accessibilityRole="button"
               accessibilityLabel={`Keluarkan ${p.nama}`}
             >
-              <Ionicons name="person-remove-outline" size={18} color={COLORS.danger} />
+              <Ionicons name="person-remove-outline" size={18} color={colors.primary} />
             </Pressable>
           </View>
         ))
@@ -223,7 +229,7 @@ function ClassFormModal({
             value={namaKelas}
             onChangeText={setNamaKelas}
             placeholder="Contoh: Kelas A"
-            placeholderTextColor={COLORS.mutedLight}
+            placeholderTextColor={colors.placeholder}
             editable={!saving}
           />
 
@@ -233,33 +239,27 @@ function ClassFormModal({
             value={praktikum}
             onChangeText={setPraktikum}
             placeholder="Contoh: Praktikum PPK"
-            placeholderTextColor={COLORS.mutedLight}
+            placeholderTextColor={colors.placeholder}
             editable={!saving}
           />
 
-          {error ? <Text style={[styles.info, { color: COLORS.danger }]}>{error}</Text> : null}
+          {error ? <Text style={[styles.info, { color: colors.danger }]}>{error}</Text> : null}
 
           <View style={styles.modalActions}>
-            <Pressable
-              style={({ pressed }) => [styles.secondaryButton, pressed && styles.actionPressed]}
+            <PrimaryButton
+              label="Batal"
+              variant="secondary"
               onPress={onClose}
               disabled={saving}
-              accessibilityRole="button"
-            >
-              <Text style={styles.secondaryText}>Batal</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.primaryButton, pressed && styles.actionPressed, saving && styles.disabled]}
+              style={styles.modalButton}
+            />
+            <PrimaryButton
+              label="Simpan"
               onPress={simpan}
               disabled={saving}
-              accessibilityRole="button"
-            >
-              {saving ? (
-                <ActivityIndicator size="small" color={COLORS.white} />
-              ) : (
-                <Text style={styles.primaryText}>Simpan</Text>
-              )}
-            </Pressable>
+              loading={saving}
+              style={styles.modalButton}
+            />
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -355,19 +355,18 @@ export default function ManageClassScreen() {
               <Text style={styles.title}>Kelas yang Kamu Ampu</Text>
               <Text style={styles.subtitle}>{classes.length} kelas</Text>
             </View>
-            <Pressable
-              style={({ pressed }) => [styles.primaryButton, pressed && styles.actionPressed]}
+            <PrimaryButton
+              label="Kelas"
+              size="sm"
+              icon="add"
               onPress={() => setForm({ mode: 'tambah' })}
-              accessibilityRole="button"
               accessibilityLabel="Tambah kelas"
-            >
-              <Ionicons name="add" size={18} color={COLORS.white} />
-              <Text style={styles.primaryText}>Kelas</Text>
-            </Pressable>
+              style={styles.addClassButton}
+            />
           </View>
         }
         ListEmptyComponent={
-          <EmptyState title="Belum ada kelas" message="Tekan tombol + Kelas untuk membuat kelas pertama." />
+          <EmptyState icon="people-outline" title="Belum ada kelas" message="Tekan tombol + Kelas untuk membuat kelas pertama." />
         }
         renderItem={({ item }) => {
           const open = openId === item.id;
@@ -398,91 +397,75 @@ export default function ManageClassScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+  container: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
-  content: { flexGrow: 1, padding: 20 },
+  content: { flexGrow: 1, padding: layout.screenPadding, paddingTop: 8, paddingBottom: 32 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
-  title: { fontSize: 20, fontFamily: 'PlusJakartaSans_800ExtraBold', color: COLORS.text },
-  subtitle: { fontSize: 13, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
+  title: { fontSize: 19, fontFamily: font.extraBold, color: colors.text },
+  subtitle: { ...text.caption },
+  addClassButton: { minHeight: 42, paddingHorizontal: 16 },
   separator: { height: 12 },
   card: {
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
+    backgroundColor: colors.card,
+    borderRadius: radius.card,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
     padding: 16,
     gap: 4,
   },
-  cardTitle: { fontSize: 16, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
-  cardMeta: { fontSize: 13, fontFamily: 'PlusJakartaSans_500Medium', color: COLORS.muted },
+  cardTitle: { fontSize: 16, fontFamily: font.bold, color: colors.text },
+  cardMeta: { ...text.caption },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
   action: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
     paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 999,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.background,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
   },
+  actionPrimary: { backgroundColor: colors.tint, borderColor: colors.tint },
+  actionDanger: { borderColor: colors.border, backgroundColor: colors.surface },
   actionPressed: { opacity: 0.75 },
-  actionText: { fontSize: 13, fontFamily: 'PlusJakartaSans_600SemiBold' },
+  actionText: { fontSize: 12, fontFamily: font.semibold },
   disabled: { opacity: 0.5 },
-  panel: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.border, gap: 8 },
+  panel: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border, gap: 8 },
   panelLoading: { paddingVertical: 12 },
   addRow: { flexDirection: 'row', gap: 8 },
   addInput: { flex: 1 },
-  addButton: {
-    justifyContent: 'center',
+  addButton: { minWidth: 88 },
+  info: { fontSize: 12, lineHeight: 18, fontFamily: font.medium },
+  emptyText: { ...text.caption, paddingVertical: 6 },
+  pesertaRow: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 8 },
+  pesertaAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
     alignItems: 'center',
-    minWidth: 84,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    backgroundColor: colors.tint,
   },
-  addButtonText: { color: COLORS.white, fontSize: 14, fontFamily: 'PlusJakartaSans_600SemiBold' },
-  info: { fontSize: 13, fontFamily: 'PlusJakartaSans_500Medium' },
-  emptyText: { fontSize: 13, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted, paddingVertical: 6 },
-  pesertaRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
-  pesertaNama: { fontSize: 14, fontFamily: 'PlusJakartaSans_600SemiBold', color: COLORS.text },
-  pesertaNim: { fontSize: 12, fontFamily: 'PlusJakartaSans_500Medium', color: COLORS.muted },
-  label: { fontSize: 13, fontFamily: 'PlusJakartaSans_600SemiBold', color: COLORS.textSecondary, marginTop: 8 },
+  pesertaInitial: { fontSize: 13, fontFamily: font.extraBold, color: colors.primary },
+  pesertaNama: { fontSize: 14, fontFamily: font.semibold, color: colors.text },
+  pesertaNim: { ...text.caption },
+  label: { ...text.bodyStrong, color: colors.textSecondary, marginTop: 8 },
   input: {
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
-    fontFamily: 'PlusJakartaSans_500Medium',
-    color: COLORS.text,
-    backgroundColor: COLORS.card,
+    borderColor: colors.border,
+    borderRadius: radius.input,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    fontSize: 14,
+    fontFamily: font.medium,
+    color: colors.text,
+    backgroundColor: colors.card,
   },
-  backdrop: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: 'rgba(15, 23, 42, 0.45)' },
-  modal: { backgroundColor: COLORS.card, borderRadius: 20, padding: 20, gap: 6 },
-  modalTitle: { fontSize: 18, fontFamily: 'PlusJakartaSans_800ExtraBold', color: COLORS.text },
-  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 14 },
-  primaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    minWidth: 92,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: COLORS.primary,
-  },
-  primaryText: { color: COLORS.white, fontSize: 14, fontFamily: 'PlusJakartaSans_600SemiBold' },
-  secondaryButton: {
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  secondaryText: { color: COLORS.text, fontSize: 14, fontFamily: 'PlusJakartaSans_600SemiBold' },
+  backdrop: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: 'rgba(20, 35, 74, 0.48)' },
+  modal: { backgroundColor: colors.card, borderRadius: 24, padding: 20, gap: 6 },
+  modalTitle: { fontSize: 18, fontFamily: font.extraBold, color: colors.text, marginBottom: 4 },
+  modalActions: { flexDirection: 'row', gap: 10, marginTop: 14 },
+  modalButton: { flex: 1, minHeight: 46, paddingHorizontal: 12 },
 });

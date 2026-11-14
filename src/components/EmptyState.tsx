@@ -1,50 +1,99 @@
 // Pemilik: Hadrian (feat/schedule-detail), SRS-03.
 // Tampilan saat daftar kosong. Dipakai juga oleh layar Riwayat dan Rekap, jadi props jangan diubah.
 import Ionicons from '@expo/vector-icons/Ionicons';
+import type { ComponentProps } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { COLORS } from '../constants/colors';
+import { colors, font, layout, radius, text } from '../constants/theme';
+
+type IoniconsName = ComponentProps<typeof Ionicons>['name'];
 
 type Props = {
   title: string;
   message?: string;
+  icon?: IoniconsName;
+  compact?: boolean;
 };
 
-export default function EmptyState({ title, message }: Props) {
+export default function EmptyState({
+  title,
+  message,
+  icon = 'file-tray-outline',
+  compact = false,
+}: Props) {
   return (
-    <View style={styles.container}>
-      <View style={styles.iconBox}>
-        <Ionicons name="file-tray-outline" size={32} color={COLORS.muted} />
+    <View style={[styles.container, compact && styles.containerCompact]}>
+      <View style={[styles.box, compact && styles.boxCompact]}>
+        <View style={[styles.iconBox, compact && styles.iconBoxCompact]}>
+          <Ionicons name={icon} size={compact ? 24 : 28} color={colors.primary} />
+        </View>
+        <Text style={[styles.title, compact && styles.titleCompact]}>{title}</Text>
+        {message ? <Text style={[styles.message, compact && styles.messageCompact]}>{message}</Text> : null}
       </View>
-      <Text style={styles.title}>{title}</Text>
-      {message ? <Text style={styles.message}>{message}</Text> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  iconBox: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+  container: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
-    backgroundColor: COLORS.surface,
+    paddingVertical: 24,
+  },
+  containerCompact: {
+    justifyContent: 'flex-start',
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: 8,
+    paddingBottom: 0,
+  },
+  box: {
+    width: '100%',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 28,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.dashed,
+    backgroundColor: colors.card,
+  },
+  boxCompact: {
+    minHeight: 144,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderRadius: radius.card,
+  },
+  iconBox: {
+    width: 60,
+    height: 60,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+    backgroundColor: colors.tint,
+  },
+  iconBoxCompact: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    marginBottom: 10,
   },
   title: {
-    fontSize: 16,
-    fontFamily: 'PlusJakartaSans_700Bold',
-    color: COLORS.text,
+    fontSize: 15,
+    fontFamily: font.bold,
+    color: colors.text,
     textAlign: 'center',
   },
+  titleCompact: { fontSize: 14 },
   message: {
+    ...text.body,
     marginTop: 6,
-    fontSize: 14,
-    lineHeight: 20,
-    fontFamily: 'PlusJakartaSans_400Regular',
-    color: COLORS.muted,
     textAlign: 'center',
+  },
+  messageCompact: {
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 4,
   },
 });

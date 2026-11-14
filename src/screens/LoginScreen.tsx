@@ -1,10 +1,12 @@
 // FILE AKMAL (feat/auth-leave-ai) — SRS-11. Layar login (Firebase Auth).
 // Satu form login untuk semua pengguna: peran ditentukan dari dokumen profil di Firestore, bukan dipilih di sini.
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { Image } from 'expo-image';
 import { Link, Redirect } from 'expo-router';
-import { useEffect, useRef, useState, type ComponentRef } from 'react';
+import { useRef, useState, type ComponentRef } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Pressable,
   ScrollView,
@@ -22,23 +24,21 @@ import { useScrollKeFieldFokus } from './useScrollKeFieldFokus';
 import { getAuthErrorMessage } from '../services/authService';
 import AuthLoadingGate from '../navigation/AuthLoadingGate';
 
+const NAVY = '#0B2447';
+const INPUT_BG = '#F5F6F8';
+const MUTED_TEXT = '#8A8F98';
+
 export default function LoginScreen() {
   const { signIn, state, authError, profileError, clearAuthError } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
+  const [remember, setRemember] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const passwordRef = useRef<ComponentRef<typeof TextInput>>(null);
   const insets = useSafeAreaInsets();
   const { scrollRef, saatLayoutForm, saatLayoutField, fokusKe } = useScrollKeFieldFokus();
-
-  // Setelah signIn berhasil, `loading` sengaja TIDAK dimatikan: tombol tetap "Memproses" sampai layar ini
-  // dilepas oleh Redirect. Kalau login berhasil tetapi profil gagal dimuat (authError terisi, pengguna
-  // dikeluarkan), tombol diaktifkan lagi supaya bisa mencoba ulang.
-  useEffect(() => {
-    if (authError) setLoading(false);
-  }, [authError]);
 
   // Sudah login tetapi profil belum terbaca (mis. koneksi lambat): tampilkan pesan + Coba lagi / Keluar.
   if (state.status === 'loading' && profileError) return <AuthLoadingGate />;
@@ -49,6 +49,10 @@ export default function LoginScreen() {
   }
 
   const displayedError = error || authError || '';
+  // Setelah signIn berhasil, `loading` sengaja TIDAK dimatikan: tombol tetap "Memproses" sampai layar ini
+  // dilepas oleh Redirect. Kalau login berhasil tetapi profil gagal dimuat (authError terisi, pengguna
+  // dikeluarkan), tombol diaktifkan lagi supaya bisa mencoba ulang.
+  const busy = loading && !authError;
 
   const clearErrors = () => {
     setError('');
@@ -56,7 +60,7 @@ export default function LoginScreen() {
   };
 
   const handleLogin = async () => {
-    if (loading) return;
+    if (busy) return;
     clearErrors();
     if (!email.trim() || !password) {
       setError('Email dan password harus diisi.');
@@ -72,124 +76,155 @@ export default function LoginScreen() {
     }
   };
 
+  const handleLupaPassword = () => {
+    Alert.alert(
+      'Lupa Password',
+      'Fitur atur ulang password belum tersedia. Hubungi admin praktikum untuk bantuan.',
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="dark-content" />
       {/* behavior="padding" di Android DAN iOS: Android edge-to-edge tidak me-resize jendela sendiri. */}
       <KeyboardAvoidingView style={styles.flex} behavior="padding">
         <ScrollView
           ref={scrollRef}
           style={styles.flex}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: Math.max(insets.bottom + 16, 28) },
+          ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
         >
-          <View style={styles.header}>
-            <Text style={styles.eyebrow}>Selamat datang di aplikasi,</Text>
+          <Image
+            source={require('../../assets/images/4598597536534242688.jpg')}
+            style={styles.photoFrame}
+            contentFit="cover"
+            accessibilityLabel="Ilustrasi kelas praktikum"
+          />
+
+          <View style={styles.brand}>
             <Text style={styles.heroTitle}>Praktikum Apps</Text>
-            <Text style={styles.heroSubtitle}>
-              Kelola jadwal, presensi, dan pengajuan izin praktikum dalam satu tempat.
-            </Text>
+            <Text style={styles.heroSubtitle}>Jadwal, Presensi, &amp; Perizinan Praktikum</Text>
           </View>
 
-          <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom + 14, 28) }]}>
-            <View style={styles.handle} />
-
-            <View style={styles.form} onLayout={saatLayoutForm}>
-              <View style={styles.fieldGroup} onLayout={saatLayoutField('email')}>
-                <Text style={styles.label}>Email</Text>
-                <View style={styles.inputBox}>
-                  <Ionicons name="mail-outline" size={18} color={COLORS.muted} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="email@kampus.ac.id"
-                    placeholderTextColor={COLORS.muted}
-                    value={email}
-                    onFocus={() => fokusKe('email')}
-                    onChangeText={(t) => {
-                      setEmail(t);
-                      clearErrors();
-                    }}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    // Autofill: pengelola password di HP (Google/Samsung) menampilkan email yang tersimpan.
-                    autoComplete="email"
-                    textContentType="username"
-                    importantForAutofill="yes"
-                    returnKeyType="next"
-                    onSubmitEditing={() => passwordRef.current?.focus()}
-                  />
-                </View>
+          <View style={styles.form} onLayout={saatLayoutForm}>
+            <View onLayout={saatLayoutField('email')}>
+              <View style={styles.inputBox}>
+                <Ionicons name="mail-outline" size={18} color={MUTED_TEXT} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Email"
+                  placeholderTextColor={MUTED_TEXT}
+                  value={email}
+                  onFocus={() => fokusKe('email')}
+                  onChangeText={(t) => {
+                    setEmail(t);
+                    clearErrors();
+                  }}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  // Autofill: pengelola password di HP (Google/Samsung) menampilkan email yang tersimpan.
+                  autoComplete="email"
+                  textContentType="username"
+                  importantForAutofill="yes"
+                  returnKeyType="next"
+                  onSubmitEditing={() => passwordRef.current?.focus()}
+                />
               </View>
+            </View>
 
-              <View style={styles.fieldGroup} onLayout={saatLayoutField('password')}>
-                <Text style={styles.label}>Password</Text>
-                <View style={styles.inputBox}>
-                  <Ionicons name="lock-closed-outline" size={18} color={COLORS.muted} />
-                  <TextInput
-                    ref={passwordRef}
-                    style={styles.input}
-                    placeholder="Password"
-                    placeholderTextColor={COLORS.muted}
-                    value={password}
-                    onFocus={() => fokusKe('password')}
-                    onChangeText={(t) => {
-                      setPassword(t);
-                      clearErrors();
-                    }}
-                    secureTextEntry={!showPass}
-                    autoComplete="current-password"
-                    textContentType="password"
-                    importantForAutofill="yes"
-                    returnKeyType="done"
-                    onSubmitEditing={handleLogin}
+            <View onLayout={saatLayoutField('password')}>
+              <View style={styles.inputBox}>
+                <Ionicons name="lock-closed-outline" size={18} color={MUTED_TEXT} />
+                <TextInput
+                  ref={passwordRef}
+                  style={styles.input}
+                  placeholder="Password"
+                  placeholderTextColor={MUTED_TEXT}
+                  value={password}
+                  onFocus={() => fokusKe('password')}
+                  onChangeText={(t) => {
+                    setPassword(t);
+                    clearErrors();
+                  }}
+                  secureTextEntry={!showPass}
+                  autoComplete="current-password"
+                  textContentType="password"
+                  importantForAutofill="yes"
+                  returnKeyType="done"
+                  onSubmitEditing={handleLogin}
+                />
+                <Pressable
+                  onPress={() => setShowPass((v) => !v)}
+                  style={styles.eyeButton}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={showPass ? 'Sembunyikan password' : 'Tampilkan password'}
+                >
+                  <Ionicons
+                    name={showPass ? 'eye-off-outline' : 'eye-outline'}
+                    size={19}
+                    color={MUTED_TEXT}
                   />
-                  <Pressable
-                    onPress={() => setShowPass((v) => !v)}
-                    style={styles.eyeButton}
-                    hitSlop={8}
-                    accessibilityRole="button"
-                    accessibilityLabel={showPass ? 'Sembunyikan password' : 'Tampilkan password'}
-                  >
-                    <Ionicons
-                      name={showPass ? 'eye-off-outline' : 'eye-outline'}
-                      size={19}
-                      color={COLORS.muted}
-                    />
-                  </Pressable>
-                </View>
+                </Pressable>
               </View>
+            </View>
 
-              {displayedError ? (
-                <View style={styles.errorBox}>
-                  <Ionicons name="alert-circle" size={15} color={COLORS.danger} />
-                  <Text style={styles.errorText}>{displayedError}</Text>
-                </View>
-              ) : null}
-
+            <View style={styles.optionsRow}>
               <Pressable
-                style={({ pressed }) => [styles.button, (loading || pressed) && styles.buttonPressed]}
-                onPress={handleLogin}
-                disabled={loading}
-                accessibilityRole="button"
-                accessibilityLabel={loading ? 'Memproses' : 'Masuk'}
+                style={styles.rememberRow}
+                onPress={() => setRemember((v) => !v)}
+                hitSlop={8}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: remember }}
+                accessibilityLabel="Ingat Saya"
               >
-                {loading ? <ActivityIndicator size="small" color={COLORS.white} /> : null}
-                <Text style={styles.buttonText}>{loading ? 'Memproses...' : 'Masuk'}</Text>
+                <Ionicons
+                  name={remember ? 'checkbox' : 'square-outline'}
+                  size={20}
+                  color={remember ? NAVY : COLORS.borderLight}
+                />
+                <Text style={styles.rememberText}>Ingat Saya</Text>
+              </Pressable>
+
+              <Pressable onPress={handleLupaPassword} hitSlop={8} accessibilityRole="link">
+                <Text style={styles.forgotText}>Lupa Password?</Text>
               </Pressable>
             </View>
 
-            <View style={styles.footer}>
-              <View style={styles.registerRow}>
-                <Text style={styles.infoText}>Belum punya akun?</Text>
-                <Link href="/register" style={styles.link}>
-                  Daftar sekarang
-                </Link>
+            {displayedError ? (
+              <View style={styles.errorBox}>
+                <Ionicons name="alert-circle" size={15} color={COLORS.danger} />
+                <Text style={styles.errorText}>{displayedError}</Text>
               </View>
-              <Text style={styles.copyright}>© 2026 created by Kelompok 5</Text>
+            ) : null}
+
+            <Pressable
+              style={({ pressed }) => [styles.button, (busy || pressed) && styles.buttonPressed]}
+              onPress={handleLogin}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel={busy ? 'Memproses' : 'Masuk'}
+            >
+              {busy ? <ActivityIndicator size="small" color={COLORS.white} /> : null}
+              <Text style={styles.buttonText}>{busy ? 'Memproses...' : 'Masuk'}</Text>
+            </Pressable>
+
+            <View style={styles.registerRow}>
+              <Text style={styles.infoText}>Belum punya akun?</Text>
+              <Link href="/register" style={styles.link}>
+                Daftar sekarang
+              </Link>
             </View>
+          </View>
+
+          <View style={styles.footer}>
+            <Text style={styles.copyright}>© 2026 created by Kelompok 5</Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -198,77 +233,57 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.primary },
+  safe: { flex: 1, backgroundColor: COLORS.white },
   flex: { flex: 1 },
-  scrollContent: { flexGrow: 1, backgroundColor: COLORS.card, paddingBottom: 32 },
-  header: {
-    backgroundColor: COLORS.primary,
+  scrollContent: {
+    flexGrow: 1,
+    backgroundColor: COLORS.white,
     paddingHorizontal: 24,
-    paddingTop: 22,
-    paddingBottom: 66,
-    gap: 10,
+    paddingTop: 18,
   },
-  eyebrow: {
-    fontSize: 11,
-    letterSpacing: 1.5,
-    fontFamily: 'PlusJakartaSans_700Bold',
-    color: 'rgba(255,255,255,0.78)',
+  photoFrame: {
+    width: '100%',
+    height: 190,
+    borderRadius: 22,
+    backgroundColor: '#F1F2F4',
+  },
+  brand: {
+    marginTop: 26,
+    alignItems: 'center',
+    gap: 6,
   },
   heroTitle: {
-    fontSize: 32,
-    lineHeight: 39,
+    fontSize: 27,
+    lineHeight: 33,
     fontFamily: 'PlusJakartaSans_800ExtraBold',
-    color: COLORS.white,
-    letterSpacing: -0.8,
+    color: NAVY,
+    letterSpacing: -0.6,
   },
   heroSubtitle: {
-    maxWidth: 300,
-    fontSize: 14,
-    lineHeight: 21,
-    fontFamily: 'PlusJakartaSans_400Regular',
-    color: 'rgba(255,255,255,0.82)',
-  },
-  sheet: {
-    marginTop: -34,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    backgroundColor: COLORS.card,
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 28,
-    gap: 22,
-  },
-  handle: {
-    alignSelf: 'center',
-    width: 42,
-    height: 5,
-    borderRadius: 999,
-    backgroundColor: COLORS.background,
-    marginBottom: 2,
-  },
-  form: { gap: 16 },
-  fieldGroup: { gap: 7 },
-  label: {
     fontSize: 13,
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    color: COLORS.text,
+    lineHeight: 19,
+    fontFamily: 'PlusJakartaSans_500Medium',
+    color: MUTED_TEXT,
   },
+  form: { marginTop: 30, gap: 14 },
   inputBox: {
-    minHeight: 56,
+    minHeight: 54,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: COLORS.background,
-    borderRadius: 16,
-    paddingLeft: 15,
-    paddingRight: 15,
+    backgroundColor: INPUT_BG,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#F0F1F3',
+    paddingLeft: 16,
+    paddingRight: 12,
   },
   input: {
     flex: 1,
     fontSize: 15,
     fontFamily: 'PlusJakartaSans_400Regular',
-    color: COLORS.text,
-    paddingVertical: 14,
+    color: NAVY,
+    paddingVertical: 13,
     paddingHorizontal: 0,
   },
   eyeButton: {
@@ -276,9 +291,29 @@ const styles = StyleSheet.create({
     minWidth: 34,
     alignItems: 'flex-end',
     justifyContent: 'center',
-    borderLeftWidth: 2,
-    borderLeftColor: COLORS.white,
-    paddingLeft: 12,
+    paddingLeft: 10,
+  },
+  optionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 2,
+    marginTop: 2,
+  },
+  rememberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  rememberText: {
+    fontSize: 13,
+    fontFamily: 'PlusJakartaSans_500Medium',
+    color: COLORS.textSecondary,
+  },
+  forgotText: {
+    fontSize: 13,
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    color: NAVY,
   },
   errorBox: {
     flexDirection: 'row',
@@ -298,11 +333,11 @@ const styles = StyleSheet.create({
     color: COLORS.danger,
   },
   button: {
-    marginTop: 2,
-    backgroundColor: COLORS.primary,
+    marginTop: 8,
+    backgroundColor: NAVY,
     paddingVertical: 16,
     paddingHorizontal: 22,
-    borderRadius: 999,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -312,9 +347,16 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: 15,
     fontFamily: 'PlusJakartaSans_700Bold',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
     color: COLORS.white,
   },
-  footer: { alignItems: 'center', gap: 10, paddingTop: 4 },
+  footer: {
+    marginTop: 'auto',
+    paddingTop: 32,
+    alignItems: 'center',
+    gap: 10,
+  },
   registerRow: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -324,16 +366,16 @@ const styles = StyleSheet.create({
   infoText: {
     fontSize: 13,
     fontFamily: 'PlusJakartaSans_400Regular',
-    color: COLORS.muted,
+    color: MUTED_TEXT,
   },
   link: {
     fontSize: 13,
     fontFamily: 'PlusJakartaSans_700Bold',
-    color: COLORS.primary,
+    color: NAVY,
   },
   copyright: {
     fontSize: 11,
     fontFamily: 'PlusJakartaSans_400Regular',
-    color: COLORS.muted,
+    color: MUTED_TEXT,
   },
 });

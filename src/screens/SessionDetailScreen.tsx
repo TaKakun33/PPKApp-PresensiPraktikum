@@ -11,10 +11,11 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import LoadingState from '../components/LoadingState';
+import PrimaryButton from '../components/PrimaryButton';
 import StatusBadge from '../components/StatusBadge';
 import type { Role } from '../lib/constants';
 import type { ClassDoc, Session } from '../lib/types';
-import { COLORS } from '../constants/colors';
+import { colors, font, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { getNamaPengguna, pesanFirestore, subscribeClass } from '../services/classService';
 import {
@@ -31,10 +32,10 @@ type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
 // Warna kartu kehadiran, diambil dari warna bersama agar senada dengan StatusBadge.
 const TONE = {
-  success: { color: COLORS.success, bg: COLORS.successLight },
-  info: { color: COLORS.primary, bg: COLORS.primaryLight },
-  neutral: { color: COLORS.textSecondary, bg: COLORS.surface },
-  danger: { color: COLORS.danger, bg: COLORS.dangerLight },
+  success: { color: colors.success, bg: colors.successTint },
+  info: { color: colors.primary, bg: colors.tint },
+  neutral: { color: colors.textSecondary, bg: colors.surface },
+  danger: { color: colors.danger, bg: colors.dangerTint },
 };
 
 type Presence = { icon: IoniconsName; tone: keyof typeof TONE; title: string; message: string };
@@ -86,7 +87,7 @@ function describePresence(
     }
     return {
       icon: 'people-outline',
-      tone: session.status === 'dibuka' ? 'success' : 'neutral',
+      tone: session.status === 'dibuka' ? 'info' : 'neutral',
       title: jumlahHadir === null ? 'Jumlah hadir belum tersedia' : `${jumlahHadir} praktikan hadir`,
       message:
         session.status === 'dibuka'
@@ -130,7 +131,7 @@ function InfoRow({ icon, label, value }: { icon: IoniconsName; label: string; va
   return (
     <View style={styles.row}>
       <View style={styles.rowIcon}>
-        <Ionicons name={icon} size={18} color={COLORS.primary} />
+        <Ionicons name={icon} size={18} color={colors.primary} />
       </View>
       <View style={styles.rowText}>
         <Text style={styles.rowLabel}>{label}</Text>
@@ -232,13 +233,7 @@ export default function SessionDetailScreen() {
           title="Sesi tidak ditemukan"
           message={`Sesi dengan ID "${id ?? '-'}" tidak ada atau sudah dihapus.`}
         />
-        <Pressable
-          style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
-          onPress={kembali}
-          accessibilityRole="button"
-        >
-          <Text style={styles.backButtonText}>Kembali</Text>
-        </Pressable>
+        <PrimaryButton label="Kembali" onPress={kembali} style={styles.backButton} />
       </View>
     );
   }
@@ -275,6 +270,7 @@ export default function SessionDetailScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.hero}>
+        <View style={styles.heroCircle} />
         <StatusBadge status={session.status} />
         <Text style={styles.title}>{session.praktikum}</Text>
         <Text style={styles.subtitle}>
@@ -320,7 +316,7 @@ export default function SessionDetailScreen() {
                 onPress={() => router.push({ pathname: '/session-form', params: { id: session.id } })}
                 accessibilityRole="button"
               >
-                <Ionicons name="create-outline" size={16} color={COLORS.text} />
+                <Ionicons name="create-outline" size={16} color={colors.primary} />
                 <Text style={styles.manageText}>Ubah Jadwal</Text>
               </Pressable>
               <Pressable
@@ -328,8 +324,8 @@ export default function SessionDetailScreen() {
                 onPress={hapus}
                 accessibilityRole="button"
               >
-                <Ionicons name="trash-outline" size={16} color={COLORS.danger} />
-                <Text style={[styles.manageText, { color: COLORS.danger }]}>Hapus Sesi</Text>
+                <Ionicons name="trash-outline" size={16} color={colors.text} />
+                <Text style={styles.manageText}>Hapus Sesi</Text>
               </Pressable>
             </View>
           ) : (
@@ -344,23 +340,32 @@ export default function SessionDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  content: { padding: 20, gap: 16 },
+  container: { flex: 1, backgroundColor: colors.bg },
+  content: { padding: 20, paddingTop: 8, paddingBottom: 32, gap: 16 },
   hero: {
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    overflow: 'hidden',
+    backgroundColor: colors.primary,
+    borderRadius: radius.card,
     padding: 20,
     gap: 8,
   },
-  title: { fontSize: 20, fontFamily: 'PlusJakartaSans_800ExtraBold', color: COLORS.text },
-  subtitle: { fontSize: 14, fontFamily: 'PlusJakartaSans_500Medium', color: COLORS.muted },
+  heroCircle: {
+    position: 'absolute',
+    right: -48,
+    top: -46,
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    borderWidth: 20,
+    borderColor: 'rgba(255,255,255,0.07)',
+  },
+  title: { fontSize: 20, lineHeight: 26, fontFamily: font.extraBold, color: colors.white },
+  subtitle: { fontSize: 13, fontFamily: font.medium, color: 'rgba(255,255,255,0.78)' },
   card: {
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
+    backgroundColor: colors.card,
+    borderRadius: radius.card,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
@@ -368,68 +373,59 @@ const styles = StyleSheet.create({
   rowIcon: {
     width: 36,
     height: 36,
-    borderRadius: 10,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: colors.tint,
   },
   rowText: { flex: 1, gap: 2 },
-  rowLabel: { fontSize: 12, fontFamily: 'PlusJakartaSans_500Medium', color: COLORS.muted },
-  rowValue: { fontSize: 15, fontFamily: 'PlusJakartaSans_600SemiBold', color: COLORS.text },
+  rowLabel: { ...text.caption },
+  rowValue: { fontSize: 14, fontFamily: font.semibold, color: colors.text },
   sectionLabel: {
     paddingTop: 8,
-    fontSize: 12,
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    color: COLORS.muted,
+    fontSize: 10,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    fontFamily: font.bold,
+    color: colors.textSecondary,
   },
   presence: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
   presenceIcon: {
     width: 44,
     height: 44,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  presenceTitle: { fontSize: 15, fontFamily: 'PlusJakartaSans_700Bold' },
-  presenceMessage: { fontSize: 13, lineHeight: 19, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
+  presenceTitle: { fontSize: 14, fontFamily: font.bold },
+  presenceMessage: { ...text.caption, color: colors.textSecondary },
   timeline: {
     gap: 2,
     paddingTop: 10,
     paddingBottom: 6,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    borderTopColor: colors.border,
   },
-  timelineText: { fontSize: 12, fontFamily: 'PlusJakartaSans_500Medium', color: COLORS.muted },
+  timelineText: { ...text.caption },
   manageRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 10 },
   manageButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 999,
+    paddingVertical: 10,
+    borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.background,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
   },
-  manageDanger: { borderColor: COLORS.dangerBorder, backgroundColor: COLORS.dangerLight },
-  manageText: { fontSize: 13, fontFamily: 'PlusJakartaSans_600SemiBold', color: COLORS.text },
+  manageDanger: { backgroundColor: colors.surface },
+  manageText: { fontSize: 12, fontFamily: font.semibold, color: colors.text },
   manageNote: {
     paddingVertical: 10,
-    fontSize: 13,
-    lineHeight: 19,
-    fontFamily: 'PlusJakartaSans_400Regular',
-    color: COLORS.muted,
+    ...text.body,
   },
-  notFound: { flex: 1, padding: 24, backgroundColor: COLORS.background },
-  backButton: {
-    alignSelf: 'center',
-    marginBottom: 24,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 999,
-    backgroundColor: COLORS.text,
-  },
+  notFound: { flex: 1, padding: 24, backgroundColor: colors.bg },
+  backButton: { alignSelf: 'center', minWidth: 160, marginBottom: 24 },
   pressed: { opacity: 0.85 },
-  backButtonText: { color: COLORS.white, fontSize: 14, fontFamily: 'PlusJakartaSans_600SemiBold' },
 });

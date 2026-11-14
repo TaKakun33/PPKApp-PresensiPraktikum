@@ -4,7 +4,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
@@ -15,12 +14,16 @@ import {
   View,
 } from 'react-native';
 
-import { STATUS_IZIN, type StatusIzin } from '../lib/constants';
+import { STATUS_IZIN } from '../lib/constants';
 import type { Session } from '../lib/types';
+import Card from '../components/Card';
 import ConfirmModal from '../components/ConfirmModal';
 import ErrorState from '../components/ErrorState';
 import LoadingState from '../components/LoadingState';
-import { COLORS } from '../constants/colors';
+import PrimaryButton from '../components/PrimaryButton';
+import ScreenHeader from '../components/ScreenHeader';
+import StatusBadge from '../components/StatusBadge';
+import { colors, font, layout, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { labelKategori } from '../services/aiService';
 import {
@@ -36,12 +39,6 @@ import {
   type SubmitLeaveResult,
 } from '../services/leaveService';
 import { getFriendlyError } from '../services/serviceUtils';
-
-const STATUS_STYLE: Record<StatusIzin, { label: string; bg: string; text: string }> = {
-  [STATUS_IZIN.MENUNGGU]: { label: 'Menunggu', bg: '#FFF4E5', text: COLORS.warning },
-  [STATUS_IZIN.DITERIMA]: { label: 'Diterima', bg: COLORS.successLight, text: COLORS.success },
-  [STATUS_IZIN.DITOLAK]: { label: 'Ditolak', bg: COLORS.dangerLight, text: COLORS.danger },
-};
 
 type Notice = { tone: 'ok' | 'info' | 'error'; text: string };
 
@@ -113,10 +110,35 @@ export default function LeaveRequestScreen() {
 
   if (!profile) return <LoadingState message="Memuat akun..." />;
   if (profile.role !== 'praktikan') {
-    return <ErrorState message="Pengajuan izin hanya tersedia untuk praktikan." />;
+    return (
+      <View style={styles.screen}>
+        <ScreenHeader title="Izin" />
+        <View style={styles.state}>
+          <ErrorState message="Pengajuan izin hanya tersedia untuk praktikan." />
+        </View>
+      </View>
+    );
   }
-  if (loadError) return <ErrorState message={loadError} onRetry={handleRetry} />;
-  if (sessions === null || leaves === null) return <LoadingState message="Memuat data izin..." />;
+  if (loadError) {
+    return (
+      <View style={styles.screen}>
+        <ScreenHeader title="Izin" />
+        <View style={styles.state}>
+          <ErrorState message={loadError} onRetry={handleRetry} />
+        </View>
+      </View>
+    );
+  }
+  if (sessions === null || leaves === null) {
+    return (
+      <View style={styles.screen}>
+        <ScreenHeader title="Izin" />
+        <View style={styles.state}>
+          <LoadingState message="Memuat data izin..." />
+        </View>
+      </View>
+    );
+  }
 
   const activeSessionIds = new Set(leaves.filter(isActiveLeave).map((l) => l.sessionId));
   const selectedSession = sessions.find((s) => s.id === selectedId) ?? null;
@@ -195,11 +217,11 @@ export default function LeaveRequestScreen() {
         </Text>
       </View>
 
-      <View style={styles.card}>
+      <Card style={styles.formCard}>
         <Text style={styles.label}>Pilih sesi</Text>
         {sessions.length === 0 ? (
           <View style={styles.infoBox}>
-            <Ionicons name="information-circle-outline" size={16} color={COLORS.muted} />
+            <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
             <Text style={styles.infoText}>
               {profile.kelasIds && profile.kelasIds.length > 0
                 ? 'Belum ada sesi yang bisa diajukan izin. Sesi yang sudah ditutup tidak ditampilkan.'
@@ -226,7 +248,7 @@ export default function LeaveRequestScreen() {
                   <Ionicons
                     name={selected ? 'radio-button-on' : 'radio-button-off'}
                     size={20}
-                    color={selected ? COLORS.primary : COLORS.mutedLight}
+                    color={selected ? colors.primary : colors.placeholder}
                   />
                   <View style={styles.optionBody}>
                     <Text style={styles.optionTitle}>{s.praktikum}</Text>
@@ -245,7 +267,7 @@ export default function LeaveRequestScreen() {
         <TextInput
           style={styles.textArea}
           placeholder="Contoh: Sakit dan sudah ada surat dokter."
-          placeholderTextColor={COLORS.mutedLight}
+          placeholderTextColor={colors.placeholder}
           value={alasan}
           onChangeText={(t) => {
             setAlasan(t);
@@ -260,9 +282,9 @@ export default function LeaveRequestScreen() {
           {trimmedLength}/{LEAVE_REASON_MAX} karakter (minimal {LEAVE_REASON_MIN})
         </Text>
 
-        <View style={styles.infoBox}>
-          <Ionicons name="sparkles-outline" size={16} color={COLORS.muted} />
-          <Text style={styles.infoText}>
+        <View style={styles.aiBox}>
+          <Ionicons name="sparkles-outline" size={16} color={colors.primary} />
+          <Text style={styles.aiText}>
             Alasanmu dianalisis oleh model AI di perangkatmu (tidak dikirim ke internet) untuk menentukan
             kategori sentimen (positif, netral, atau negatif). AI hanya memberi informasi pendukung dan tidak menentukan izin diterima atau ditolak.
           </Text>
@@ -270,7 +292,7 @@ export default function LeaveRequestScreen() {
 
         {formError ? (
           <View style={styles.errorBox}>
-            <Ionicons name="alert-circle" size={15} color={COLORS.danger} />
+            <Ionicons name="alert-circle" size={15} color={colors.danger} />
             <Text style={styles.errorText}>{formError}</Text>
           </View>
         ) : null}
@@ -287,23 +309,20 @@ export default function LeaveRequestScreen() {
                 notice.tone === 'ok' ? 'checkmark-circle' : notice.tone === 'error' ? 'alert-circle' : 'cloud-offline-outline'
               }
               size={16}
-              color={notice.tone === 'ok' ? COLORS.success : notice.tone === 'error' ? COLORS.danger : COLORS.warning}
+              color={notice.tone === 'ok' ? colors.success : notice.tone === 'error' ? colors.danger : colors.warning}
             />
             <Text style={styles.noticeText}>{notice.text}</Text>
           </View>
         ) : null}
 
-        <Pressable
-          style={({ pressed }) => [styles.button, (submitting || pressed) && styles.buttonPressed]}
+        <PrimaryButton
+          label={submitting ? 'Mengirim...' : 'Kirim Pengajuan'}
           onPress={handleSubmit}
           disabled={submitting}
-          accessibilityRole="button"
-          accessibilityLabel="Kirim pengajuan izin"
-        >
-          {submitting ? <ActivityIndicator size="small" color={COLORS.white} /> : null}
-          <Text style={styles.buttonText}>{submitting ? 'Mengirim...' : 'Kirim Pengajuan'}</Text>
-        </Pressable>
-      </View>
+          loading={submitting}
+          style={styles.submit}
+        />
+      </Card>
 
       <Text style={styles.sectionTitle}>Pengajuan Saya ({leaves.length})</Text>
     </View>
@@ -311,47 +330,49 @@ export default function LeaveRequestScreen() {
 
   // behavior="padding" di Android DAN iOS: Android edge-to-edge tidak me-resize jendela sendiri.
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior="padding">
-      <FlatList
-        style={styles.list}
-        contentContainerStyle={styles.content}
-        data={leaves}
-        keyExtractor={(item) => item.id}
-        keyboardShouldPersistTaps="handled"
-        ListHeaderComponent={header}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        renderItem={({ item }) => <LeaveCard item={item} onCancel={() => setCancelTarget(item)} />}
-        ListEmptyComponent={
-          <View style={styles.emptyBox}>
-            <Ionicons name="file-tray-outline" size={28} color={COLORS.muted} />
-            <Text style={styles.emptyTitle}>Belum ada pengajuan izin</Text>
-            <Text style={styles.emptyText}>Pengajuan yang kamu kirim akan muncul di sini beserta statusnya.</Text>
-          </View>
-        }
-      />
-      <ConfirmModal
-        visible={cancelTarget !== null}
-        title="Batalkan pengajuan?"
-        message="Pengajuan izin ini akan dihapus. Kamu bisa mengajukan ulang untuk sesi yang sama selama sesinya belum ditutup."
-        confirmLabel={cancelling ? 'Membatalkan...' : 'Batalkan'}
-        onConfirm={handleConfirmCancel}
-        onCancel={() => (cancelling ? undefined : setCancelTarget(null))}
-      />
-    </KeyboardAvoidingView>
+    <View style={styles.screen}>
+      <ScreenHeader title="Izin" />
+      <KeyboardAvoidingView style={styles.flex} behavior="padding">
+        <FlatList
+          style={styles.list}
+          contentContainerStyle={styles.content}
+          data={leaves}
+          keyExtractor={(item) => item.id}
+          keyboardShouldPersistTaps="handled"
+          ListHeaderComponent={header}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          renderItem={({ item }) => <LeaveCard item={item} onCancel={() => setCancelTarget(item)} />}
+          ListEmptyComponent={
+            <View style={styles.emptyBox}>
+              <View style={styles.emptyIcon}>
+                <Ionicons name="document-text-outline" size={26} color={colors.primary} />
+              </View>
+              <Text style={styles.emptyTitle}>Belum ada pengajuan izin</Text>
+              <Text style={styles.emptyText}>Pengajuan yang kamu kirim akan muncul di sini beserta statusnya.</Text>
+            </View>
+          }
+        />
+        <ConfirmModal
+          visible={cancelTarget !== null}
+          title="Batalkan pengajuan?"
+          message="Pengajuan izin ini akan dihapus. Kamu bisa mengajukan ulang untuk sesi yang sama selama sesinya belum ditutup."
+          confirmLabel={cancelling ? 'Membatalkan...' : 'Batalkan'}
+          onConfirm={handleConfirmCancel}
+          onCancel={() => (cancelling ? undefined : setCancelTarget(null))}
+        />
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 function LeaveCard({ item, onCancel }: { item: LeaveItem; onCancel: () => void }) {
-  const status = STATUS_STYLE[item.status] ?? STATUS_STYLE[STATUS_IZIN.MENUNGGU];
   return (
     <View style={styles.leaveCard}>
       <View style={styles.leaveTop}>
         <Text style={styles.leaveTitle} numberOfLines={2}>
           {item.praktikum}
         </Text>
-        <View style={[styles.pill, { backgroundColor: status.bg }]}>
-          <Text style={[styles.pillText, { color: status.text }]}>{status.label}</Text>
-        </View>
+        <StatusBadge status={item.status} />
       </View>
       <Text style={styles.leaveReason}>{item.alasan}</Text>
       <Text style={styles.leaveMeta}>
@@ -374,7 +395,7 @@ function LeaveCard({ item, onCancel }: { item: LeaveItem; onCancel: () => void }
           accessibilityRole="button"
           accessibilityLabel="Batalkan pengajuan izin"
         >
-          <Ionicons name="close-circle-outline" size={15} color={COLORS.danger} />
+          <Ionicons name="close-circle-outline" size={15} color={colors.primary} />
           <Text style={styles.cancelText}>Batalkan pengajuan</Text>
         </Pressable>
       ) : null}
@@ -383,144 +404,150 @@ function LeaveCard({ item, onCancel }: { item: LeaveItem; onCancel: () => void }
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
-  list: { flex: 1, backgroundColor: COLORS.background },
-  content: { flexGrow: 1, padding: 20, paddingBottom: 32 },
-  headerWrap: { gap: 16, marginBottom: 12 },
-  header: { gap: 4 },
-  title: { fontSize: 20, fontFamily: 'PlusJakartaSans_800ExtraBold', color: COLORS.text },
-  subtitle: { fontSize: 13, lineHeight: 19, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
-  card: {
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 16,
-    gap: 10,
+  list: { flex: 1 },
+  state: { flex: 1 },
+  content: {
+    flexGrow: 1,
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: 8,
+    paddingBottom: layout.tabBarSpace,
   },
-  label: { fontSize: 14, fontFamily: 'PlusJakartaSans_600SemiBold', color: COLORS.text },
+  headerWrap: { gap: 16, marginBottom: 12 },
+  header: { gap: 5 },
+  title: { fontSize: 20, fontFamily: font.extraBold, color: colors.text },
+  subtitle: { ...text.body },
+  formCard: { padding: 18, gap: 10 },
+  label: { ...text.bodyStrong },
   labelSpaced: { marginTop: 6 },
   optionList: { gap: 8 },
   option: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
-    padding: 12,
-    borderRadius: 12,
+    padding: 13,
+    borderRadius: radius.input,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.background,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
-  optionSelected: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryLight },
+  optionSelected: { borderColor: colors.primary, backgroundColor: colors.tint },
   optionDisabled: { opacity: 0.55 },
-  optionBody: { flex: 1, gap: 2 },
-  optionTitle: { fontSize: 14, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
-  optionMeta: { fontSize: 12, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
-  optionTaken: { fontSize: 12, fontFamily: 'PlusJakartaSans_600SemiBold', color: COLORS.warning },
+  optionBody: { flex: 1, gap: 3 },
+  optionTitle: { fontSize: 14, lineHeight: 20, fontFamily: font.bold, color: colors.text },
+  optionMeta: { ...text.caption },
+  optionTaken: { fontSize: 12, fontFamily: font.semibold, color: colors.warning },
   textArea: {
-    minHeight: 110,
-    borderRadius: 12,
+    minHeight: 116,
+    borderRadius: radius.input,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.background,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 15,
+    paddingVertical: 13,
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: 'PlusJakartaSans_400Regular',
-    color: COLORS.text,
+    fontFamily: font.medium,
+    color: colors.text,
   },
-  counter: { fontSize: 12, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted, textAlign: 'right' },
+  counter: { ...text.caption, textAlign: 'right' },
+  aiBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: colors.tint,
+  },
+  aiText: { flex: 1, fontSize: 12, lineHeight: 18, fontFamily: font.medium, color: colors.primary },
   infoBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: COLORS.surface,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
   },
-  infoText: { flex: 1, fontSize: 12, lineHeight: 18, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
+  infoText: { flex: 1, fontSize: 12, lineHeight: 18, fontFamily: font.medium, color: colors.textSecondary },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: COLORS.dangerLight,
-    borderRadius: 10,
+    backgroundColor: colors.dangerTint,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: COLORS.dangerBorder,
+    borderColor: colors.danger,
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
-  errorText: { flex: 1, fontSize: 13, fontFamily: 'PlusJakartaSans_500Medium', color: COLORS.danger },
+  errorText: { flex: 1, fontSize: 13, fontFamily: font.medium, color: colors.danger },
   noticeBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
-    borderRadius: 10,
+    borderRadius: 14,
     borderWidth: 1,
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
-  noticeOk: { backgroundColor: COLORS.successLight, borderColor: '#C8F0D5' },
-  noticeInfo: { backgroundColor: '#FFF4E5', borderColor: '#FFE0B2' },
-  noticeError: { backgroundColor: COLORS.dangerLight, borderColor: COLORS.dangerBorder },
-  pendingText: { fontSize: 12, fontFamily: 'PlusJakartaSans_500Medium', color: COLORS.warning },
+  noticeOk: { backgroundColor: colors.successTint, borderColor: colors.success },
+  noticeInfo: { backgroundColor: colors.warningTint, borderColor: colors.warning },
+  noticeError: { backgroundColor: colors.dangerTint, borderColor: colors.danger },
+  noticeText: { flex: 1, fontSize: 13, lineHeight: 19, fontFamily: font.medium, color: colors.text },
+  submit: { marginTop: 4 },
+  sectionTitle: { ...text.sectionTitle, marginTop: 4 },
+  separator: { height: 10 },
+  emptyBox: {
+    alignItems: 'center',
+    gap: 7,
+    padding: 26,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.dashed,
+    backgroundColor: colors.card,
+  },
+  emptyIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.tint,
+  },
+  emptyTitle: { fontSize: 14, fontFamily: font.bold, color: colors.text },
+  emptyText: { ...text.caption, textAlign: 'center' },
+  leaveCard: {
+    backgroundColor: colors.card,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 15,
+    gap: 8,
+  },
+  leaveTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
+  leaveTitle: { flex: 1, fontSize: 14, lineHeight: 20, fontFamily: font.bold, color: colors.text },
+  leaveReason: { ...text.body, color: colors.textSecondary },
+  leaveMeta: { ...text.caption },
+  leaveMetaStrong: { fontFamily: font.semibold, color: colors.text },
+  pendingText: { fontSize: 12, fontFamily: font.medium, color: colors.warning },
   cancelBtn: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     marginTop: 4,
-    paddingVertical: 6,
+    paddingVertical: 7,
     paddingHorizontal: 12,
-    borderRadius: 20,
+    borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: COLORS.dangerBorder,
-    backgroundColor: COLORS.dangerLight,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
-  cancelText: { fontSize: 12, fontFamily: 'PlusJakartaSans_600SemiBold', color: COLORS.danger },
-  noticeText: { flex: 1, fontSize: 13, lineHeight: 19, fontFamily: 'PlusJakartaSans_500Medium', color: COLORS.text },
-  button: {
-    marginTop: 4,
-    backgroundColor: COLORS.text,
-    paddingVertical: 15,
-    borderRadius: 30,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  buttonPressed: { opacity: 0.85 },
-  buttonText: { fontSize: 15, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.white },
-  sectionTitle: { fontSize: 16, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text, marginTop: 4 },
-  separator: { height: 10 },
-  emptyBox: {
-    alignItems: 'center',
-    gap: 6,
-    padding: 24,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: COLORS.borderLight,
-  },
-  emptyTitle: { fontSize: 14, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
-  emptyText: { fontSize: 13, textAlign: 'center', fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
-  leaveCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 14,
-    gap: 8,
-  },
-  leaveTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
-  leaveTitle: { flex: 1, fontSize: 14, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
-  pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
-  pillText: { fontSize: 12, fontFamily: 'PlusJakartaSans_600SemiBold' },
-  leaveReason: { fontSize: 13, lineHeight: 19, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.textSecondary },
-  leaveMeta: { fontSize: 12, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
-  leaveMetaStrong: { fontFamily: 'PlusJakartaSans_600SemiBold', color: COLORS.text },
-  noteBox: { padding: 10, borderRadius: 10, backgroundColor: COLORS.surface, gap: 2 },
-  noteLabel: { fontSize: 11, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.muted },
-  noteText: { fontSize: 13, lineHeight: 18, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.text },
+  cancelText: { fontSize: 12, fontFamily: font.semibold, color: colors.primary },
+  buttonPressed: { opacity: 0.82 },
+  noteBox: { padding: 11, borderRadius: 14, backgroundColor: colors.surface, gap: 2 },
+  noteLabel: { fontSize: 11, fontFamily: font.bold, color: colors.textSecondary },
+  noteText: { ...text.body, color: colors.text },
 });
