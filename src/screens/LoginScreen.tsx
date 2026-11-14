@@ -186,9 +186,6 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.footer}>
-              <Text style={styles.demoText}>
-                Akun demo terisi otomatis. Pilih role untuk melihat tampilan yang berbeda.
-              </Text>
               <View style={styles.registerRow}>
                 <Text style={styles.infoText}>Belum punya akun?</Text>
                 <Link href="/register" style={styles.link}>
@@ -348,14 +345,6 @@ const styles = StyleSheet.create({
     color: COLORS.white,
   },
   footer: { alignItems: 'center', gap: 10, paddingTop: 4 },
-  demoText: {
-    maxWidth: 300,
-    fontSize: 11,
-    lineHeight: 17,
-    textAlign: 'center',
-    fontFamily: 'PlusJakartaSans_400Regular',
-    color: COLORS.muted,
-  },
   registerRow: {
     flexDirection: 'row',
     justifyContent: 'center',
