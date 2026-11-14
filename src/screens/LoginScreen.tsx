@@ -1,9 +1,10 @@
 // FILE AKMAL (feat/auth-leave-ai) — SRS-11. Layar login (Firebase Auth).
-// Peran ditentukan dari dokumen profil di Firestore, bukan dipilih di sini.
+// Satu form login untuk semua pengguna: peran ditentukan dari dokumen profil di Firestore, bukan dipilih di sini.
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Link, Redirect } from 'expo-router';
-import { useRef, useState, type ComponentRef } from 'react';
+import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Pressable,
   ScrollView,
@@ -19,14 +20,12 @@ import { COLORS } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import { useScrollKeFieldFokus } from './useScrollKeFieldFokus';
 import { getAuthErrorMessage } from '../services/authService';
-
-type LoginRole = 'praktikan' | 'asisten';
+import AuthLoadingGate from '../navigation/AuthLoadingGate';
 
 export default function LoginScreen() {
-  const { signIn, state, authError, clearAuthError } = useAuth();
+  const { signIn, state, authError, profileError, clearAuthError } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<LoginRole>('praktikan');
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -34,13 +33,22 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const { scrollRef, saatLayoutForm, saatLayoutField, fokusKe } = useScrollKeFieldFokus();
 
+  // Setelah signIn berhasil, `loading` sengaja TIDAK dimatikan: tombol tetap "Memproses" sampai layar ini
+  // dilepas oleh Redirect. Kalau login berhasil tetapi profil gagal dimuat (authError terisi, pengguna
+  // dikeluarkan), tombol diaktifkan lagi supaya bisa mencoba ulang.
+  useEffect(() => {
+    if (authError) setLoading(false);
+  }, [authError]);
+
+  // Sudah login tetapi profil belum terbaca (mis. koneksi lambat): tampilkan pesan + Coba lagi / Keluar.
+  if (state.status === 'loading' && profileError) return <AuthLoadingGate />;
+
   // Sudah login -> arahkan ke layar sesuai peran.
   if (state.status === 'authenticated') {
     return <Redirect href={state.profile.role === 'asisten' ? '/asisten/jadwal' : '/praktikan/home'} />;
   }
 
   const displayedError = error || authError || '';
-  const submitLabel = role === 'asisten' ? 'Masuk sebagai Asisten' : 'Masuk sebagai Praktikan';
 
   const clearErrors = () => {
     setError('');
@@ -57,10 +65,9 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await signIn(email.trim(), password);
-      // Pengalihan ditangani otomatis begitu profil terbaca.
+      // Pengalihan ditangani otomatis begitu profil terbaca; `loading` tetap aktif sampai saat itu.
     } catch (e: unknown) {
       setError(getAuthErrorMessage(e, 'Login gagal. Coba lagi.'));
-    } finally {
       setLoading(false);
     }
   };
@@ -89,33 +96,14 @@ export default function LoginScreen() {
           <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom + 14, 28) }]}>
             <View style={styles.handle} />
 
-            <View style={styles.roleSwitcher} accessibilityRole="tablist">
-              {(['praktikan', 'asisten'] as const).map((item) => {
-                const active = role === item;
-                return (
-                  <Pressable
-                    key={item}
-                    onPress={() => setRole(item)}
-                    style={[styles.roleOption, active && styles.roleOptionActive]}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected: active }}
-                  >
-                    <Text style={[styles.roleText, active && styles.roleTextActive]}>
-                      {item === 'praktikan' ? 'Praktikan' : 'Asisten'}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
             <View style={styles.form} onLayout={saatLayoutForm}>
               <View style={styles.fieldGroup} onLayout={saatLayoutField('email')}>
-                <Text style={styles.label}>Email Kampus</Text>
+                <Text style={styles.label}>Email</Text>
                 <View style={styles.inputBox}>
                   <Ionicons name="mail-outline" size={18} color={COLORS.muted} />
                   <TextInput
                     style={styles.input}
-                    placeholder="praktikan@kampus.ac.id"
+                    placeholder="email@kampus.ac.id"
                     placeholderTextColor={COLORS.muted}
                     value={email}
                     onFocus={() => fokusKe('email')}
@@ -126,6 +114,10 @@ export default function LoginScreen() {
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
+                    // Autofill: pengelola password di HP (Google/Samsung) menampilkan email yang tersimpan.
+                    autoComplete="email"
+                    textContentType="username"
+                    importantForAutofill="yes"
                     returnKeyType="next"
                     onSubmitEditing={() => passwordRef.current?.focus()}
                   />
@@ -148,6 +140,9 @@ export default function LoginScreen() {
                       clearErrors();
                     }}
                     secureTextEntry={!showPass}
+                    autoComplete="current-password"
+                    textContentType="password"
+                    importantForAutofill="yes"
                     returnKeyType="done"
                     onSubmitEditing={handleLogin}
                   />
@@ -179,16 +174,14 @@ export default function LoginScreen() {
                 onPress={handleLogin}
                 disabled={loading}
                 accessibilityRole="button"
-                accessibilityLabel={loading ? 'Memproses' : submitLabel}
+                accessibilityLabel={loading ? 'Memproses' : 'Masuk'}
               >
-                <Text style={styles.buttonText}>{loading ? 'Memproses...' : submitLabel}</Text>
+                {loading ? <ActivityIndicator size="small" color={COLORS.white} /> : null}
+                <Text style={styles.buttonText}>{loading ? 'Memproses...' : 'Masuk'}</Text>
               </Pressable>
             </View>
 
             <View style={styles.footer}>
-              <Text style={styles.demoText}>
-                Akun demo terisi otomatis. Pilih role untuk melihat tampilan yang berbeda.
-              </Text>
               <View style={styles.registerRow}>
                 <Text style={styles.infoText}>Belum punya akun?</Text>
                 <Link href="/register" style={styles.link}>
@@ -253,34 +246,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
     marginBottom: 2,
   },
-  roleSwitcher: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.background,
-    borderRadius: 16,
-    padding: 4,
-    gap: 4,
-  },
-  roleOption: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 11,
-    borderRadius: 13,
-  },
-  roleOptionActive: {
-    backgroundColor: COLORS.card,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  roleText: {
-    fontSize: 14,
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    color: COLORS.muted,
-  },
-  roleTextActive: { color: COLORS.text, fontFamily: 'PlusJakartaSans_700Bold' },
   form: { gap: 16 },
   fieldGroup: { gap: 7 },
   label: {
@@ -340,6 +305,8 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
   },
   buttonPressed: { opacity: 0.84 },
   buttonText: {
@@ -348,14 +315,6 @@ const styles = StyleSheet.create({
     color: COLORS.white,
   },
   footer: { alignItems: 'center', gap: 10, paddingTop: 4 },
-  demoText: {
-    maxWidth: 300,
-    fontSize: 11,
-    lineHeight: 17,
-    textAlign: 'center',
-    fontFamily: 'PlusJakartaSans_400Regular',
-    color: COLORS.muted,
-  },
   registerRow: {
     flexDirection: 'row',
     justifyContent: 'center',

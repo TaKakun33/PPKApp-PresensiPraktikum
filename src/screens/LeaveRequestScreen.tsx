@@ -2,7 +2,7 @@
 // Isi: form (pilih sesi + alasan), hasil klasifikasi AI, dan daftar pengajuan milik sendiri (real-time).
 // Layar tidak memanggil Firestore/AI langsung; semua lewat leaveService.
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -15,15 +15,18 @@ import {
   View,
 } from 'react-native';
 
-import { STATUS_IZIN, type StatusIzin } from '../app/constants';
-import type { Session } from '../app/types';
+import { STATUS_IZIN, type StatusIzin } from '../lib/constants';
+import type { Session } from '../lib/types';
+import ConfirmModal from '../components/ConfirmModal';
 import ErrorState from '../components/ErrorState';
 import LoadingState from '../components/LoadingState';
 import { COLORS } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
+import { labelKategori } from '../services/aiService';
 import {
   LEAVE_REASON_MAX,
   LEAVE_REASON_MIN,
+  cancelLeave,
   isActiveLeave,
   submitLeave,
   subscribeLeaveSessionOptions,
@@ -40,16 +43,18 @@ const STATUS_STYLE: Record<StatusIzin, { label: string; bg: string; text: string
   [STATUS_IZIN.DITOLAK]: { label: 'Ditolak', bg: COLORS.dangerLight, text: COLORS.danger },
 };
 
-function buildNotice(result: SubmitLeaveResult): { tone: 'ok' | 'info'; text: string } {
+type Notice = { tone: 'ok' | 'info' | 'error'; text: string };
+
+function buildNotice(result: SubmitLeaveResult): Notice {
   const aiText =
     result.aiStatus === 'berhasil' && result.kategoriAI
-      ? `Kategori alasan menurut AI: ${result.kategoriAI}.`
+      ? `Kategori alasan menurut AI: ${labelKategori(result.kategoriAI)}.`
       : 'Kategori AI belum tersedia (alasan belum bisa dianalisis), tetapi asisten tetap dapat memeriksa alasanmu.';
 
   if (result.queued) {
     return {
       tone: 'info',
-      text: `Koneksi sedang lambat. Pengajuanmu disimpan di perangkat dan akan terkirim otomatis saat online. ${aiText}`,
+      text: `Koneksi sedang lambat. Pengajuanmu antre di perangkat dan akan dikirim saat online; statusnya akan kami kabarkan di sini. ${aiText}`,
     };
   }
   return { tone: 'ok', text: `Pengajuan terkirim dengan status Menunggu. ${aiText}` };
@@ -67,7 +72,18 @@ export default function LeaveRequestScreen() {
   const [alasan, setAlasan] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
-  const [notice, setNotice] = useState<{ tone: 'ok' | 'info'; text: string } | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<LeaveItem | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+
+  // Hasil akhir pengajuan yang antre baru datang belakangan; jangan set state kalau layar sudah ditutup.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const userId = profile?.id;
 
@@ -128,10 +144,44 @@ export default function LeaveRequestScreen() {
       setAlasan('');
       setSelectedId(null);
       setNotice(buildNotice(result));
+      if (result.queued) {
+        // Pengajuan antre bisa saja ditolak server nanti (mis. sesi keburu ditutup): beri tahu hasil akhirnya.
+        result.settled.then((outcome) => {
+          if (!mountedRef.current) return;
+          if (outcome.ok) {
+            setNotice({ tone: 'ok', text: 'Pengajuan yang tertunda sudah terkirim ke server dengan status Menunggu.' });
+          } else {
+            setNotice({
+              tone: 'error',
+              text: `Pengajuan yang tertunda ditolak server. ${getFriendlyError(outcome.error, 'Pengajuan tidak dapat disimpan.')} Silakan ajukan ulang.`,
+            });
+          }
+        });
+      }
     } catch (e: unknown) {
       setFormError(getFriendlyError(e, 'Pengajuan izin gagal dikirim. Coba lagi.'));
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleConfirmCancel = async () => {
+    const target = cancelTarget;
+    if (!target || cancelling) return;
+    setCancelling(true);
+    setFormError('');
+    try {
+      const queued = await cancelLeave(profile, target);
+      setNotice(
+        queued
+          ? { tone: 'info', text: 'Koneksi lambat. Pembatalan akan diproses saat perangkat online.' }
+          : { tone: 'ok', text: 'Pengajuan dibatalkan. Kamu bisa mengajukan ulang untuk sesi ini.' },
+      );
+    } catch (e: unknown) {
+      setNotice({ tone: 'error', text: getFriendlyError(e, 'Pengajuan gagal dibatalkan. Coba lagi.') });
+    } finally {
+      setCancelling(false);
+      setCancelTarget(null);
     }
   };
 
@@ -214,7 +264,7 @@ export default function LeaveRequestScreen() {
           <Ionicons name="sparkles-outline" size={16} color={COLORS.muted} />
           <Text style={styles.infoText}>
             Alasanmu dianalisis oleh model AI di perangkatmu (tidak dikirim ke internet) untuk menentukan
-            kategori. AI hanya memberi informasi pendukung dan tidak menentukan izin diterima atau ditolak.
+            kategori sentimen (positif, netral, atau negatif). AI hanya memberi informasi pendukung dan tidak menentukan izin diterima atau ditolak.
           </Text>
         </View>
 
@@ -226,11 +276,18 @@ export default function LeaveRequestScreen() {
         ) : null}
 
         {notice ? (
-          <View style={[styles.noticeBox, notice.tone === 'ok' ? styles.noticeOk : styles.noticeInfo]}>
+          <View
+            style={[
+              styles.noticeBox,
+              notice.tone === 'ok' ? styles.noticeOk : notice.tone === 'error' ? styles.noticeError : styles.noticeInfo,
+            ]}
+          >
             <Ionicons
-              name={notice.tone === 'ok' ? 'checkmark-circle' : 'cloud-offline-outline'}
+              name={
+                notice.tone === 'ok' ? 'checkmark-circle' : notice.tone === 'error' ? 'alert-circle' : 'cloud-offline-outline'
+              }
               size={16}
-              color={notice.tone === 'ok' ? COLORS.success : COLORS.warning}
+              color={notice.tone === 'ok' ? COLORS.success : notice.tone === 'error' ? COLORS.danger : COLORS.warning}
             />
             <Text style={styles.noticeText}>{notice.text}</Text>
           </View>
@@ -263,7 +320,7 @@ export default function LeaveRequestScreen() {
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={header}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
-        renderItem={({ item }) => <LeaveCard item={item} />}
+        renderItem={({ item }) => <LeaveCard item={item} onCancel={() => setCancelTarget(item)} />}
         ListEmptyComponent={
           <View style={styles.emptyBox}>
             <Ionicons name="file-tray-outline" size={28} color={COLORS.muted} />
@@ -272,11 +329,19 @@ export default function LeaveRequestScreen() {
           </View>
         }
       />
+      <ConfirmModal
+        visible={cancelTarget !== null}
+        title="Batalkan pengajuan?"
+        message="Pengajuan izin ini akan dihapus. Kamu bisa mengajukan ulang untuk sesi yang sama selama sesinya belum ditutup."
+        confirmLabel={cancelling ? 'Membatalkan...' : 'Batalkan'}
+        onConfirm={handleConfirmCancel}
+        onCancel={() => (cancelling ? undefined : setCancelTarget(null))}
+      />
     </KeyboardAvoidingView>
   );
 }
 
-function LeaveCard({ item }: { item: LeaveItem }) {
+function LeaveCard({ item, onCancel }: { item: LeaveItem; onCancel: () => void }) {
   const status = STATUS_STYLE[item.status] ?? STATUS_STYLE[STATUS_IZIN.MENUNGGU];
   return (
     <View style={styles.leaveCard}>
@@ -291,13 +356,27 @@ function LeaveCard({ item }: { item: LeaveItem }) {
       <Text style={styles.leaveReason}>{item.alasan}</Text>
       <Text style={styles.leaveMeta}>
         Kategori AI (info pendukung):{' '}
-        <Text style={styles.leaveMetaStrong}>{item.kategoriAI ?? 'tidak tersedia'}</Text>
+        <Text style={styles.leaveMetaStrong}>{labelKategori(item.kategoriAI)}</Text>
       </Text>
+      {item.pending ? (
+        <Text style={styles.pendingText}>Belum terkirim ke server — akan dikirim otomatis saat online.</Text>
+      ) : null}
       {item.catatanAsisten ? (
         <View style={styles.noteBox}>
           <Text style={styles.noteLabel}>Catatan asisten</Text>
           <Text style={styles.noteText}>{item.catatanAsisten}</Text>
         </View>
+      ) : null}
+      {item.status === STATUS_IZIN.MENUNGGU ? (
+        <Pressable
+          onPress={onCancel}
+          style={({ pressed }) => [styles.cancelBtn, pressed && styles.buttonPressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Batalkan pengajuan izin"
+        >
+          <Ionicons name="close-circle-outline" size={15} color={COLORS.danger} />
+          <Text style={styles.cancelText}>Batalkan pengajuan</Text>
+        </Pressable>
       ) : null}
     </View>
   );
@@ -384,6 +463,22 @@ const styles = StyleSheet.create({
   },
   noticeOk: { backgroundColor: COLORS.successLight, borderColor: '#C8F0D5' },
   noticeInfo: { backgroundColor: '#FFF4E5', borderColor: '#FFE0B2' },
+  noticeError: { backgroundColor: COLORS.dangerLight, borderColor: COLORS.dangerBorder },
+  pendingText: { fontSize: 12, fontFamily: 'PlusJakartaSans_500Medium', color: COLORS.warning },
+  cancelBtn: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.dangerBorder,
+    backgroundColor: COLORS.dangerLight,
+  },
+  cancelText: { fontSize: 12, fontFamily: 'PlusJakartaSans_600SemiBold', color: COLORS.danger },
   noticeText: { flex: 1, fontSize: 13, lineHeight: 19, fontFamily: 'PlusJakartaSans_500Medium', color: COLORS.text },
   button: {
     marginTop: 4,

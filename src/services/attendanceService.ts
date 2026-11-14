@@ -7,8 +7,8 @@ import {
   type FirestoreError,
 } from "@react-native-firebase/firestore";
 
-import { db } from "../app/firebase";
-import type { Session } from "../app/types";
+import { db } from "../lib/firebase";
+import type { Session } from "../lib/types";
 
 export type CheckInUser = {
   uid?: string;

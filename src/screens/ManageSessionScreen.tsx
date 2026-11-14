@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { STATUS_SESI } from '../app/constants';
-import type { Session } from '../app/types';
+import { STATUS_SESI } from '../lib/constants';
+import type { Session } from '../lib/types';
 import { closeSession, openSession, subscribeSessions } from '../services/sessionService';
 import ConfirmModal from '../components/ConfirmModal';
 import EmptyState from '../components/EmptyState';

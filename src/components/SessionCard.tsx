@@ -4,7 +4,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import type { Session } from '../app/types';
+import type { Session } from '../lib/types';
 import { COLORS } from '../constants/colors';
 import { labelTanggal, labelWaktu } from '../services/sessionService';
 import StatusBadge from './StatusBadge';

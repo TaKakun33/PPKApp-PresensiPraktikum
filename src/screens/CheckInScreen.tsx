@@ -9,7 +9,7 @@ import StatusBadge from "../components/StatusBadge";
 import SuccessBottomSheet from "../components/SuccessBottomSheet";
 import { COLORS } from "../constants/colors";
 import { useAuth } from "../context/AuthContext";
-import type { Session } from "../app/types";
+import type { Session } from "../lib/types";
 import { checkIn, subscribeCheckInState } from "../services/attendanceService";
 import { formatJam } from "../utils/format";
 

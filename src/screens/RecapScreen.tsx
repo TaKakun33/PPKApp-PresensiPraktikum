@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { STATUS_SESI } from '../app/constants';
-import type { Attendance, Session } from '../app/types';
+import { STATUS_SESI } from '../lib/constants';
+import type { Attendance, Session } from '../lib/types';
 import { subscribeAttendances, subscribeSessions } from '../services/sessionService';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';

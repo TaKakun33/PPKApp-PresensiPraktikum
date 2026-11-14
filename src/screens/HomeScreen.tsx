@@ -4,8 +4,8 @@ import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import type { Attendance, ClassDoc, LeaveRequest, Session } from '../app/types';
-import { STATUS_IZIN } from '../app/constants';
+import type { Attendance, ClassDoc, LeaveRequest, Session } from '../lib/types';
+import { STATUS_IZIN } from '../lib/constants';
 import ErrorState from '../components/ErrorState';
 import LoadingState from '../components/LoadingState';
 import { COLORS } from '../constants/colors';

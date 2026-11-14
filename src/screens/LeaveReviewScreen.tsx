@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { STATUS_IZIN } from '../app/constants';
-import type { LeaveRequest, Session } from '../app/types';
+import { STATUS_IZIN } from '../lib/constants';
+import type { LeaveRequest, Session } from '../lib/types';
 import {
   subscribeLeaveRequestsForAsisten,
   subscribeSessions,
   updateLeaveStatus,
 } from '../services/sessionService';
+import { labelKategori } from '../services/aiService';
 import ConfirmModal from '../components/ConfirmModal';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';
@@ -231,7 +232,7 @@ export default function LeaveReviewScreen() {
             <View style={styles.metaRow}>
               <View style={styles.metaBox}>
                 <Text style={styles.metaLabel}>Klasifikasi AI</Text>
-                <Text style={styles.metaValue}>{item.kategoriAI ?? 'Belum tersedia'}</Text>
+                <Text style={styles.metaValue}>{item.kategoriAI ? labelKategori(item.kategoriAI) : 'Belum tersedia'}</Text>
               </View>
               <View style={styles.metaBox}>
                 <Text style={styles.metaLabel}>Status AI</Text>

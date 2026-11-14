@@ -1,7 +1,8 @@
 // FILE AKMAL (feat/auth-leave-ai) — SRS-11 & SRS-12.
 // Satu-satunya tempat yang bicara ke Firebase Auth dan dokumen profil `users/{uid}`.
-// Registrasi di aplikasi HANYA untuk praktikan. Akun asisten dibuat manual oleh admin
-// di Firebase Console (Authentication + dokumen `users/{uid}` berperan "asisten").
+// Registrasi terbuka untuk praktikan. Registrasi ASISTEN hanya berhasil jika email-nya sudah
+// terdaftar di koleksi `allowedAssistants/{email huruf kecil}` (diisi admin lewat Firebase Console).
+// Pemeriksaan yang sama dipasang di firestore.rules, jadi tidak bisa dilewati dari klien.
 // Layar tidak boleh memanggil Firebase langsung; pakai AuthContext (yang memakai file ini).
 import {
   createUserWithEmailAndPassword,
@@ -11,6 +12,7 @@ import {
 } from '@react-native-firebase/auth';
 import {
   doc,
+  getDoc,
   onSnapshot,
   serverTimestamp,
   setDoc,
@@ -18,13 +20,15 @@ import {
   type FirestoreError,
 } from '@react-native-firebase/firestore';
 
-import { auth, db } from '../app/firebase';
-import type { Profile } from '../app/types';
+import { auth, db } from '../lib/firebase';
+import type { Role } from '../lib/constants';
+import type { Profile } from '../lib/types';
 import { createAppError, getErrorCode, getFriendlyError, withTimeout } from './serviceUtils';
 
 // ─── validasi ─────────────────────────────────────────────────────────────────
 
 export type RegisterInput = {
+  role: Role;
   nama: string;
   email: string;
   password: string;
@@ -55,8 +59,11 @@ export function validateRegisterInput(input: RegisterInput): RegisterErrors {
   else if (input.confirmPassword !== input.password) {
     errors.confirmPassword = 'Konfirmasi password tidak sama.';
   }
-  if (!nim) errors.nim = 'NIM wajib diisi.';
-  else if (!/^\d{5,20}$/.test(nim)) errors.nim = 'NIM hanya boleh angka (5–20 digit).';
+  // NIM hanya untuk praktikan; asisten tidak mengisinya.
+  if (input.role === 'praktikan') {
+    if (!nim) errors.nim = 'NIM wajib diisi.';
+    else if (!/^\d{5,20}$/.test(nim)) errors.nim = 'NIM hanya boleh angka (5–20 digit).';
+  }
   return errors;
 }
 
@@ -106,9 +113,16 @@ export async function signOutUser(): Promise<void> {
   await fbSignOut(auth);
 }
 
+const NOT_ALLOWED_ASSISTANT_MESSAGE =
+  'Email ini tidak terdaftar sebagai asisten. Hubungi admin atau daftar sebagai praktikan.';
+
 /**
- * Registrasi praktikan: buat akun Auth, lalu simpan profil ke `users/{uid}` (peran selalu "praktikan").
- * Jika profil gagal disimpan, akun Auth dibatalkan (dihapus) agar tidak ada akun yatim.
+ * Registrasi: buat akun Auth, lalu simpan profil ke `users/{uid}`.
+ * - Praktikan: langsung boleh (profil berisi NIM dan kelasIds kosong).
+ * - Asisten: email harus ada di `allowedAssistants/{email huruf kecil}`. Jika tidak, akun Auth dibatalkan.
+ *   (Cek ini ditulis setelah akun dibuat karena aturan Firestore hanya mengizinkan pengguna yang sudah
+ *   login membaca dokumen email-nya sendiri; daftar asisten tidak bisa dibaca publik.)
+ * Jika langkah apa pun setelah akun Auth dibuat gagal, akun dihapus agar tidak ada akun yatim.
  */
 export async function registerUser(input: RegisterInput): Promise<void> {
   const errors = validateRegisterInput(input);
@@ -117,34 +131,73 @@ export async function registerUser(input: RegisterInput): Promise<void> {
   }
 
   const email = input.email.trim();
+  const isAsisten = input.role === 'asisten';
 
   registering = true;
   try {
     const cred = await createUserWithEmailAndPassword(auth, email, input.password);
 
-    const profile = {
-      nama: input.nama.trim(),
-      email,
-      role: 'praktikan' as const,
-      nim: input.nim.trim(),
-      kelasIds: [] as string[], // diisi asisten saat menambah peserta kelas
-      createdAt: serverTimestamp(),
-    };
-
-    try {
-      await withTimeout(setDoc(doc(db, 'users', cred.user.uid), profile), PROFILE_WRITE_TIMEOUT_MS);
-    } catch (e) {
-      // Batalkan akun supaya email yang sama bisa dipakai mendaftar lagi.
+    // Batalkan akun supaya email yang sama bisa dipakai mendaftar lagi.
+    const rollback = async () => {
       try {
         await deleteUser(cred.user);
       } catch {
         await fbSignOut(auth).catch(() => {});
       }
+    };
+
+    if (isAsisten) {
+      let listed = false;
+      try {
+        const allowed = await withTimeout(
+          getDoc(doc(db, 'allowedAssistants', email.toLowerCase())),
+          PROFILE_WRITE_TIMEOUT_MS,
+        );
+        listed = allowed.exists();
+      } catch (e) {
+        await rollback();
+        // permission-denied di sini berarti email tidak boleh membaca dokumen tsb → anggap tidak terdaftar.
+        if (getErrorCode(e) === 'firestore/permission-denied') {
+          throw createAppError('app/not-allowed-assistant', NOT_ALLOWED_ASSISTANT_MESSAGE);
+        }
+        throw createAppError(
+          'app/profile-save-failed',
+          getFriendlyError(e, 'Gagal memeriksa daftar asisten. Periksa koneksi internet lalu coba lagi.'),
+        );
+      }
+      if (!listed) {
+        await rollback();
+        throw createAppError('app/not-allowed-assistant', NOT_ALLOWED_ASSISTANT_MESSAGE);
+      }
+    }
+
+    const profile = isAsisten
+      ? {
+          nama: input.nama.trim(),
+          email,
+          role: 'asisten' as const,
+          createdAt: serverTimestamp(),
+        }
+      : {
+          nama: input.nama.trim(),
+          email,
+          role: 'praktikan' as const,
+          nim: input.nim.trim(),
+          kelasIds: [] as string[], // diisi asisten saat menambah peserta kelas
+          createdAt: serverTimestamp(),
+        };
+
+    try {
+      await withTimeout(setDoc(doc(db, 'users', cred.user.uid), profile), PROFILE_WRITE_TIMEOUT_MS);
+    } catch (e) {
+      await rollback();
       const denied = getErrorCode(e) === 'firestore/permission-denied';
       throw createAppError(
         'app/profile-save-failed',
         denied
-          ? 'Pendaftaran ditolak oleh aturan keamanan database. Hubungi PM.'
+          ? isAsisten
+            ? NOT_ALLOWED_ASSISTANT_MESSAGE
+            : 'Pendaftaran ditolak oleh aturan keamanan database. Hubungi PM.'
           : 'Profil gagal disimpan. Periksa koneksi internet lalu coba daftar lagi.',
       );
     }

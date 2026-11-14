@@ -12,7 +12,7 @@ import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import LoadingState from '../components/LoadingState';
 import SessionCard from '../components/SessionCard';
-import type { Session } from '../app/types';
+import type { Session } from '../lib/types';
 import { COLORS } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import { pesanFirestore, subscribeClassesForUser } from '../services/classService';
