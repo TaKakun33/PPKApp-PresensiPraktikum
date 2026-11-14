@@ -13,6 +13,7 @@ import PrimaryButton from '../components/PrimaryButton';
 import { colors, font, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import LogoutButton from '../navigation/LogoutButton';
+import ProfileButton from '../navigation/ProfileButton';
 import { getNamaPengguna, subscribeClassesForUser } from '../services/classService';
 import { subscribeAttendanceHistory, subscribeLeaveHistory } from '../services/historyService';
 import { labelWaktu, subscribeSessions, urutkanSesi } from '../services/sessionService';
@@ -199,6 +200,7 @@ export default function HomeScreen() {
             {profile.nama}
           </Text>
         </View>
+        <ProfileButton />
         <LogoutButton />
       </View>
 
