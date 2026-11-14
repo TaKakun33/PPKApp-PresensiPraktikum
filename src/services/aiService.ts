@@ -1,17 +1,39 @@
 // FILE AKMAL (feat/auth-leave-ai) — SRS-14.
-// Integrasi AI: menganalisis alasan izin memakai model sentimen LOKAL dari pengajar (folder `ai/`).
-// Model berjalan murni di JavaScript di dalam aplikasi: tanpa internet, tanpa API key, tanpa dependency baru.
+// Integrasi AI: menganalisis SENTIMEN ALASAN IZIN (positif / netral / negatif) memakai model EDOM dari pengajar.
+// Berjalan lokal di perangkat (JavaScript murni): tanpa internet, tanpa API key, tanpa dependency baru.
+//
+// Sesuai petunjuk pengajar (Model EDOM.md), isi paket model-edom.zip diletakkan APA ADANYA di folder `ai/`:
+//   ai/model-edom.json, ai/sentiment.js, ai/README.md, ai/requirements.txt  — tidak diubah.
+//
+// Catatan jujur: model EDOM dilatih dari komentar evaluasi dosen, bukan alasan izin, sehingga hasilnya hanya
+// perkiraan kasar. Karena itu hasil AI HANYA informasi pendukung dan tidak pernah dipakai untuk
+// menerima/menolak izin.
 //
 // Aturan:
 //  - classifyLeaveReason() TIDAK PERNAH melempar error. Jika AI gagal / alasan tidak terbaca,
 //    hasilnya { kategori: null, status: 'gagal' } dan pengajuan izin tetap disimpan tanpa kategori.
-//  - Hasil AI hanya informasi pendukung — tidak boleh dipakai untuk menerima/menolak izin.
-//  - Label null (komentar kosong / kata tidak dikenali) dianggap GAGAL, bukan "netral" (sesuai ai/README.md).
-//
-// Catatan model: dilatih dari komentar evaluasi dosen (EDOM), bukan alasan izin praktikum,
-// jadi kategorinya (negatif / netral / positif) hanya perkiraan awal.
+//  - Alasan yang tidak terbaca TIDAK dianggap "netral".
 import model from '../../ai/model-edom.json';
 import { createSentimentClassifier } from '../../ai/sentiment.js';
+
+// ─── kategori ─────────────────────────────────────────────────────────────────
+
+/** Harus sama dengan daftar `kategoriAI` di firestore.rules dan `labels` di ai/model-edom.json. */
+export const KATEGORI_IZIN = ['positif', 'netral', 'negatif'] as const;
+export type KategoriIzin = (typeof KATEGORI_IZIN)[number];
+
+const KATEGORI_LABEL: Record<KategoriIzin, string> = {
+  positif: 'Positif',
+  netral: 'Netral',
+  negatif: 'Negatif',
+};
+
+/** Label ramah untuk ditampilkan. Nilai tak dikenal / null → "tidak tersedia". */
+export function labelKategori(kategori: string | null | undefined): string {
+  if (!kategori) return 'tidak tersedia';
+  // Data lama (sebelum model sentimen) bisa berisi kategori lain: tampilkan apa adanya.
+  return (KATEGORI_LABEL as Record<string, string>)[kategori] ?? kategori;
+}
 
 // ─── tipe ─────────────────────────────────────────────────────────────────────
 
@@ -22,43 +44,45 @@ export type AiResult = {
   reason?: string;
 };
 
-// --- pembuatan model ---------------------------------------------------------
+// ─── pembuatan model ──────────────────────────────────────────────────────────
 
 // Dibuat sekali di luar fungsi supaya tidak dibuat ulang setiap pengajuan izin.
-// createSentimentClassifier melempar error jika format model tidak didukung,
-// jadi dibungkus try/catch agar aplikasi tidak crash saat dimuat.
-let prediksiSentimen: ReturnType<typeof createSentimentClassifier> | null = null;
+// createSentimentClassifier melempar error jika format model tidak didukung, jadi dibungkus try/catch
+// agar aplikasi tidak crash saat dimuat.
+let klasifikasi: ReturnType<typeof createSentimentClassifier> | null = null;
 let galatMemuatModel: string | null = null;
 
 try {
-  prediksiSentimen = createSentimentClassifier(model);
+  klasifikasi = createSentimentClassifier(model);
 } catch (e) {
   galatMemuatModel = e instanceof Error ? e.message : 'Model AI gagal dimuat.';
 }
 
 // ─── klasifikasi ──────────────────────────────────────────────────────────────
 
+const ALASAN_GAGAL: Record<string, string> = {
+  empty_input: 'Alasan kosong, tidak dapat dianalisis.',
+  unknown_vocabulary: 'Tidak ada kata yang dikenali model.',
+};
+
 /** Analisis alasan izin di perangkat. Tidak pernah melempar error. */
 export async function classifyLeaveReason(alasan: string): Promise<AiResult> {
-  if (!prediksiSentimen) {
+  if (!klasifikasi) {
     return { kategori: null, status: 'gagal', reason: galatMemuatModel ?? 'Model AI belum siap.' };
   }
 
   try {
-    const prediksi = prediksiSentimen(alasan);
+    const hasil = klasifikasi(alasan);
 
-    if (prediksi.label === null) {
-      return {
-        kategori: null,
-        status: 'gagal',
-        reason:
-          prediksi.status === 'empty_input'
-            ? 'Alasan kosong, tidak dapat dianalisis.'
-            : 'Tidak ada kata yang dikenali model.',
-      };
+    if (hasil.label === null) {
+      return { kategori: null, status: 'gagal', reason: ALASAN_GAGAL[hasil.status] ?? 'Alasan tidak dapat dianalisis.' };
+    }
+    // Pengaman: hanya kategori yang diizinkan Security Rules yang boleh disimpan.
+    if (!(KATEGORI_IZIN as readonly string[]).includes(hasil.label)) {
+      return { kategori: null, status: 'gagal', reason: 'Kategori dari model tidak dikenali.' };
     }
 
-    return { kategori: prediksi.label, status: 'berhasil' };
+    return { kategori: hasil.label, status: 'berhasil' };
   } catch (e) {
     return {
       kategori: null,

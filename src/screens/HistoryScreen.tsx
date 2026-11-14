@@ -12,6 +12,7 @@ import {
   subscribeAttendanceHistory,
   subscribeLeaveHistory,
 } from '../services/historyService';
+import { labelKategori } from '../services/aiService';
 import { subscribeSessions } from '../services/sessionService';
 
 type RiwayatTab = 'presensi' | 'perizinan';
@@ -333,7 +334,7 @@ export default function HistoryScreen() {
                 {kategori ? (
                   <View style={styles.aiBadge}>
                     <Ionicons name="sparkles-outline" size={12} color={COLORS.primary} />
-                    <Text style={styles.aiBadgeText}>Kategori AI: {kategori}</Text>
+                    <Text style={styles.aiBadgeText}>Kategori AI: {labelKategori(kategori)}</Text>
                   </View>
                 ) : null}
 
