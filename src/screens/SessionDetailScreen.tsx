@@ -242,7 +242,8 @@ export default function SessionDetailScreen() {
     profile.role === 'asisten' ? pengampu : (profile.kelasIds ?? []).includes(session.kelasId);
   const presence = describePresence(session, profile.role, milikSaya, hadir, jumlahHadir);
   const tone = TONE[presence.tone];
-  const namaKelas = kelas?.namaKelas ?? session.kelasId;
+  // ID dokumen tidak ditampilkan; selama nama kelas belum terbaca pakai teks netral.
+  const namaKelas = kelas?.id === session.kelasId && kelas.namaKelas ? kelas.namaKelas : 'Kelas';
   const namaAsisten = pengampu ? profile.nama : namaAsistenLain;
   const { openedAt, closedAt } = session as SessionWaktu;
   const dibuka = toDate(openedAt);
