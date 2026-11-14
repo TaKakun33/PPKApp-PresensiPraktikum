@@ -4,7 +4,7 @@ import { Redirect } from 'expo-router';
 import type { ReactNode } from 'react';
 
 import LoadingState from '../components/LoadingState';
-import type { Role } from '../app/constants';
+import type { Role } from '../lib/constants';
 import { useAuth } from '../context/AuthContext';
 
 export default function RoleGuard({ role, children }: { role: Role; children: ReactNode }) {

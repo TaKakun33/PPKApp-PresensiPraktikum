@@ -1,8 +1,8 @@
 import type { Role, StatusSesi, StatusIzin } from "./constants";
 
-// Profil pengguna — dokumen di koleksi "users", dibuat manual admin.
-// Praktikan: kelasIds wajib diisi (array kelasId yang diikuti).
-// Asisten: kelasIds opsional (sesi dicari via asistenId).
+// Profil pengguna — dokumen di koleksi "users", dibuat otomatis saat registrasi (authService.registerUser).
+// Praktikan: nim wajib; kelasIds dimulai kosong dan diisi asisten saat menambahkannya sebagai peserta kelas.
+// Asisten: tanpa nim/kelasIds (sesi dicari via asistenId); email harus terdaftar di allowedAssistants.
 export type Profile = {
   id: string;
   nama: string;

@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import type { Role } from '../app/constants';
+import type { Role } from '../lib/constants';
 import { COLORS } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import { useScrollKeFieldFokus } from './useScrollKeFieldFokus';

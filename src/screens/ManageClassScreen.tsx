@@ -20,7 +20,7 @@ import {
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import LoadingState from '../components/LoadingState';
-import type { ClassDoc, Profile } from '../app/types';
+import type { ClassDoc, Profile } from '../lib/types';
 import { COLORS } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import {

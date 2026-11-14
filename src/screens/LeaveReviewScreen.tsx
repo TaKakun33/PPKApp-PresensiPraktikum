@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { STATUS_IZIN } from '../app/constants';
-import type { LeaveRequest, Session } from '../app/types';
+import { STATUS_IZIN } from '../lib/constants';
+import type { LeaveRequest, Session } from '../lib/types';
 import {
   subscribeLeaveRequestsForAsisten,
   subscribeSessions,

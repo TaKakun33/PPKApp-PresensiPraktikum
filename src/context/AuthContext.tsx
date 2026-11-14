@@ -11,8 +11,8 @@
 import { onAuthStateChanged } from '@react-native-firebase/auth';
 import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 
-import { auth } from '../app/firebase';
-import type { Profile } from '../app/types';
+import { auth } from '../lib/firebase';
+import type { Profile } from '../lib/types';
 import {
   getAuthErrorMessage,
   isRegistering,

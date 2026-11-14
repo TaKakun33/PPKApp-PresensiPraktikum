@@ -7,8 +7,8 @@ import {
   type QuerySnapshot,
 } from "@react-native-firebase/firestore";
 
-import { db } from "../app/firebase";
-import type { Attendance, LeaveRequest } from "../app/types";
+import { db } from "../lib/firebase";
+import type { Attendance, LeaveRequest } from "../lib/types";
 
 function getTimestampMillis(val: unknown): number {
   if (val == null) return Infinity;

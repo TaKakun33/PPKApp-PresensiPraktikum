@@ -24,10 +24,10 @@ import {
   type QuerySnapshot,
 } from "@react-native-firebase/firestore";
 
-import { STATUS_IZIN } from "../app/constants";
-import type { StatusIzin, StatusSesi } from "../app/constants";
-import { db } from "../app/firebase";
-import type { Attendance, LeaveRequest, Profile, Session } from "../app/types";
+import { STATUS_IZIN } from "../lib/constants";
+import type { StatusIzin, StatusSesi } from "../lib/constants";
+import { db } from "../lib/firebase";
+import type { Attendance, LeaveRequest, Profile, Session } from "../lib/types";
 import { formatTanggal } from "../utils/format";
 
 export type LeaveClassifier = (alasan: string) => Promise<string | null> | string | null;

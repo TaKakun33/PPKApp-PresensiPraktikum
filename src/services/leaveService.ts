@@ -14,9 +14,9 @@ import {
   type QuerySnapshot,
 } from '@react-native-firebase/firestore';
 
-import { STATUS_IZIN, STATUS_SESI } from '../app/constants';
-import { db } from '../app/firebase';
-import type { LeaveRequest, Profile, Session } from '../app/types';
+import { STATUS_IZIN, STATUS_SESI } from '../lib/constants';
+import { db } from '../lib/firebase';
+import type { LeaveRequest, Profile, Session } from '../lib/types';
 import { classifyLeaveReason } from './aiService';
 import { createAppError, isTimeoutError, withTimeout } from './serviceUtils';
 import { subscribeSessions } from './sessionService';

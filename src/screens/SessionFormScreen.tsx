@@ -19,7 +19,7 @@ import {
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import LoadingState from '../components/LoadingState';
-import type { ClassDoc } from '../app/types';
+import type { ClassDoc } from '../lib/types';
 import { COLORS } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import { pesanFirestore, subscribeClassesForAsisten } from '../services/classService';

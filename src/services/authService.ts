@@ -20,9 +20,9 @@ import {
   type FirestoreError,
 } from '@react-native-firebase/firestore';
 
-import { auth, db } from '../app/firebase';
-import type { Role } from '../app/constants';
-import type { Profile } from '../app/types';
+import { auth, db } from '../lib/firebase';
+import type { Role } from '../lib/constants';
+import type { Profile } from '../lib/types';
 import { createAppError, getErrorCode, getFriendlyError, withTimeout } from './serviceUtils';
 
 // ─── validasi ─────────────────────────────────────────────────────────────────

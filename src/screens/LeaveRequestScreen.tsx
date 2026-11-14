@@ -15,8 +15,8 @@ import {
   View,
 } from 'react-native';
 
-import { STATUS_IZIN, type StatusIzin } from '../app/constants';
-import type { Session } from '../app/types';
+import { STATUS_IZIN, type StatusIzin } from '../lib/constants';
+import type { Session } from '../lib/types';
 import ErrorState from '../components/ErrorState';
 import LoadingState from '../components/LoadingState';
 import { COLORS } from '../constants/colors';

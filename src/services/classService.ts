@@ -24,8 +24,8 @@ import {
   type QueryDocumentSnapshot,
 } from '@react-native-firebase/firestore';
 
-import { db } from '../app/firebase';
-import type { ClassDoc, Profile } from '../app/types';
+import { db } from '../lib/firebase';
+import type { ClassDoc, Profile } from '../lib/types';
 
 export type ClassInput = { namaKelas: string; praktikum: string };
 
