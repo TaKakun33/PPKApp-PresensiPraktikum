@@ -5,7 +5,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { Session } from '../lib/types';
-import { COLORS } from '../constants/colors';
+import { colors, font, radius, text } from '../constants/theme';
 import { labelTanggal, labelWaktu } from '../services/sessionService';
 import StatusBadge from './StatusBadge';
 
@@ -30,7 +30,11 @@ export default function SessionCard({ session, onPress, kelasNama }: Props) {
     >
       <View style={styles.topRow}>
         <StatusBadge status={session.status} />
-        {onPress ? <Ionicons name="chevron-forward" size={18} color={COLORS.mutedLight} /> : null}
+        {onPress ? (
+          <View style={styles.chevron}>
+            <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+          </View>
+        ) : null}
       </View>
 
       <Text style={styles.title} numberOfLines={2}>
@@ -39,19 +43,22 @@ export default function SessionCard({ session, onPress, kelasNama }: Props) {
 
       <View style={styles.metaRow}>
         <View style={styles.metaItem}>
-          <Ionicons name="people-outline" size={14} color={COLORS.muted} />
-          <Text style={styles.metaText}>{kelas}</Text>
-        </View>
-        <View style={styles.metaItem}>
-          <Ionicons name="calendar-outline" size={14} color={COLORS.muted} />
+          <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
           <Text style={styles.metaText}>{tanggal}</Text>
         </View>
         <View style={styles.metaItem}>
-          <Ionicons name="time-outline" size={14} color={COLORS.muted} />
+          <Ionicons name="time-outline" size={14} color={colors.textSecondary} />
           <Text style={styles.metaText}>{waktu}</Text>
         </View>
+      </View>
+
+      <View style={styles.metaRow}>
         <View style={styles.metaItem}>
-          <Ionicons name="location-outline" size={14} color={COLORS.muted} />
+          <Ionicons name="people-outline" size={14} color={colors.textSecondary} />
+          <Text style={styles.metaText}>{kelas}</Text>
+        </View>
+        <View style={styles.metaItem}>
+          <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
           <Text style={styles.metaText}>{session.ruangan}</Text>
         </View>
       </View>
@@ -61,17 +68,25 @@ export default function SessionCard({ session, onPress, kelasNama }: Props) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: COLORS.background,
-    borderRadius: 20,
+    backgroundColor: colors.card,
+    borderRadius: radius.card,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
     padding: 16,
     gap: 10,
   },
-  cardPressed: { backgroundColor: COLORS.surface, opacity: 0.88 },
+  cardPressed: { backgroundColor: colors.surface, opacity: 0.9 },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  title: { fontSize: 16, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
+  chevron: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.tint,
+  },
+  title: { fontSize: 15, lineHeight: 21, fontFamily: font.bold, color: colors.text },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 6 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  metaText: { fontSize: 13, fontFamily: 'PlusJakartaSans_500Medium', color: COLORS.muted },
+  metaText: { ...text.caption, color: colors.textSecondary },
 });

@@ -3,13 +3,17 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Attendance, ClassDoc, LeaveRequest, Session } from '../lib/types';
 import { STATUS_IZIN } from '../lib/constants';
 import ErrorState from '../components/ErrorState';
 import LoadingState from '../components/LoadingState';
-import { COLORS } from '../constants/colors';
+import PrimaryButton from '../components/PrimaryButton';
+import { colors, font, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
+import LogoutButton from '../navigation/LogoutButton';
+import ProfileButton from '../navigation/ProfileButton';
 import { getNamaPengguna, subscribeClassesForUser } from '../services/classService';
 import { subscribeAttendanceHistory, subscribeLeaveHistory } from '../services/historyService';
 import { labelWaktu, subscribeSessions, urutkanSesi } from '../services/sessionService';
@@ -72,6 +76,7 @@ function bagianTanggal(tanggal: string): { hari: string; angka: string; bulan: s
 
 export default function HomeScreen() {
   const { profile } = useAuth();
+  const insets = useSafeAreaInsets();
 
   const [sessions, setSessions] = useState<Session[] | null>(null);
   const [classes, setClasses] = useState<ClassDoc[] | null>(null);
@@ -180,40 +185,28 @@ export default function HomeScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.profileRow}>
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>{inisial(profile.nama)}</Text>
+        </View>
         <View style={styles.profileText}>
-          <Text style={styles.greeting}>
-            {sapaan()}, {profile.role}
+          <Text style={styles.greeting} numberOfLines={1}>
+            {sapaan()}
           </Text>
           <Text style={styles.name} numberOfLines={2}>
             {profile.nama}
           </Text>
         </View>
-
-        <View style={styles.avatarWrap}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{inisial(profile.nama)}</Text>
-          </View>
-          <View style={styles.notificationDot} />
-        </View>
+        <ProfileButton />
+        <LogoutButton />
       </View>
 
       <View style={styles.hero}>
-        <Ionicons
-          name="sparkles"
-          size={94}
-          color="rgba(255,255,255,0.13)"
-          style={styles.heroSparkleLarge}
-        />
-        <Ionicons
-          name="star"
-          size={26}
-          color="rgba(255,255,255,0.22)"
-          style={styles.heroSparkleSmall}
-        />
+        <View style={styles.heroCircleLarge} />
+        <View style={styles.heroCircleSmall} />
         <Text style={styles.heroDate}>{labelHariIni()}</Text>
         <Text style={styles.heroTitle}>Siap untuk praktikum hari ini?</Text>
         <Text style={styles.heroSubtitle}>{subjudulHero}</Text>
@@ -225,26 +218,36 @@ export default function HomeScreen() {
             accessibilityLabel={`Lihat detail ${nearest.praktikum}`}
           >
             <Text style={styles.heroButtonText}>Lihat detail jadwal</Text>
-            <Ionicons name="arrow-forward" size={15} color={COLORS.primary} />
+            <Ionicons name="arrow-forward" size={15} color={colors.primary} />
           </Pressable>
         ) : null}
       </View>
 
-      <View style={styles.statsRow}>
-        <View style={styles.statCard}>
-          <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
-          <Text style={styles.statValue}>{persentaseHadir}%</Text>
-          <Text style={styles.statLabel}>Kehadiran</Text>
+      <View style={styles.summaryCard}>
+        <View style={styles.attendanceRing}>
+          <Text style={styles.attendanceValue}>{persentaseHadir}%</Text>
+          <Text style={styles.attendanceLabel}>Hadir</Text>
         </View>
-        <View style={styles.statCard}>
-          <Ionicons name="calendar" size={20} color="#5856D6" />
-          <Text style={styles.statValue}>{upcoming.length}</Text>
-          <Text style={styles.statLabel}>Jadwal aktif</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Ionicons name="document-text" size={20} color={COLORS.warning} />
-          <Text style={styles.statValue}>{izinDiproses}</Text>
-          <Text style={styles.statLabel}>Izin diproses</Text>
+        <View style={styles.summaryDivider} />
+        <View style={styles.summaryMetrics}>
+          <View style={styles.metricRow}>
+            <View style={styles.metricIcon}>
+              <Ionicons name="calendar-outline" size={17} color={colors.primary} />
+            </View>
+            <View style={styles.metricText}>
+              <Text style={styles.metricValue}>{upcoming.length}</Text>
+              <Text style={styles.metricLabel}>Jadwal aktif</Text>
+            </View>
+          </View>
+          <View style={styles.metricRow}>
+            <View style={styles.metricIcon}>
+              <Ionicons name="document-text-outline" size={17} color={colors.primary} />
+            </View>
+            <View style={styles.metricText}>
+              <Text style={styles.metricValue}>{izinDiproses}</Text>
+              <Text style={styles.metricLabel}>Izin diproses</Text>
+            </View>
+          </View>
         </View>
       </View>
 
@@ -263,18 +266,18 @@ export default function HomeScreen() {
       {jadwalTerdekat.length === 0 ? (
         <View style={styles.emptyCard}>
           <View style={styles.emptyIcon}>
-            <Ionicons name="calendar-outline" size={26} color={COLORS.primary} />
+            <Ionicons name="calendar-outline" size={26} color={colors.primary} />
           </View>
           <Text style={styles.emptyTitle}>Belum ada jadwal terdekat</Text>
           <Text style={styles.emptyText}>
             Jadwal praktikum yang aktif akan muncul di sini.
           </Text>
-          <Pressable
-            style={({ pressed }) => [styles.emptyButton, pressed && styles.pressed]}
+          <PrimaryButton
+            label="Buka Jadwal"
+            size="sm"
             onPress={() => router.push('/praktikan/jadwal')}
-          >
-            <Text style={styles.emptyButtonText}>Buka Jadwal</Text>
-          </Pressable>
+            style={styles.emptyButton}
+          />
         </View>
       ) : (
         <View style={styles.scheduleList}>
@@ -305,7 +308,9 @@ export default function HomeScreen() {
                     {namaAsisten[session.asistenId] || 'Asisten praktikum'}
                   </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={17} color={COLORS.muted} />
+                <View style={styles.chevron}>
+                  <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+                </View>
               </Pressable>
             );
           })}
@@ -316,233 +321,205 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  content: { padding: 20, paddingTop: 18, paddingBottom: 36, gap: 18 },
-  stateWrap: { flex: 1, backgroundColor: COLORS.background },
+  container: { flex: 1, backgroundColor: colors.bg },
+  content: { padding: 20, paddingBottom: 120, gap: 18 },
+  stateWrap: { flex: 1, backgroundColor: colors.bg },
   profileRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 16,
+    gap: 12,
   },
-  profileText: { flex: 1, gap: 3 },
-  greeting: {
-    fontSize: 12,
-    fontFamily: 'PlusJakartaSans_500Medium',
-    color: COLORS.muted,
-  },
-  name: {
-    fontSize: 25,
-    lineHeight: 31,
-    fontFamily: 'PlusJakartaSans_800ExtraBold',
-    color: COLORS.text,
-    letterSpacing: -0.6,
-  },
-  avatarWrap: { width: 56, height: 56 },
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: COLORS.primaryLight,
+    width: 46,
+    height: 46,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.tint,
   },
-  avatarText: {
-    fontSize: 18,
-    fontFamily: 'PlusJakartaSans_800ExtraBold',
-    color: COLORS.primary,
-  },
-  notificationDot: {
-    position: 'absolute',
-    top: -1,
-    right: -1,
-    width: 11,
-    height: 11,
-    borderRadius: 6,
-    backgroundColor: COLORS.danger,
-    borderWidth: 2,
-    borderColor: COLORS.background,
+  avatarText: { fontSize: 16, fontFamily: font.extraBold, color: colors.primary },
+  profileText: { flex: 1, gap: 2 },
+  greeting: { ...text.caption, fontFamily: font.medium },
+  name: {
+    fontSize: 20,
+    lineHeight: 25,
+    fontFamily: font.extraBold,
+    color: colors.text,
+    letterSpacing: -0.4,
   },
   hero: {
     overflow: 'hidden',
-    backgroundColor: COLORS.primary,
+    backgroundColor: colors.primary,
     borderRadius: 26,
     padding: 22,
     paddingTop: 24,
     gap: 7,
   },
-  heroSparkleLarge: { position: 'absolute', right: -18, top: 4 },
-  heroSparkleSmall: { position: 'absolute', right: 66, top: 84 },
+  heroCircleLarge: {
+    position: 'absolute',
+    right: -54,
+    top: -58,
+    width: 190,
+    height: 190,
+    borderRadius: 95,
+    borderWidth: 24,
+    borderColor: 'rgba(255,255,255,0.07)',
+  },
+  heroCircleSmall: {
+    position: 'absolute',
+    right: 54,
+    bottom: -36,
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
   heroDate: {
     fontSize: 10,
     letterSpacing: 1.1,
-    fontFamily: 'PlusJakartaSans_700Bold',
-    color: 'rgba(255,255,255,0.74)',
+    fontFamily: font.bold,
+    color: 'rgba(255,255,255,0.70)',
   },
   heroTitle: {
     maxWidth: 250,
-    fontSize: 24,
-    lineHeight: 30,
-    fontFamily: 'PlusJakartaSans_800ExtraBold',
-    color: COLORS.white,
+    fontSize: 23,
+    lineHeight: 29,
+    fontFamily: font.extraBold,
+    color: colors.white,
     letterSpacing: -0.4,
   },
   heroSubtitle: {
     maxWidth: 250,
     fontSize: 13,
     lineHeight: 19,
-    fontFamily: 'PlusJakartaSans_500Medium',
-    color: 'rgba(255,255,255,0.82)',
+    fontFamily: font.medium,
+    color: 'rgba(255,255,255,0.78)',
   },
   heroButton: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: COLORS.white,
-    borderRadius: 999,
+    backgroundColor: colors.white,
+    borderRadius: radius.pill,
     paddingVertical: 9,
     paddingHorizontal: 14,
     marginTop: 8,
   },
-  heroButtonText: {
-    fontSize: 12,
-    fontFamily: 'PlusJakartaSans_700Bold',
-    color: COLORS.primary,
-  },
+  heroButtonText: { fontSize: 12, fontFamily: font.bold, color: colors.primary },
   pressed: { opacity: 0.82 },
-  statsRow: { flexDirection: 'row', gap: 10 },
-  statCard: {
-    flex: 1,
-    backgroundColor: COLORS.background,
+  summaryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    backgroundColor: colors.card,
+    borderRadius: radius.card,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 18,
-    padding: 13,
-    gap: 5,
+    borderColor: colors.border,
+    padding: 16,
   },
-  statValue: {
-    fontSize: 22,
-    fontFamily: 'PlusJakartaSans_800ExtraBold',
-    color: COLORS.text,
-    letterSpacing: -0.4,
+  attendanceRing: {
+    width: 78,
+    height: 78,
+    borderRadius: 39,
+    borderWidth: 7,
+    borderColor: colors.tint,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.card,
   },
-  statLabel: {
-    fontSize: 10,
-    fontFamily: 'PlusJakartaSans_500Medium',
-    color: COLORS.muted,
+  attendanceValue: { fontSize: 19, fontFamily: font.extraBold, color: colors.primary },
+  attendanceLabel: { fontSize: 10, fontFamily: font.medium, color: colors.textSecondary },
+  summaryDivider: { width: 1, height: 68, backgroundColor: colors.border },
+  summaryMetrics: { flex: 1, gap: 12 },
+  metricRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  metricIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.tint,
   },
+  metricText: { gap: 1 },
+  metricValue: { fontSize: 16, fontFamily: font.extraBold, color: colors.text },
+  metricLabel: { fontSize: 11, fontFamily: font.medium, color: colors.textSecondary },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: 2,
   },
-  sectionTitle: {
-    fontSize: 17,
-    fontFamily: 'PlusJakartaSans_700Bold',
-    color: COLORS.text,
-  },
-  sectionLink: {
-    fontSize: 12,
-    fontFamily: 'PlusJakartaSans_700Bold',
-    color: COLORS.primary,
-  },
+  sectionTitle: { ...text.sectionTitle },
+  sectionLink: { fontSize: 12, fontFamily: font.bold, color: colors.primary },
   scheduleList: { gap: 10 },
   scheduleCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 13,
-    backgroundColor: COLORS.background,
+    gap: 12,
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
     borderRadius: 20,
-    paddingVertical: 14,
+    paddingVertical: 13,
     paddingHorizontal: 13,
   },
-  scheduleCardPressed: { backgroundColor: COLORS.surface, opacity: 0.88 },
-  dateColumn: { width: 42, alignItems: 'center', gap: 1 },
-  dateDay: {
-    fontSize: 9,
-    letterSpacing: 0.7,
-    fontFamily: 'PlusJakartaSans_700Bold',
-    color: COLORS.muted,
+  scheduleCardPressed: { backgroundColor: colors.surface, opacity: 0.9 },
+  dateColumn: {
+    width: 48,
+    alignItems: 'center',
+    gap: 1,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
   },
-  dateNumber: {
-    fontSize: 24,
-    lineHeight: 28,
-    fontFamily: 'PlusJakartaSans_800ExtraBold',
-    color: COLORS.text,
-  },
-  dateMonth: {
-    fontSize: 9,
-    letterSpacing: 0.7,
-    fontFamily: 'PlusJakartaSans_700Bold',
-    color: COLORS.muted,
-  },
+  dateDay: { fontSize: 9, letterSpacing: 0.7, fontFamily: font.bold, color: colors.textSecondary },
+  dateNumber: { fontSize: 20, lineHeight: 24, fontFamily: font.extraBold, color: colors.text },
+  dateMonth: { fontSize: 9, letterSpacing: 0.7, fontFamily: font.bold, color: colors.textSecondary },
   scheduleDivider: {
-    width: 4,
-    height: 42,
-    borderRadius: 999,
-    backgroundColor: COLORS.primary,
+    width: 3,
+    height: 44,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primary,
   },
   scheduleBody: { flex: 1, gap: 2 },
-  scheduleTitle: {
-    fontSize: 14,
-    fontFamily: 'PlusJakartaSans_700Bold',
-    color: COLORS.text,
-  },
-  scheduleMeta: {
-    fontSize: 11,
-    fontFamily: 'PlusJakartaSans_400Regular',
-    color: COLORS.muted,
-  },
-  scheduleAssistant: {
-    fontSize: 11,
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    color: COLORS.text,
+  scheduleTitle: { fontSize: 14, fontFamily: font.bold, color: colors.text },
+  scheduleMeta: { fontSize: 11, fontFamily: font.medium, color: colors.textSecondary },
+  scheduleAssistant: { fontSize: 11, fontFamily: font.semibold, color: colors.primary },
+  chevron: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.tint,
   },
   emptyCard: {
     alignItems: 'center',
     gap: 8,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.card,
     borderWidth: 1,
     borderStyle: 'dashed',
-    borderColor: COLORS.borderLight,
-    borderRadius: 20,
+    borderColor: colors.dashed,
+    borderRadius: 22,
     padding: 24,
   },
   emptyIcon: {
-    width: 52,
-    height: 52,
+    width: 54,
+    height: 54,
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: colors.tint,
     marginBottom: 2,
   },
-  emptyTitle: {
-    fontSize: 14,
-    fontFamily: 'PlusJakartaSans_700Bold',
-    color: COLORS.text,
-  },
+  emptyTitle: { fontSize: 14, fontFamily: font.bold, color: colors.text },
   emptyText: {
     fontSize: 12,
     lineHeight: 18,
     textAlign: 'center',
-    fontFamily: 'PlusJakartaSans_400Regular',
-    color: COLORS.muted,
+    fontFamily: font.medium,
+    color: colors.textSecondary,
   },
-  emptyButton: {
-    marginTop: 4,
-    backgroundColor: COLORS.primary,
-    borderRadius: 999,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-  },
-  emptyButtonText: {
-    fontSize: 12,
-    fontFamily: 'PlusJakartaSans_700Bold',
-    color: COLORS.white,
-  },
+  emptyButton: { alignSelf: 'center', minHeight: 44, marginTop: 4 },
 });

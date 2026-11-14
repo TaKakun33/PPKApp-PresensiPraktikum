@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
 
 import { STATUS_IZIN } from '../lib/constants';
 import type { LeaveRequest, Session } from '../lib/types';
@@ -12,7 +12,10 @@ import { labelKategori } from '../services/aiService';
 import ConfirmModal from '../components/ConfirmModal';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';
-import { COLORS } from '../constants/colors';
+import PrimaryButton from '../components/PrimaryButton';
+import ScreenHeader from '../components/ScreenHeader';
+import StatusBadge from '../components/StatusBadge';
+import { colors, font, layout, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 
 type ReviewAction = 'diterima' | 'ditolak';
@@ -147,27 +150,40 @@ export default function LeaveReviewScreen() {
   };
 
   if (authLoading) {
-    return <LoadingState message="Memuat profil asisten..." />;
+    return (
+      <View style={styles.screen}>
+        <ScreenHeader title="Review Izin" />
+        <View style={styles.state}>
+          <LoadingState message="Memuat profil asisten..." />
+        </View>
+      </View>
+    );
   }
 
   if (role !== 'asisten') {
     return (
-      <EmptyState
-        title="Fitur khusus asisten"
-        message="Hanya asisten yang dapat meninjau pengajuan izin praktikkan."
-      />
+      <View style={styles.screen}>
+        <ScreenHeader title="Review Izin" />
+        <View style={styles.state}>
+          <EmptyState
+            icon="lock-closed-outline"
+            title="Fitur khusus asisten"
+            message="Hanya asisten yang dapat meninjau pengajuan izin praktikan."
+          />
+        </View>
+      </View>
     );
   }
 
   return (
-    <>
+    <View style={styles.screen}>
+      <ScreenHeader title="Review Izin" />
       <FlatList
         data={pendingRequests}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.content}
         ListHeaderComponent={
           <View style={styles.header}>
-            <Text style={styles.title}>Review Izin</Text>
             <Text style={styles.subtitle}>
               Tinjau dan setujui atau tolak permohonan izin praktikan.
             </Text>
@@ -195,6 +211,7 @@ export default function LeaveReviewScreen() {
             <LoadingState message="Memuat permintaan izin..." />
           ) : (
             <EmptyState
+              icon="document-text-outline"
               title="Tidak ada izin yang menunggu"
               message="Permohonan izin baru akan muncul di sini untuk ditinjau."
             />
@@ -203,77 +220,61 @@ export default function LeaveReviewScreen() {
         renderItem={({ item }) => {
           const session = sessionById.get(item.sessionId);
           return (
-          <View style={styles.card}>
-            <View style={styles.cardTop}>
-              <View style={styles.studentInfo}>
-                <Text style={styles.studentName}>{item.nama}</Text>
-                <Text style={styles.studentNim}>NIM: {item.nim}</Text>
+            <View style={styles.card}>
+              <View style={styles.cardTop}>
+                <View style={styles.studentInfo}>
+                  <Text style={styles.studentName}>{item.nama}</Text>
+                  <Text style={styles.studentNim}>NIM: {item.nim}</Text>
+                </View>
+                <StatusBadge status={item.status} />
               </View>
-              <View style={styles.statusPill}>
-                <Text style={styles.statusPillText}>{item.status}</Text>
+
+              <Text style={styles.sectionLabel}>Praktikum</Text>
+              <Text style={styles.valueText}>{session?.praktikum ?? item.praktikum}</Text>
+
+              <Text style={styles.sectionLabel}>Sesi / Kelas</Text>
+              <Text style={styles.valueText}>{item.kelasId} · {item.sessionId}</Text>
+              <Text style={styles.sectionLabel}>Tanggal / Waktu</Text>
+              <Text style={styles.valueText}>
+                {session
+                  ? `${session.tanggal} · ${session.waktuMulai} - ${session.waktuSelesai}`
+                  : 'Detail tanggal sesi tidak tersedia.'}
+              </Text>
+
+              <Text style={styles.sectionLabel}>Alasan izin</Text>
+              <Text style={styles.valueText}>{item.alasan}</Text>
+
+              <View style={styles.metaRow}>
+                <View style={styles.metaBox}>
+                  <Text style={styles.metaLabel}>Klasifikasi AI</Text>
+                  <Text style={styles.metaValue}>{item.kategoriAI ? labelKategori(item.kategoriAI) : 'Belum tersedia'}</Text>
+                </View>
+                <View style={styles.metaBox}>
+                  <Text style={styles.metaLabel}>Status AI</Text>
+                  <Text style={styles.metaValue}>{item.aiStatus}</Text>
+                </View>
               </View>
+
+              {item.status === STATUS_IZIN.MENUNGGU ? (
+                <View style={styles.actionRow}>
+                  <PrimaryButton
+                    label="Terima"
+                    onPress={() => setPendingAction({ requestId: item.id, action: 'diterima' })}
+                    disabled={submitting}
+                    accessibilityLabel={`Terima izin ${item.nama}`}
+                    style={styles.actionButton}
+                  />
+                  <PrimaryButton
+                    label="Tolak"
+                    variant="secondary"
+                    onPress={() => setPendingAction({ requestId: item.id, action: 'ditolak' })}
+                    disabled={submitting}
+                    accessibilityLabel={`Tolak izin ${item.nama}`}
+                    style={styles.actionButton}
+                  />
+                </View>
+              ) : null}
             </View>
-
-            <Text style={styles.sectionLabel}>Praktikum</Text>
-            <Text style={styles.valueText}>{session?.praktikum ?? item.praktikum}</Text>
-
-            <Text style={styles.sectionLabel}>Sesi / Kelas</Text>
-            <Text style={styles.valueText}>{item.kelasId} · {item.sessionId}</Text>
-            <Text style={styles.sectionLabel}>Tanggal / Waktu</Text>
-            <Text style={styles.valueText}>
-              {session
-                ? `${session.tanggal} · ${session.waktuMulai} - ${session.waktuSelesai}`
-                : 'Detail tanggal sesi tidak tersedia.'}
-            </Text>
-
-            <Text style={styles.sectionLabel}>Alasan izin</Text>
-            <Text style={styles.valueText}>{item.alasan}</Text>
-
-            <View style={styles.metaRow}>
-              <View style={styles.metaBox}>
-                <Text style={styles.metaLabel}>Klasifikasi AI</Text>
-                <Text style={styles.metaValue}>{item.kategoriAI ? labelKategori(item.kategoriAI) : 'Belum tersedia'}</Text>
-              </View>
-              <View style={styles.metaBox}>
-                <Text style={styles.metaLabel}>Status AI</Text>
-                <Text style={styles.metaValue}>{item.aiStatus}</Text>
-              </View>
-            </View>
-
-            {item.status === STATUS_IZIN.MENUNGGU ? (
-              <View style={styles.actionRow}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Terima izin ${item.nama}`}
-                  disabled={submitting}
-                  onPress={() => setPendingAction({ requestId: item.id, action: 'diterima' })}
-                  style={({ pressed }) => [
-                    styles.actionButton,
-                    styles.confirmButton,
-                    pressed && !submitting && styles.buttonPressed,
-                    submitting && styles.buttonDisabled,
-                  ]}
-                >
-                  <Text style={styles.actionButtonText}>Terima</Text>
-                </Pressable>
-
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Tolak izin ${item.nama}`}
-                  disabled={submitting}
-                  onPress={() => setPendingAction({ requestId: item.id, action: 'ditolak' })}
-                  style={({ pressed }) => [
-                    styles.actionButton,
-                    styles.rejectButton,
-                    pressed && !submitting && styles.buttonPressed,
-                    submitting && styles.buttonDisabled,
-                  ]}
-                >
-                  <Text style={styles.actionButtonText}>Tolak</Text>
-                </Pressable>
-              </View>
-            ) : null}
-          </View>
           );
         }}
       />
@@ -292,80 +293,61 @@ export default function LeaveReviewScreen() {
           if (!submitting) setPendingAction(null);
         }}
       />
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { flexGrow: 1, padding: 20, gap: 12, backgroundColor: COLORS.background },
-  header: { gap: 8, marginBottom: 8 },
-  title: { fontSize: 22, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
-  subtitle: { fontSize: 14, lineHeight: 20, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
+  screen: { flex: 1, backgroundColor: colors.bg },
+  state: { flex: 1 },
+  content: {
+    flexGrow: 1,
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: 8,
+    paddingBottom: layout.tabBarSpace,
+    gap: 12,
+  },
+  header: { gap: 8, marginBottom: 4 },
+  subtitle: { ...text.body },
   feedback: {
-    marginTop: 8,
     padding: 12,
     borderWidth: 1,
-    borderRadius: 10,
-    backgroundColor: COLORS.card,
+    borderRadius: 14,
+    backgroundColor: colors.card,
   },
-  successFeedback: { borderColor: COLORS.success },
-  errorFeedback: { borderColor: COLORS.danger },
-  feedbackText: {
-    fontSize: 14,
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    color: COLORS.text,
-  },
+  successFeedback: { borderColor: colors.success, backgroundColor: colors.successTint },
+  errorFeedback: { borderColor: colors.danger, backgroundColor: colors.dangerTint },
+  feedbackText: { fontSize: 13, lineHeight: 19, fontFamily: font.medium, color: colors.text },
   card: {
     gap: 8,
     padding: 16,
-    borderRadius: 14,
+    borderRadius: radius.card,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
   },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  studentInfo: { flex: 1 },
-  studentName: { fontSize: 16, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
-  studentNim: { fontSize: 13, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
-  statusPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: COLORS.warning,
-  },
-  statusPillText: {
-    fontSize: 11,
-    fontFamily: 'PlusJakartaSans_700Bold',
-    color: COLORS.white,
-    textTransform: 'capitalize',
-  },
+  studentInfo: { flex: 1, gap: 2 },
+  studentName: { fontSize: 16, fontFamily: font.bold, color: colors.text },
+  studentNim: { ...text.caption },
   sectionLabel: {
-    fontSize: 12,
-    letterSpacing: 0.2,
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    color: COLORS.muted,
+    fontSize: 10,
+    letterSpacing: 0.4,
+    fontFamily: font.bold,
+    color: colors.textSecondary,
     textTransform: 'uppercase',
+    marginTop: 2,
   },
-  valueText: { fontSize: 14, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.text },
-  metaRow: { flexDirection: 'row', gap: 12 },
+  valueText: { fontSize: 13, lineHeight: 19, fontFamily: font.medium, color: colors.text },
+  metaRow: { flexDirection: 'row', gap: 10, marginTop: 2 },
   metaBox: {
     flex: 1,
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: COLORS.surface,
+    padding: 11,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
   },
-  metaLabel: { fontSize: 11, fontFamily: 'PlusJakartaSans_600SemiBold', color: COLORS.muted },
-  metaValue: { marginTop: 4, fontSize: 13, fontFamily: 'PlusJakartaSans_600SemiBold', color: COLORS.text },
-  actionRow: { flexDirection: 'row', gap: 12, marginTop: 4 },
-  actionButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  confirmButton: { backgroundColor: COLORS.success },
-  rejectButton: { backgroundColor: COLORS.danger },
-  buttonPressed: { opacity: 0.85 },
-  buttonDisabled: { opacity: 0.7 },
-  actionButtonText: { color: COLORS.white, fontFamily: 'PlusJakartaSans_700Bold' },
+  metaLabel: { fontSize: 10, fontFamily: font.semibold, color: colors.textSecondary },
+  metaValue: { marginTop: 3, fontSize: 12, fontFamily: font.semibold, color: colors.text },
+  actionRow: { flexDirection: 'row', gap: 10, marginTop: 6 },
+  actionButton: { flex: 1, minHeight: 46, paddingHorizontal: 10 },
 });

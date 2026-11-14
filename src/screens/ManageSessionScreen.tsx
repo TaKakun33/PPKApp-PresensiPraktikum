@@ -1,5 +1,6 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
 
 import { STATUS_SESI } from '../lib/constants';
 import type { Session } from '../lib/types';
@@ -7,8 +8,10 @@ import { closeSession, openSession, subscribeSessions } from '../services/sessio
 import ConfirmModal from '../components/ConfirmModal';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';
+import PrimaryButton from '../components/PrimaryButton';
+import ScreenHeader from '../components/ScreenHeader';
 import StatusBadge from '../components/StatusBadge';
-import { COLORS } from '../constants/colors';
+import { colors, font, layout, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 
 type SessionAction = 'open' | 'close';
@@ -135,27 +138,40 @@ export default function ManageSessionScreen() {
       : `Apakah kamu yakin ingin membuka ${pendingSessionName}?`;
 
   if (authLoading) {
-    return <LoadingState message="Memuat profil asisten..." />;
+    return (
+      <View style={styles.screen}>
+        <ScreenHeader title="Kelola Sesi" />
+        <View style={styles.state}>
+          <LoadingState message="Memuat profil asisten..." />
+        </View>
+      </View>
+    );
   }
 
   if (role !== 'asisten') {
     return (
-      <EmptyState
-        title="Fitur khusus asisten"
-        message="Hanya asisten pengampu yang dapat mengelola status sesi praktikum."
-      />
+      <View style={styles.screen}>
+        <ScreenHeader title="Kelola Sesi" />
+        <View style={styles.state}>
+          <EmptyState
+            icon="lock-closed-outline"
+            title="Fitur khusus asisten"
+            message="Hanya asisten pengampu yang dapat mengelola status sesi praktikum."
+          />
+        </View>
+      </View>
     );
   }
 
   return (
-    <>
+    <View style={styles.screen}>
+      <ScreenHeader title="Kelola Sesi" />
       <FlatList
         data={sessions}
         keyExtractor={(session) => session.id}
         contentContainerStyle={styles.content}
         ListHeaderComponent={
           <View style={styles.header}>
-            <Text style={styles.title}>Kelola Sesi</Text>
             <Text style={styles.subtitle}>
               Buka atau tutup sesi praktikum yang ditugaskan kepadamu.
             </Text>
@@ -190,6 +206,7 @@ export default function ManageSessionScreen() {
             <LoadingState message="Memuat sesi aktif..." />
           ) : (
             <EmptyState
+              icon="calendar-outline"
               title="Belum ada sesi yang ditugaskan"
               message="Sesi praktikum yang ditugaskan kepadamu akan muncul di sini."
             />
@@ -203,48 +220,40 @@ export default function ManageSessionScreen() {
                   {session.praktikum}
                 </Text>
                 <Text style={styles.moduleTitle} numberOfLines={2}>
-                  {session.kelasId}
+                  Kelas {session.kelasId}
                 </Text>
               </View>
               <StatusBadge status={session.status} />
             </View>
 
             <View style={styles.details}>
-              <Text style={styles.detailText}>
-                {session.tanggal} | {session.waktuMulai} - {session.waktuSelesai}
-              </Text>
-              <Text style={styles.detailText}>Ruangan: {session.ruangan}</Text>
+              <View style={styles.detailRow}>
+                <Ionicons name="calendar-outline" size={15} color={colors.textSecondary} />
+                <Text style={styles.detailText}>
+                  {session.tanggal} · {session.waktuMulai} - {session.waktuSelesai}
+                </Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Ionicons name="location-outline" size={15} color={colors.textSecondary} />
+                <Text style={styles.detailText}>{session.ruangan}</Text>
+              </View>
             </View>
 
             {session.status === STATUS_SESI.BELUM ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Buka sesi ${session.praktikum}`}
-                disabled={submitting}
+              <PrimaryButton
+                label="Buka sesi"
                 onPress={() => requestAction(session.id, 'open')}
-                style={({ pressed }) => [
-                  styles.actionButton,
-                  pressed && !submitting && styles.buttonPressed,
-                  submitting && styles.buttonDisabled,
-                ]}
-              >
-                <Text style={styles.actionButtonText}>Buka sesi</Text>
-              </Pressable>
-            ) : session.status === STATUS_SESI.DIBUKA ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Tutup sesi ${session.praktikum}`}
                 disabled={submitting}
+                accessibilityLabel={`Buka sesi ${session.praktikum}`}
+              />
+            ) : session.status === STATUS_SESI.DIBUKA ? (
+              <PrimaryButton
+                label="Tutup sesi"
+                variant="secondary"
                 onPress={() => requestAction(session.id, 'close')}
-                style={({ pressed }) => [
-                  styles.actionButton,
-                  styles.closeButton,
-                  pressed && !submitting && styles.buttonPressed,
-                  submitting && styles.buttonDisabled,
-                ]}
-              >
-                <Text style={styles.actionButtonText}>Tutup sesi</Text>
-              </Pressable>
+                disabled={submitting}
+                accessibilityLabel={`Tutup sesi ${session.praktikum}`}
+              />
             ) : null}
           </View>
         )}
@@ -260,51 +269,44 @@ export default function ManageSessionScreen() {
           if (!submitting) setPendingAction(null);
         }}
       />
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { flexGrow: 1, padding: 20, gap: 12, backgroundColor: COLORS.background },
-  header: { gap: 6, marginBottom: 8 },
-  title: { fontSize: 22, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
-  subtitle: { fontSize: 14, lineHeight: 20, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
+  screen: { flex: 1, backgroundColor: colors.bg },
+  state: { flex: 1 },
+  content: {
+    flexGrow: 1,
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: 8,
+    paddingBottom: layout.tabBarSpace,
+    gap: 12,
+  },
+  header: { gap: 8, marginBottom: 4 },
+  subtitle: { ...text.body },
   feedback: {
-    marginTop: 8,
     padding: 12,
     borderWidth: 1,
-    borderRadius: 10,
-    backgroundColor: COLORS.card,
+    borderRadius: 14,
+    backgroundColor: colors.card,
   },
-  successFeedback: { borderColor: COLORS.success },
-  errorFeedback: { borderColor: COLORS.danger },
-  feedbackText: {
-    fontSize: 14,
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    color: COLORS.text,
-  },
+  successFeedback: { borderColor: colors.success, backgroundColor: colors.successTint },
+  errorFeedback: { borderColor: colors.danger, backgroundColor: colors.dangerTint },
+  feedbackText: { fontSize: 13, lineHeight: 19, fontFamily: font.medium, color: colors.text },
   card: {
     padding: 16,
     gap: 12,
-    backgroundColor: COLORS.card,
-    borderRadius: 14,
+    backgroundColor: colors.card,
+    borderRadius: radius.card,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
   },
   cardHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   sessionInfo: { flex: 1, gap: 4 },
-  sessionTitle: { fontSize: 16, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
-  moduleTitle: { fontSize: 14, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
-  details: { gap: 4 },
-  detailText: { fontSize: 13, lineHeight: 19, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
-  actionButton: {
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: COLORS.primary,
-  },
-  closeButton: { backgroundColor: COLORS.danger },
-  buttonDisabled: { opacity: 0.7 },
-  buttonPressed: { opacity: 0.8 },
-  actionButtonText: { color: COLORS.white, fontSize: 14, fontFamily: 'PlusJakartaSans_700Bold' },
+  sessionTitle: { fontSize: 15, lineHeight: 21, fontFamily: font.bold, color: colors.text },
+  moduleTitle: { ...text.caption },
+  details: { gap: 7 },
+  detailRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  detailText: { flex: 1, ...text.caption },
 });

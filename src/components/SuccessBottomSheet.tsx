@@ -1,7 +1,9 @@
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { COLORS } from "../constants/colors";
+import { colors, font, text } from '../constants/theme';
+import PrimaryButton from './PrimaryButton';
 
 type Props = {
   visible: boolean;
@@ -19,34 +21,23 @@ export default function SuccessBottomSheet({
   const insets = useSafeAreaInsets();
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable
           style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 24) }]}
           onPress={(e) => e.stopPropagation()}
         >
           <View style={styles.handle} />
+          <View style={styles.iconBox}>
+            <Ionicons name="checkmark" size={30} color={colors.success} />
+          </View>
           <Text style={styles.title}>Presensi Berhasil</Text>
           <Text style={styles.subtitle}>{sessionName}</Text>
           <View style={styles.timeBox}>
-            <Text style={styles.timeLabel}>Waktu hadir:</Text>
+            <Text style={styles.timeLabel}>Waktu hadir</Text>
             <Text style={styles.timeValue}>{waktuHadir}</Text>
           </View>
-          <Pressable
-            style={({ pressed }) => [
-              styles.button,
-              pressed && styles.buttonPressed,
-            ]}
-            onPress={onClose}
-            accessibilityRole="button"
-          >
-            <Text style={styles.buttonText}>Selesai</Text>
-          </Pressable>
+          <PrimaryButton label="Selesai" onPress={onClose} style={styles.button} />
         </Pressable>
       </Pressable>
     </Modal>
@@ -56,63 +47,47 @@ export default function SuccessBottomSheet({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.4)",
-    justifyContent: "flex-end",
+    backgroundColor: 'rgba(20, 35, 74, 0.48)',
+    justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: COLORS.card,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    backgroundColor: colors.card,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     paddingHorizontal: 24,
     paddingTop: 16,
-    gap: 10,
+    alignItems: 'center',
   },
   handle: {
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: COLORS.border,
-    alignSelf: "center",
-    marginBottom: 6,
+    backgroundColor: colors.border,
+    marginBottom: 18,
   },
-  title: {
-    fontSize: 18,
-    fontFamily: "PlusJakartaSans_700Bold",
-    color: COLORS.success,
+  iconBox: {
+    width: 64,
+    height: 64,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.successTint,
+    marginBottom: 12,
   },
-  subtitle: {
-    fontSize: 14,
-    fontFamily: "PlusJakartaSans_600SemiBold",
-    color: COLORS.text,
-  },
+  title: { fontSize: 20, fontFamily: font.extraBold, color: colors.text },
+  subtitle: { ...text.body, marginTop: 4, textAlign: 'center' },
   timeBox: {
-    flexDirection: "row",
-    gap: 6,
-    marginTop: 2,
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
   },
-  timeLabel: {
-    fontSize: 13,
-    fontFamily: "PlusJakartaSans_400Regular",
-    color: COLORS.muted,
-  },
-  timeValue: {
-    fontSize: 13,
-    fontFamily: "PlusJakartaSans_600SemiBold",
-    color: COLORS.text,
-  },
-  button: {
-    marginTop: 14,
-    backgroundColor: COLORS.primary,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  buttonPressed: {
-    opacity: 0.85,
-  },
-  buttonText: {
-    color: COLORS.white,
-    fontFamily: "PlusJakartaSans_600SemiBold",
-    fontSize: 14,
-  },
+  timeLabel: { ...text.caption },
+  timeValue: { fontSize: 15, fontFamily: font.bold, color: colors.text },
+  button: { alignSelf: 'stretch', marginTop: 18 },
 });

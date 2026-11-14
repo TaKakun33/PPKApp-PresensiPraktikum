@@ -1,8 +1,9 @@
 // STUB dari PM - pemilik: Naufal (feat/assistant-session-recap). Boleh diganti total,
 // tapi pertahankan props agar layar lain tidak rusak.
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, StyleSheet, Text, View } from 'react-native';
 
-import { COLORS } from '../constants/colors';
+import { colors, font, text } from '../constants/theme';
+import PrimaryButton from './PrimaryButton';
 
 type Props = {
   visible: boolean;
@@ -28,12 +29,13 @@ export default function ConfirmModal({
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
           <View style={styles.row}>
-            <Pressable style={[styles.button, styles.cancel]} onPress={onCancel}>
-              <Text style={styles.cancelText}>Batal</Text>
-            </Pressable>
-            <Pressable style={[styles.button, styles.confirm]} onPress={onConfirm}>
-              <Text style={styles.confirmText}>{confirmLabel}</Text>
-            </Pressable>
+            <PrimaryButton
+              label="Batal"
+              onPress={onCancel}
+              variant="secondary"
+              style={styles.button}
+            />
+            <PrimaryButton label={confirmLabel} onPress={onConfirm} style={styles.button} />
           </View>
         </View>
       </View>
@@ -44,7 +46,7 @@ export default function ConfirmModal({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(20, 35, 74, 0.48)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
@@ -52,17 +54,13 @@ const styles = StyleSheet.create({
   box: {
     width: '100%',
     maxWidth: 400,
-    backgroundColor: COLORS.card,
-    borderRadius: 14,
-    padding: 20,
+    backgroundColor: colors.card,
+    borderRadius: 24,
+    padding: 22,
     gap: 10,
   },
-  title: { fontSize: 18, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
-  message: { fontSize: 14, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
-  row: { flexDirection: 'row', gap: 10, marginTop: 8 },
-  button: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
-  cancel: { backgroundColor: COLORS.border },
-  confirm: { backgroundColor: COLORS.primary },
-  cancelText: { color: COLORS.text, fontFamily: 'PlusJakartaSans_600SemiBold' },
-  confirmText: { color: COLORS.white, fontFamily: 'PlusJakartaSans_600SemiBold' },
+  title: { fontSize: 18, fontFamily: font.extraBold, color: colors.text },
+  message: { ...text.body },
+  row: { flexDirection: 'row', gap: 10, marginTop: 10 },
+  button: { flex: 1, minHeight: 46, paddingHorizontal: 12 },
 });

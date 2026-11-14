@@ -1,9 +1,9 @@
-// Tombol di header tab: membuka layar Profil (lihat data akun, ubah nama, ubah password).
+// Tombol di header: membuka layar Profil (lihat data akun, ubah nama, ubah password).
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet } from 'react-native';
 
-import { COLORS } from '../constants/colors';
+import { colors, radius } from '../constants/theme';
 
 export default function ProfileButton() {
   return (
@@ -13,25 +13,19 @@ export default function ProfileButton() {
       accessibilityRole="button"
       accessibilityLabel="Buka profil"
     >
-      <Ionicons name="person-outline" size={14} color={COLORS.text} />
-      <Text style={styles.text}>Profil</Text>
+      <Ionicons name="person-outline" size={18} color={colors.primary} />
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   btn: {
-    flexDirection: 'row',
+    width: 40,
+    height: 40,
     alignItems: 'center',
-    gap: 6,
-    marginRight: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.background,
+    justifyContent: 'center',
+    borderRadius: radius.icon,
+    backgroundColor: colors.surface,
   },
-  btnPressed: { backgroundColor: COLORS.border, opacity: 0.85 },
-  text: { color: COLORS.text, fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12 },
+  btnPressed: { backgroundColor: colors.tint, opacity: 0.9 },
 });

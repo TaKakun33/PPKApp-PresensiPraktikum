@@ -11,6 +11,7 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 
+import { colors, font } from '../constants/theme';
 import { AuthProvider } from '../context/AuthContext';
 
 SplashScreen.preventAutoHideAsync();
@@ -34,7 +35,16 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          headerStyle: { backgroundColor: colors.card },
+          headerTintColor: colors.primary,
+          headerTitleStyle: { color: colors.text, fontFamily: font.bold, fontSize: 17 },
+          headerShadowVisible: false,
+          contentStyle: { backgroundColor: colors.bg },
+        }}
+      >
         <Stack.Screen name="index" />
         <Stack.Screen name="login" />
         <Stack.Screen name="praktikan" />
