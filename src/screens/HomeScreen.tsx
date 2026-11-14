@@ -194,7 +194,7 @@ export default function HomeScreen() {
         </View>
         <View style={styles.profileText}>
           <Text style={styles.greeting} numberOfLines={1}>
-            {sapaan()}, {profile.role}
+            {sapaan()}
           </Text>
           <Text style={styles.name} numberOfLines={2}>
             {profile.nama}
