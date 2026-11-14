@@ -370,6 +370,16 @@ async function pastikanKelasMilik(kelasId: string, asistenId: string) {
   }
 }
 
+// "2026-11-20" (jam lokal perangkat), dibandingkan sebagai string karena formatnya TTTT-BB-HH.
+function hariIni(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function tolakTanggalLewat(tanggal: string) {
+  if (tanggal < hariIni()) throw new Error("Tanggal sesi tidak boleh sebelum hari ini.");
+}
+
 async function getEditableSession(sessionId: string, asistenId: string) {
   const owned = await getOwnedSession(sessionId, asistenId);
   if (owned.sesi.status !== "belum_dibuka") {
@@ -381,6 +391,7 @@ async function getEditableSession(sessionId: string, asistenId: string) {
 /** Tambah sesi baru (status Belum Dibuka). Mengembalikan id sesi. */
 export async function createSession(asistenId: string, input: SessionInput): Promise<string> {
   const data = validasiSesi(input);
+  tolakTanggalLewat(data.tanggal);
   await pastikanKelasMilik(data.kelasId, asistenId);
 
   const ref = doc(collection(db, "sessions"));
@@ -396,7 +407,9 @@ export async function updateSession(
   input: SessionInput
 ): Promise<void> {
   const data = validasiSesi(input);
-  const { ref } = await getEditableSession(sessionId, asistenId);
+  const { ref, sesi } = await getEditableSession(sessionId, asistenId);
+  // Sesi lama yang belum dibuka tetap boleh diubah (mis. ruangan) selama tanggalnya tidak diganti.
+  if (data.tanggal !== sesi.tanggal) tolakTanggalLewat(data.tanggal);
   await pastikanKelasMilik(data.kelasId, asistenId);
   await updateDoc(ref, data);
 }

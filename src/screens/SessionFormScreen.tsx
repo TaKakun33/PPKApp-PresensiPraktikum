@@ -253,8 +253,14 @@ export default function SessionFormScreen() {
   const pilihTanggal = (date: Date) =>
     setForm((f) => ({ ...f, tanggal: tanggalKeYmd(date) }));
 
+  // Praktikum diisi otomatis dari kelas. Saat pindah kelas, isian ikut diganti kecuali
+  // asisten sudah mengetiknya sendiri (berbeda dari praktikum kelas sebelumnya).
   const pilihKelas = (cls: ClassDoc) =>
-    setForm((f) => ({ ...f, kelasId: cls.id, praktikum: f.praktikum || cls.praktikum }));
+    setForm((f) => {
+      const praktikumLama = classes?.find((c) => c.id === f.kelasId)?.praktikum;
+      const otomatis = !f.praktikum.trim() || f.praktikum === praktikumLama;
+      return { ...f, kelasId: cls.id, praktikum: otomatis ? cls.praktikum : f.praktikum };
+    });
 
   const simpan = async () => {
     setError('');
