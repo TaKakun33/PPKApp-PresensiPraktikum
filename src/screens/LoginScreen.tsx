@@ -2,8 +2,9 @@
 // Satu form login untuk semua pengguna: peran ditentukan dari dokumen profil di Firestore, bukan dipilih di sini.
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Link, Redirect } from 'expo-router';
-import { useRef, useState, type ComponentRef } from 'react';
+import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Pressable,
   ScrollView,
@@ -19,9 +20,10 @@ import { COLORS } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import { useScrollKeFieldFokus } from './useScrollKeFieldFokus';
 import { getAuthErrorMessage } from '../services/authService';
+import AuthLoadingGate from '../navigation/AuthLoadingGate';
 
 export default function LoginScreen() {
-  const { signIn, state, authError, clearAuthError } = useAuth();
+  const { signIn, state, authError, profileError, clearAuthError } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
@@ -30,6 +32,16 @@ export default function LoginScreen() {
   const passwordRef = useRef<ComponentRef<typeof TextInput>>(null);
   const insets = useSafeAreaInsets();
   const { scrollRef, saatLayoutForm, saatLayoutField, fokusKe } = useScrollKeFieldFokus();
+
+  // Setelah signIn berhasil, `loading` sengaja TIDAK dimatikan: tombol tetap "Memproses" sampai layar ini
+  // dilepas oleh Redirect. Kalau login berhasil tetapi profil gagal dimuat (authError terisi, pengguna
+  // dikeluarkan), tombol diaktifkan lagi supaya bisa mencoba ulang.
+  useEffect(() => {
+    if (authError) setLoading(false);
+  }, [authError]);
+
+  // Sudah login tetapi profil belum terbaca (mis. koneksi lambat): tampilkan pesan + Coba lagi / Keluar.
+  if (state.status === 'loading' && profileError) return <AuthLoadingGate />;
 
   // Sudah login -> arahkan ke layar sesuai peran.
   if (state.status === 'authenticated') {
@@ -53,10 +65,9 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await signIn(email.trim(), password);
-      // Pengalihan ditangani otomatis begitu profil terbaca.
+      // Pengalihan ditangani otomatis begitu profil terbaca; `loading` tetap aktif sampai saat itu.
     } catch (e: unknown) {
       setError(getAuthErrorMessage(e, 'Login gagal. Coba lagi.'));
-    } finally {
       setLoading(false);
     }
   };
@@ -103,6 +114,10 @@ export default function LoginScreen() {
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
+                    // Autofill: pengelola password di HP (Google/Samsung) menampilkan email yang tersimpan.
+                    autoComplete="email"
+                    textContentType="username"
+                    importantForAutofill="yes"
                     returnKeyType="next"
                     onSubmitEditing={() => passwordRef.current?.focus()}
                   />
@@ -125,6 +140,9 @@ export default function LoginScreen() {
                       clearErrors();
                     }}
                     secureTextEntry={!showPass}
+                    autoComplete="current-password"
+                    textContentType="password"
+                    importantForAutofill="yes"
                     returnKeyType="done"
                     onSubmitEditing={handleLogin}
                   />
@@ -158,6 +176,7 @@ export default function LoginScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={loading ? 'Memproses' : 'Masuk'}
               >
+                {loading ? <ActivityIndicator size="small" color={COLORS.white} /> : null}
                 <Text style={styles.buttonText}>{loading ? 'Memproses...' : 'Masuk'}</Text>
               </Pressable>
             </View>
@@ -286,6 +305,8 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
   },
   buttonPressed: { opacity: 0.84 },
   buttonText: {

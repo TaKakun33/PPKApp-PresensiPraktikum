@@ -7,9 +7,13 @@
 //  - Ada register() (profil dibuat saat registrasi, bukan manual oleh admin).
 //  - Profil dibaca lewat listener (bukan sekali), jadi perubahan kelasIds langsung terbawa.
 //  - Pengguna yang baru mendaftar tidak lagi dikeluarkan karena profilnya belum sempat tertulis.
-//  - Offline tidak langsung dianggap "profil hilang": data cache dipakai, ada batas waktu 10 detik.
+//  - Offline tidak langsung dianggap "profil hilang": data cache dipakai. Jika profil belum terbaca dalam
+//    10 detik, pengguna TIDAK dikeluarkan: `profileError` diisi (layar menampilkan "Coba lagi" / "Keluar")
+//    dan listener tetap hidup, jadi profil termuat otomatis begitu koneksi kembali.
+//  - Logout menghentikan listener profil dan melepas layar lebih dulu, baru memanggil Firebase signOut,
+//    sehingga tidak ada kilatan error permission-denied dari listener yang masih aktif.
 import { onAuthStateChanged } from '@react-native-firebase/auth';
-import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
+import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from 'react';
 
 import { auth } from '../lib/firebase';
 import type { Profile } from '../lib/types';
@@ -35,6 +39,9 @@ type AuthContextValue = {
   role: Profile['role'] | null;
   loading: boolean;
   authError: string | null;
+  /** Terisi bila pengguna sudah login tetapi profilnya belum bisa dimuat (mis. offline). Bukan alasan untuk logout. */
+  profileError: string | null;
+  retryProfile: () => void;
   // Actions. Error dilempar ke pemanggil; layar yang menampilkan pesannya.
   signIn: (email: string, password: string) => Promise<void>;
   register: (input: RegisterInput) => Promise<void>;
@@ -50,6 +57,10 @@ const PROFILE_TIMEOUT_MS = 10000;
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({ status: 'loading' });
   const [authError, setAuthError] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
+  // Menghentikan listener profil dari luar effect (dipakai signOut).
+  const stopProfileRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     let unsubscribeProfile: (() => void) | null = null;
@@ -72,8 +83,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOutUser().catch(() => {});
     };
 
+    stopProfileRef.current = stopProfile;
+
     const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
       stopProfile();
+      setProfileError(null);
 
       if (!firebaseUser) {
         setState({ status: 'unauthenticated' });
@@ -84,8 +98,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Saat registrasi, proses registrasi punya batas waktunya sendiri.
       if (!isRegistering()) {
+        // Jangan logout: pengguna mungkin hanya sedang offline. Listener tetap hidup dan akan
+        // mengisi profil sendiri begitu koneksi kembali.
         timer = setTimeout(
-          () => failProfile('Profil belum bisa dimuat. Periksa koneksi internet lalu masuk lagi.'),
+          () =>
+            setProfileError(
+              'Profil belum bisa dimuat. Periksa koneksi internet; profil akan dimuat otomatis saat koneksi kembali.',
+            ),
           PROFILE_TIMEOUT_MS,
         );
       }
@@ -108,6 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           clearTimer();
           setAuthError(null);
+          setProfileError(null);
           setState({ status: 'authenticated', profile: { id: firebaseUser.uid, ...data } });
         },
         (err) => failProfile(getAuthErrorMessage(err, 'Gagal memuat profil pengguna.')),
@@ -117,8 +137,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       unsubscribeAuth();
       stopProfile();
+      stopProfileRef.current = null;
     };
-  }, []);
+  }, [retryKey]);
+
+  const retryProfile = () => {
+    setProfileError(null);
+    setRetryKey((k) => k + 1);
+  };
 
   const signIn = async (email: string, password: string) => {
     setAuthError(null);
@@ -134,7 +160,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     setAuthError(null);
-    await signOutUser();
+    setProfileError(null);
+    const previous = state;
+    // 1) Hentikan listener profil milik context ini (tanpa ini ia menerima permission-denied setelah logout).
+    stopProfileRef.current?.();
+    // 2) Ubah state dulu: RoleGuard mengalihkan ke Login sehingga layar (beserta listener Firestore-nya) dilepas.
+    setState({ status: 'unauthenticated' });
+    await new Promise<void>((resolve) => setTimeout(resolve, 150));
+    // 3) Baru keluar dari Firebase.
+    try {
+      await signOutUser();
+    } catch (e) {
+      // Gagal keluar: pulihkan sesi dan pasang ulang listener.
+      setState(previous);
+      setRetryKey((k) => k + 1);
+      throw e;
+    }
   };
 
   const value: AuthContextValue = {
@@ -143,6 +184,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     role: state.status === 'authenticated' ? state.profile.role : null,
     loading: state.status === 'loading',
     authError,
+    profileError,
+    retryProfile,
     signIn,
     register,
     signOut,
