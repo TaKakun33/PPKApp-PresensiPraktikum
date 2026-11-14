@@ -49,7 +49,7 @@ export default function RegisterScreen() {
 
   // Sudah login (termasuk setelah registrasi berhasil) → arahkan ke layar sesuai peran.
   if (state.status === 'authenticated') {
-    return <Redirect href={state.profile.role === 'asisten' ? '/asisten/jadwal' : '/praktikan/jadwal'} />;
+    return <Redirect href={state.profile.role === 'asisten' ? '/asisten/jadwal' : '/praktikan/home'} />;
   }
 
   const clearField = (field: RegisterField) => {

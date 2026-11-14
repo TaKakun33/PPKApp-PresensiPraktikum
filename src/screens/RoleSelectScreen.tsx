@@ -103,7 +103,7 @@ export default function RoleSelectScreen() {
       return;
     }
     setCurrentUser(selectedUser!);
-    router.replace(selectedRole === 'praktikan' ? '/praktikan/jadwal' : '/asisten/jadwal');
+    router.replace(selectedRole === 'praktikan' ? '/praktikan/home' : '/asisten/jadwal');
   };
 
   // Pesan validasi

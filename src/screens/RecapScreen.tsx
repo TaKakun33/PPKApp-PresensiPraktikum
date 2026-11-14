@@ -1,57 +1,191 @@
-// STUB dari PM - pemilik: Naufal (feat/assistant-session-recap), SRS-10.
-// TODO: pilih sesi, tampilkan getRecap(sessionId) (nama, NIM, waktu) + jumlahnya.
-//       Kosong -> EmptyState; sesi Belum Dibuka -> info "sesi belum dibuka".
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { STATUS_SESI } from '../app/constants';
+import type { Attendance, Session } from '../app/types';
+import { subscribeAttendances, subscribeSessions } from '../services/sessionService';
 import EmptyState from '../components/EmptyState';
+import LoadingState from '../components/LoadingState';
 import StatusBadge from '../components/StatusBadge';
 import { COLORS } from '../constants/colors';
-import { useApp } from '../context/AppContext';
-import { PENDAFTARAN } from '../data/dummy';
-import type { RecapItem } from '../data/types';
-import { formatJam } from '../utils/format';
+import { useAuth } from '../context/AuthContext';
+import { formatTanggalJam } from '../utils/format';
+
+function toDateFromValue(value: unknown): Date | null {
+  if (!value) return null;
+
+  if (typeof value === 'string') {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  if (typeof value === 'number') {
+    return new Date(value);
+  }
+
+  if (typeof value === 'object') {
+    const maybeDate = value as { toDate?: () => Date; seconds?: number; nanoseconds?: number };
+    if (typeof maybeDate.toDate === 'function') {
+      return maybeDate.toDate();
+    }
+
+    if (typeof maybeDate.seconds === 'number') {
+      return new Date(maybeDate.seconds * 1000);
+    }
+  }
+
+  return null;
+}
+
+function normalizeTimestamp(value: unknown): string {
+  const date = toDateFromValue(value);
+  if (!date) return '—';
+  return formatTanggalJam(date.toISOString());
+}
 
 export default function RecapScreen() {
-  const { currentUser, getVisibleSessions, getRecap } = useApp();
+  const { profile, role, loading: authLoading } = useAuth();
+  const [sessionState, setSessionState] = useState<{
+    profileId: string;
+    sessions: Session[];
+    loading: boolean;
+    error: string | null;
+  } | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [attendanceResult, setAttendanceResult] = useState<{
+    sessionId: string;
+    items: Attendance[];
+    loading: boolean;
+    error: string | null;
+  } | null>(null);
 
-  const visibleSessions = getVisibleSessions();
-  const sessions = currentUser.role === 'asisten' ? visibleSessions : [];
+  useEffect(() => {
+    if (!profile || role !== 'asisten') {
+      return;
+    }
 
-  // Default: pilih sesi yang sedang dibuka jika ada.
-  const selectedSession =
-    sessions.find((session) => session.id === selectedSessionId)
-    ?? sessions.find((session) => session.status === 'dibuka')
-    ?? sessions[0];
+    const unsubscribe = subscribeSessions(
+      profile,
+      (items) => {
+        const sorted = [...items].sort(
+          (a, b) =>
+            a.tanggal.localeCompare(b.tanggal) ||
+            a.waktuMulai.localeCompare(b.waktuMulai)
+        );
+        setSessionState({
+          profileId: profile.id,
+          sessions: sorted,
+          loading: false,
+          error: null,
+        });
+      },
+      (error) => {
+        setSessionState({
+          profileId: profile.id,
+          sessions: [],
+          loading: false,
+          error: error.message || 'Gagal memuat sesi praktikum.',
+        });
+      }
+    );
 
-  const recapItems =
-    selectedSession && selectedSession.status !== 'belum_dibuka'
-      ? getRecap(selectedSession.id)
-      : [];
+    return unsubscribe;
+  }, [profile, role]);
 
-  const totalStudents = selectedSession
-    ? PENDAFTARAN.filter((p) => p.kelasId === selectedSession.kelasId).length
-    : 0;
-
-  const renderAttendance = ({ item }: { item: RecapItem }) => (
-    <View style={styles.attendanceCard}>
-      <View style={styles.studentInfo}>
-        <Text style={styles.studentName}>{item.user.nama}</Text>
-        <Text style={styles.studentNim}>NIM: {item.user.nim}</Text>
-      </View>
-      <View style={styles.timeContainer}>
-        <Text style={styles.timeLabel}>Waktu hadir</Text>
-        <Text style={styles.timeValue}>{formatJam(item.attendance.waktuHadir)}</Text>
-      </View>
-    </View>
+  const currentSessionState =
+    sessionState && sessionState.profileId === profile?.id ? sessionState : null;
+  const sessions = useMemo(
+    () => currentSessionState?.sessions ?? [],
+    [currentSessionState]
   );
+  const isLoadingSessions =
+    role === 'asisten' && (!currentSessionState || currentSessionState.loading);
+  const loadError = currentSessionState?.error ?? null;
+
+  const selectedSession = useMemo(
+    () =>
+      sessions.find((session) => session.id === selectedSessionId) ??
+      sessions.find((session) => session.status === STATUS_SESI.DIBUKA) ??
+      sessions[0] ??
+      null,
+    [sessions, selectedSessionId]
+  );
+
+  const selectedSessionKey = selectedSession?.id ?? null;
+
+  useEffect(() => {
+    if (!selectedSessionKey) {
+      return;
+    }
+
+    let active = true;
+
+    const unsubscribe = subscribeAttendances(
+      selectedSessionKey,
+      (items) => {
+        const sorted = [...items].sort((a, b) => {
+          const timeA = toDateFromValue(a.waktuHadir)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+          const timeB = toDateFromValue(b.waktuHadir)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+          return timeA - timeB;
+        });
+        if (active) {
+          setAttendanceResult({
+            sessionId: selectedSessionKey,
+            items: sorted,
+            loading: false,
+            error: null,
+          });
+        }
+      },
+      (error) => {
+        if (active) {
+          setAttendanceResult({
+            sessionId: selectedSessionKey,
+            items: [],
+            loading: false,
+            error: error.message || 'Gagal memuat rekap kehadiran.',
+          });
+        }
+      }
+    );
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [selectedSessionKey]);
+
+  const currentAttendanceResult =
+    attendanceResult && attendanceResult.sessionId === selectedSessionKey
+      ? attendanceResult
+      : null;
+  const attendances = selectedSessionKey ? currentAttendanceResult?.items ?? [] : [];
+  const isLoadingAttendances =
+    !!selectedSessionKey &&
+    (!currentAttendanceResult || currentAttendanceResult.loading);
+  const attendanceError = currentAttendanceResult?.error ?? null;
+  const attendanceRows = attendances.map((item) => ({
+    ...item,
+    waktuTampil: normalizeTimestamp(item.waktuHadir),
+  }));
+
+  if (authLoading) {
+    return <LoadingState message="Memuat profil asisten..." />;
+  }
+
+  if (role !== 'asisten') {
+    return (
+      <EmptyState
+        title="Fitur khusus asisten"
+        message="Pilih identitas asisten untuk melihat rekap kehadiran."
+      />
+    );
+  }
 
   return (
     <FlatList
-      data={recapItems}
-      keyExtractor={(item) => item.attendance.id}
-      renderItem={renderAttendance}
+      data={attendanceRows}
+      keyExtractor={(item) => item.id}
       contentContainerStyle={styles.content}
       ListHeaderComponent={
         <View style={styles.header}>
@@ -60,6 +194,12 @@ export default function RecapScreen() {
             Pilih sesi untuk melihat daftar praktikan yang hadir.
           </Text>
 
+          {loadError ? (
+            <View style={[styles.feedback, styles.errorFeedback]}>
+              <Text style={styles.feedbackText}>{loadError}</Text>
+            </View>
+          ) : null}
+
           {sessions.length > 0 ? (
             <ScrollView
               horizontal
@@ -67,12 +207,12 @@ export default function RecapScreen() {
               contentContainerStyle={styles.sessionSelector}
             >
               {sessions.map((session) => {
-                const selected = session.id === selectedSession?.id;
+                const selected = session.id === selectedSessionId;
                 return (
                   <Pressable
                     key={session.id}
                     accessibilityRole="button"
-                    accessibilityLabel={`${session.praktikum}, kelas ${session.kelas}, ${session.tanggal}`}
+                    accessibilityLabel={`${session.praktikum}, kelas ${session.kelasId}, ${session.tanggal}`}
                     accessibilityState={{ selected }}
                     onPress={() => setSelectedSessionId(session.id)}
                     style={({ pressed }) => [
@@ -96,7 +236,7 @@ export default function RecapScreen() {
                         selected && styles.sessionOptionTitleSelected,
                       ]}
                     >
-                      Kelas {session.kelas} · {session.tanggal}
+                      {session.kelasId} · {session.tanggal}
                     </Text>
                   </Pressable>
                 );
@@ -108,19 +248,16 @@ export default function RecapScreen() {
             <View style={styles.selectedSessionCard}>
               <View style={styles.selectedSessionInfo}>
                 <Text style={styles.selectedSessionTitle}>{selectedSession.praktikum}</Text>
+                <Text style={styles.selectedSessionDetails}>Kelas {selectedSession.kelasId}</Text>
                 <Text style={styles.selectedSessionDetails}>
-                  {selectedSession.judulModul} · Kelas {selectedSession.kelas}
+                  {selectedSession.tanggal}, {selectedSession.waktuMulai} - {selectedSession.waktuSelesai}
                 </Text>
-                <Text style={styles.selectedSessionDetails}>
-                  {selectedSession.tanggal}, {selectedSession.waktu} · {selectedSession.ruangan}
-                </Text>
+                <Text style={styles.selectedSessionDetails}>Ruangan: {selectedSession.ruangan}</Text>
               </View>
               <StatusBadge status={selectedSession.status} />
-              {selectedSession.status !== 'belum_dibuka' ? (
+              {!isLoadingAttendances && selectedSession.status !== STATUS_SESI.BELUM ? (
                 <View style={styles.countContainer}>
-                  <Text style={[styles.countValue, styles.countValueSmall]}>
-                    {recapItems.length} / {totalStudents}
-                  </Text>
+                  <Text style={[styles.countValue, styles.countValueSmall]}>{attendanceRows.length}</Text>
                   <Text style={styles.countLabel}>praktikan hadir</Text>
                 </View>
               ) : null}
@@ -129,21 +266,22 @@ export default function RecapScreen() {
         </View>
       }
       ListEmptyComponent={
-        currentUser.role !== 'asisten' ? (
-          <EmptyState
-            title="Fitur khusus asisten"
-            message="Pilih identitas asisten untuk melihat rekap kehadiran."
-          />
+        isLoadingSessions ? (
+          <LoadingState message="Memuat sesi aktif..." />
         ) : sessions.length === 0 ? (
           <EmptyState
             title="Belum ada sesi yang ditugaskan"
             message="Sesi yang ditugaskan kepadamu akan muncul di sini."
           />
-        ) : selectedSession?.status === 'belum_dibuka' ? (
+        ) : selectedSession?.status === STATUS_SESI.BELUM ? (
           <EmptyState
             title="Sesi belum dibuka"
             message="Rekap kehadiran tersedia setelah sesi dibuka."
           />
+        ) : isLoadingAttendances ? (
+          <LoadingState message="Memuat rekap kehadiran..." />
+        ) : attendanceError ? (
+          <EmptyState title="Tidak dapat memuat rekap" message={attendanceError} />
         ) : (
           <EmptyState
             title="Belum ada praktikan yang hadir"
@@ -151,6 +289,18 @@ export default function RecapScreen() {
           />
         )
       }
+      renderItem={({ item }) => (
+        <View style={styles.attendanceCard}>
+          <View style={styles.studentInfo}>
+            <Text style={styles.studentName}>{item.nama}</Text>
+            <Text style={styles.studentNim}>NIM: {item.nim}</Text>
+          </View>
+          <View style={styles.timeContainer}>
+            <Text style={styles.timeLabel}>Waktu hadir</Text>
+            <Text style={styles.timeValue}>{item.waktuTampil}</Text>
+          </View>
+        </View>
+      )}
     />
   );
 }
@@ -160,6 +310,19 @@ const styles = StyleSheet.create({
   header: { gap: 8, marginBottom: 8 },
   title: { fontSize: 22, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
   subtitle: { fontSize: 14, lineHeight: 20, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
+  feedback: {
+    marginTop: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderRadius: 10,
+    backgroundColor: COLORS.card,
+  },
+  errorFeedback: { borderColor: COLORS.danger },
+  feedbackText: {
+    fontSize: 14,
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    color: COLORS.text,
+  },
   sessionSelector: { gap: 8, paddingVertical: 8 },
   sessionOption: {
     width: 190,

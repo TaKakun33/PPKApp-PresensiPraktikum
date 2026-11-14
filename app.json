@@ -43,7 +43,10 @@
       ],
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
-      "expo-dev-client"
+      "expo-dev-client",
+      "expo-image",
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -22,7 +22,7 @@ export type AiResult = {
   reason?: string;
 };
 
-// ─── pembuatan model ──────────────────────────────────────────────────────────
+// --- pembuatan model ---------------------------------------------------------
 
 // Dibuat sekali di luar fungsi supaya tidak dibuat ulang setiap pengajuan izin.
 // createSentimentClassifier melempar error jika format model tidak didukung,
