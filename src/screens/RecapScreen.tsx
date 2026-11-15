@@ -1,83 +1,27 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { STATUS_IZIN, STATUS_SESI } from '../lib/constants';
+import { STATUS_SESI } from '../lib/constants';
 import type { Attendance, ClassDoc, LeaveRequest, Profile, Session } from '../lib/types';
-import {
-  checkInManual,
-  resetIzin,
-  resetPresensi,
-} from '../services/attendanceService';
 import { subscribeClass, subscribePeserta } from '../services/classService';
 import {
   subscribeAttendances,
   subscribeLeaveRequestsForAsisten,
   subscribeSessions,
 } from '../services/sessionService';
-import ConfirmModal from '../components/ConfirmModal';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';
-import PrimaryButton from '../components/PrimaryButton';
 import ScreenHeader from '../components/ScreenHeader';
 import StatusBadge from '../components/StatusBadge';
 import { colors, font, layout, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
-import { formatTanggalJam } from '../utils/format';
+import {
+  REKAP_LABEL,
+  buildRekap,
+  toDateFromValue,
+  waktuSesiLewat,
+} from '../utils/rekap';
 import { useNamaKelas } from '../hooks/useNamaKelas';
-
-function toDateFromValue(value: unknown): Date | null {
-  if (!value) return null;
-
-  if (typeof value === 'string') {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  }
-
-  if (typeof value === 'number') {
-    return new Date(value);
-  }
-
-  if (typeof value === 'object') {
-    const maybeDate = value as { toDate?: () => Date; seconds?: number; nanoseconds?: number };
-    if (typeof maybeDate.toDate === 'function') {
-      return maybeDate.toDate();
-    }
-
-    if (typeof maybeDate.seconds === 'number') {
-      return new Date(maybeDate.seconds * 1000);
-    }
-  }
-
-  return null;
-}
-
-function normalizeTimestamp(value: unknown): string {
-  const date = toDateFromValue(value);
-  if (!date) return '—';
-  return formatTanggalJam(date.toISOString());
-}
-
-type RekapStatus = 'hadir' | 'izin' | 'belum' | 'tidak';
-
-type RekapRow = {
-  key: string;
-  nama: string;
-  nim: string;
-  status: RekapStatus;
-  waktuTampil: string;
-  waktuMs: number;
-  /** Presensi dicatat manual oleh asisten (bukan presensi sendiri oleh praktikan). */
-  manual: boolean;
-  /** Dokumen izin ajuan praktikan di sesi ini (status apa pun), atau null. */
-  leave: LeaveRequest | null;
-};
-
-const REKAP_LABEL: Record<RekapStatus, string> = {
-  hadir: 'Hadir',
-  izin: 'Izin',
-  belum: 'Belum hadir',
-  tidak: 'Tidak hadir',
-};
 
 /**
  * Urutan pilihan sesi: yang masih berjalan di depan.
@@ -96,74 +40,6 @@ function urutkanSesiRekap(items: Session[]): Session[] {
     const waktu = `${a.tanggal} ${a.waktuMulai}`.localeCompare(`${b.tanggal} ${b.waktuMulai}`);
     return a.status === STATUS_SESI.DITUTUP ? -waktu : waktu;
   });
-}
-
-const REKAP_ORDER: Record<RekapStatus, number> = { hadir: 0, izin: 1, belum: 2, tidak: 3 };
-
-/** Sesi dianggap sudah lewat waktunya jika tanggal + waktuSelesai (jam lokal) sudah terlewati. */
-function waktuSesiLewat(session: Session | null, now: number): boolean {
-  if (!session) return false;
-  const tgl = /^(\d{4})-(\d{2})-(\d{2})$/.exec(session.tanggal ?? '');
-  const jam = /^(\d{1,2}):(\d{2})$/.exec((session.waktuSelesai ?? '').replace('.', ':'));
-  if (!tgl || !jam) return false;
-  const akhir = new Date(Number(tgl[1]), Number(tgl[2]) - 1, Number(tgl[3]), Number(jam[1]), Number(jam[2]));
-  return now > akhir.getTime();
-}
-
-/**
- * Gabungkan peserta kelas + presensi + izin menjadi satu daftar rekap.
- * Prioritas status: Hadir > Izin (hanya yang DITERIMA) > Tidak hadir (sesi selesai) > Belum hadir.
- * "Tidak hadir" tidak disimpan di database; ia hanya hasil perhitungan saat sesi sudah ditutup atau
- * waktunya lewat dan praktikan tidak punya presensi maupun izin diterima.
- * Praktikan yang tidak ada di daftar peserta tetap tampil jika sudah presensi.
- */
-function buildRekap(
-  peserta: Profile[],
-  attendances: Attendance[],
-  izinSesi: LeaveRequest[],
-  sesiSelesai: boolean
-): RekapRow[] {
-  const hadirByUser = new Map(attendances.map((a) => [a.userId, a]));
-  const izinByUser = new Map(izinSesi.map((l) => [l.userId, l]));
-  const rows = new Map<string, RekapRow>();
-
-  for (const p of peserta) {
-    const att = hadirByUser.get(p.id);
-    const leave = izinByUser.get(p.id) ?? null;
-    const waktu = att ? toDateFromValue(att.waktuHadir) : null;
-    const izinDiterima = leave?.status === STATUS_IZIN.DITERIMA;
-    rows.set(p.id, {
-      key: p.id,
-      nama: p.nama,
-      nim: p.nim ?? '',
-      status: att ? 'hadir' : izinDiterima ? 'izin' : sesiSelesai ? 'tidak' : 'belum',
-      waktuTampil: att ? normalizeTimestamp(att.waktuHadir) : '—',
-      waktuMs: waktu?.getTime() ?? Number.MAX_SAFE_INTEGER,
-      manual: att?.manual === true,
-      leave,
-    });
-  }
-
-  for (const att of attendances) {
-    if (rows.has(att.userId)) continue;
-    const waktu = toDateFromValue(att.waktuHadir);
-    rows.set(att.userId, {
-      key: att.userId,
-      nama: att.nama || '(tanpa nama)',
-      nim: att.nim ?? '',
-      status: 'hadir',
-      waktuTampil: normalizeTimestamp(att.waktuHadir),
-      waktuMs: waktu?.getTime() ?? Number.MAX_SAFE_INTEGER,
-      manual: att.manual === true,
-      leave: izinByUser.get(att.userId) ?? null,
-    });
-  }
-
-  return [...rows.values()].sort(
-    (a, b) =>
-      REKAP_ORDER[a.status] - REKAP_ORDER[b.status] ||
-      (a.status === 'hadir' ? a.waktuMs - b.waktuMs : a.nama.localeCompare(b.nama))
-  );
 }
 
 export default function RecapScreen() {
@@ -187,12 +63,8 @@ export default function RecapScreen() {
     error: string | null;
   } | null>(null);
 
-  // Aksi manual asisten: aksi yang sedang dikonfirmasi, baris yang sedang disimpan, dan umpan balik.
-  const [aksi, setAksi] = useState<{ type: 'hadir' | 'reset'; row: RekapRow } | null>(null);
   // Jam sekarang, diperbarui berkala supaya status "Tidak hadir" muncul saat waktu sesi habis.
   const [now, setNow] = useState(() => Date.now());
-  const [savingKey, setSavingKey] = useState<string | null>(null);
-  const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30000);
@@ -359,71 +231,6 @@ export default function RecapScreen() {
     tidak: attendanceRows.filter((r) => r.status === 'tidak').length,
   };
 
-  // Tombol Hadir / Reset hanya aktif selagi sesi Dibuka (aturan bisnis + firestore.rules).
-  // Setelah sesi ditutup, rekap final.
-  const bisaUbahStatus = selectedSession?.status === STATUS_SESI.DIBUKA;
-
-  const pilihSesi = (sessionId: string) => {
-    setSelectedSessionId(sessionId);
-    setNotice(null);
-    setAksi(null);
-  };
-
-  const konfirmasiAksi = async () => {
-    const dipilih = aksi;
-    setAksi(null);
-    if (!dipilih || !selectedSession || !profileId || savingKey) return;
-
-    const { type, row } = dipilih;
-    const target = { id: row.key, nama: row.nama, nim: row.nim };
-
-    setSavingKey(row.key);
-    setNotice(null);
-
-    let result;
-    let berhasil = '';
-    if (type === 'hadir') {
-      result = await checkInManual(selectedSession, target, profileId);
-      berhasil = `${row.nama} dicatat hadir.`;
-    } else if (row.status === 'hadir') {
-      result = await resetPresensi(selectedSession, row.key, profileId);
-      berhasil = `Presensi ${row.nama} dikembalikan ke awal.`;
-    } else if (row.leave) {
-      result = await resetIzin(selectedSession, row.key, profileId);
-      berhasil = `Izin ${row.nama} dikembalikan ke awal.`;
-    } else {
-      result = { ok: false as const, message: 'Tidak ada status yang bisa direset.' };
-    }
-
-    setSavingKey(null);
-    setNotice(result.ok ? { type: 'success', message: berhasil } : { type: 'error', message: result.message });
-  };
-
-  const teksKonfirmasi = (() => {
-    if (!aksi) return { title: '', message: '', label: 'Ya' };
-    const { type, row } = aksi;
-    const orang = `${row.nama}${row.nim ? ` (${row.nim})` : ''}`;
-    const sesi = `"${selectedSession?.praktikum ?? ''}"`;
-    if (type === 'hadir') {
-      return {
-        title: 'Catat hadir?',
-        message: `${orang} akan dicatat hadir pada sesi ${sesi} dengan waktu saat ini.`,
-        label: 'Catat hadir',
-      };
-    }
-    return row.status === 'hadir'
-      ? {
-          title: 'Reset presensi?',
-          message: `Presensi ${orang} pada sesi ${sesi} akan dihapus. Praktikan bisa presensi sendiri lagi atau dicatat ulang.`,
-          label: 'Reset',
-        }
-      : {
-          title: 'Reset izin?',
-          message: `Izin yang diajukan ${orang} dikembalikan ke status Menunggu pada tab Izin.`,
-          label: 'Reset',
-        };
-  })();
-
   if (authLoading) {
     return (
       <View style={styles.screen}>
@@ -461,19 +268,7 @@ export default function RecapScreen() {
           <View style={styles.header}>
             <Text style={styles.subtitle}>
               Pilih sesi untuk melihat daftar praktikan yang hadir.
-              {bisaUbahStatus ? ' Praktikan yang belum hadir bisa dicatat hadir secara manual.' : ''}
             </Text>
-
-            {notice ? (
-              <View
-                style={[
-                  styles.feedback,
-                  notice.type === 'success' ? styles.successFeedback : styles.errorFeedback,
-                ]}
-              >
-                <Text style={styles.feedbackText}>{notice.message}</Text>
-              </View>
-            ) : null}
 
             {loadError ? (
               <View style={[styles.feedback, styles.errorFeedback]}>
@@ -495,7 +290,7 @@ export default function RecapScreen() {
                       accessibilityRole="button"
                       accessibilityLabel={`${session.praktikum}, ${labelKelas(session.kelasId)}, ${session.tanggal}`}
                       accessibilityState={{ selected }}
-                      onPress={() => pilihSesi(session.id)}
+                      onPress={() => setSelectedSessionId(session.id)}
                       style={({ pressed }) => [
                         styles.sessionOption,
                         selected && styles.sessionOptionSelected,
@@ -593,7 +388,6 @@ export default function RecapScreen() {
           )
         }
         renderItem={({ item }) => {
-          const sibuk = savingKey !== null;
           return (
             <View style={styles.attendanceCard}>
               <View style={styles.attendanceRow}>
@@ -622,46 +416,9 @@ export default function RecapScreen() {
                 </View>
               </View>
 
-              {bisaUbahStatus ? (
-                <View style={styles.actionRow}>
-                  {item.status === 'hadir' || item.status === 'izin' ? (
-                    <PrimaryButton
-                      label="Reset"
-                      variant="secondary"
-                      size="sm"
-                      icon="refresh"
-                      loading={savingKey === item.key}
-                      disabled={sibuk}
-                      onPress={() => setAksi({ type: 'reset', row: item })}
-                      accessibilityLabel={`Reset status ${item.nama}`}
-                      style={styles.actionButton}
-                    />
-                  ) : (
-                    <PrimaryButton
-                      label="Hadir"
-                      size="sm"
-                      icon="checkmark"
-                      loading={savingKey === item.key}
-                      disabled={sibuk}
-                      onPress={() => setAksi({ type: 'hadir', row: item })}
-                      accessibilityLabel={`Catat ${item.nama} hadir`}
-                      style={styles.actionButton}
-                    />
-                  )}
-                </View>
-              ) : null}
             </View>
           );
         }}
-      />
-
-      <ConfirmModal
-        visible={aksi !== null}
-        title={teksKonfirmasi.title}
-        message={teksKonfirmasi.message}
-        confirmLabel={teksKonfirmasi.label}
-        onConfirm={konfirmasiAksi}
-        onCancel={() => setAksi(null)}
       />
     </View>
   );
@@ -686,7 +443,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
   },
   errorFeedback: { borderColor: colors.danger, backgroundColor: colors.dangerTint },
-  successFeedback: { borderColor: colors.success, backgroundColor: colors.successTint },
   feedbackText: { fontSize: 13, lineHeight: 19, fontFamily: font.medium, color: colors.text },
   sessionSelector: { gap: 8, paddingVertical: 4 },
   sessionOption: {
@@ -742,14 +498,6 @@ const styles = StyleSheet.create({
   countValue: { fontSize: 22, fontFamily: font.extraBold, color: colors.primary },
   countLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.textSecondary },
   attendanceRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  actionButton: { flex: 1, minHeight: 40 },
   attendanceCard: {
     gap: 10,
     padding: 14,

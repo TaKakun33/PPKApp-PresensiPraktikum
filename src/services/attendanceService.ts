@@ -1,11 +1,11 @@
 // Presensi (SRS presensi). SATU-SATUNYA jalur menulis presensi:
 //   - checkIn        : praktikan presensi sendiri.
-//   - checkInManual  : asisten pengampu mencatat presensi praktikan secara manual.
+//   - checkInManual  : asisten pengampu mencatat presensi praktikan.
 //   - resetPresensi / resetIzin : asisten mengembalikan status Hadir / Izin praktikan ke awal di Rekap. "Tidak hadir" TIDAK disimpan: dihitung di layar Rekap
 //     untuk praktikan tanpa presensi dan tanpa izin setelah sesi ditutup / waktunya lewat.
 // Format dokumen (harus sama dengan firestore.rules dan tipe `Attendance`):
 //   attendances/{sessionId}_{uid} = { sessionId, kelasId, userId, nama, nim, waktuHadir }
-//   Presensi manual menambah dua field: { manual: true, dicatatOleh: <uid asisten> }
+//   Presensi oleh asisten menambah dua field: { manual: true, dicatatOleh: <uid asisten> }
 // - ID deterministik + rules `update/delete: false` => satu presensi per praktikan per sesi, ditegakkan SERVER.
 // - Rules juga memeriksa status sesi `dibuka` saat commit, jadi sesi yang ditutup di tengah proses tetap ditolak.
 // - Transaksi di bawah hanya untuk memberi pesan error yang jelas; keamanan tetap di rules.
@@ -128,7 +128,7 @@ export async function checkIn(
 export type ManualCheckInTarget = { id: string; nama: string; nim?: string };
 
 /**
- * Asisten pengampu mencatat presensi seorang praktikan secara manual (mis. HP praktikan bermasalah).
+ * Asisten pengampu mencatat presensi seorang praktikan (mis. HP praktikan bermasalah).
  * - Hanya saat sesi Dibuka dan hanya untuk peserta kelas sesi tersebut (ditegakkan firestore.rules).
  * - ID dokumen sama dengan presensi biasa, jadi satu praktikan tetap hanya satu presensi per sesi:
  *   mencatat praktikan yang sudah hadir ditolak server (dokumen ada = update = ditolak).
@@ -147,7 +147,7 @@ export async function checkInManual(
     return { ok: false, message: "Hanya asisten pengampu sesi ini yang dapat mencatat presensi." };
   }
   if (session.status !== STATUS_SESI.DIBUKA) {
-    return { ok: false, message: "Presensi manual hanya dapat dicatat saat sesi sedang dibuka." };
+    return { ok: false, message: "Presensi hanya dapat dicatat saat sesi sedang dibuka." };
   }
 
   try {

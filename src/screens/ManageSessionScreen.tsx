@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 
@@ -181,7 +182,7 @@ export default function ManageSessionScreen() {
         ListHeaderComponent={
           <View style={styles.header}>
             <Text style={styles.subtitle}>
-              Buka atau tutup sesi praktikum yang ditugaskan kepadamu.
+              Buka atau tutup sesi praktikum yang ditugaskan kepadamu. Presensi tersedia selama sesi dibuka.
             </Text>
 
             {loadError ? (
@@ -262,13 +263,23 @@ export default function ManageSessionScreen() {
                 ) : null}
               </>
             ) : session.status === STATUS_SESI.DIBUKA ? (
-              <PrimaryButton
-                label="Tutup sesi"
-                variant="secondary"
-                onPress={() => requestAction(session.id, 'close')}
-                disabled={submitting}
-                accessibilityLabel={`Tutup sesi ${session.praktikum}`}
-              />
+              <View style={styles.actionRow}>
+                <PrimaryButton
+                  label="Presensi"
+                  onPress={() => router.push({ pathname: '/presensi-manual', params: { sessionId: session.id } })}
+                  disabled={submitting}
+                  accessibilityLabel={`Presensi sesi ${session.praktikum}`}
+                  style={styles.actionButton}
+                />
+                <PrimaryButton
+                  label="Tutup sesi"
+                  variant="secondary"
+                  onPress={() => requestAction(session.id, 'close')}
+                  disabled={submitting}
+                  accessibilityLabel={`Tutup sesi ${session.praktikum}`}
+                  style={styles.actionButton}
+                />
+              </View>
             ) : null}
           </View>
         )}
@@ -300,6 +311,8 @@ const styles = StyleSheet.create({
   },
   header: { gap: 8, marginBottom: 4 },
   subtitle: { ...text.body },
+  actionRow: { flexDirection: 'row', gap: 10 },
+  actionButton: { flex: 1 },
   lockHint: { ...text.caption, textAlign: 'center' },
   feedback: {
     padding: 12,

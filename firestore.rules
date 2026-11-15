@@ -248,7 +248,7 @@ service cloud.firestore {
     // --- attendances --------------------------------------------------------
     // SATU format dokumen (attendanceService.checkIn / checkInManual):
     //   ID = {sessionId}_{uid}, isi { sessionId, kelasId, userId, nama, nim, waktuHadir }
-    //   (presensi manual asisten menambah { manual: true, dicatatOleh })
+    //   (presensi oleh asisten menambah { manual: true, dicatatOleh })
     // ID deterministik + update/delete ditolak => satu presensi per praktikan per sesi,
     // ditegakkan server. Status sesi `dibuka` diperiksa saat commit, jadi tidak ada race
     // dengan penutupan sesi oleh asisten.
@@ -277,7 +277,7 @@ service cloud.firestore {
         && request.resource.data.nim == myProfile().get('nim', '')
         && request.resource.data.waktuHadir == request.time;
 
-      // Presensi MANUAL oleh asisten pengampu (attendanceService.checkInManual).
+      // Presensi oleh asisten pengampu (attendanceService.checkInManual).
       // Aturan yang sama seperti presensi sendiri (satu per praktikan per sesi, hanya saat sesi
       // `dibuka`, waktu = waktu server), ditambah: sesi milik asisten ini, praktikan terdaftar
       // sebagai peserta kelas sesi tersebut, nama/NIM sama dengan profil praktikan, dan ditandai
