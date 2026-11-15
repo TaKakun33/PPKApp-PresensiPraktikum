@@ -1,5 +1,5 @@
 // FILE MILIK PM - warna bersama supaya tampilan konsisten.
-import type { SessionStatus } from '../data/types';
+import type { StatusSesi } from '../lib/constants';
 
 export const COLORS = {
   // Core palette
@@ -36,13 +36,13 @@ export const COLORS = {
 };
 
 // Status disimpan sebagai kode; tampilkan ke pengguna lewat STATUS_LABEL.
-export const STATUS_LABEL: Record<SessionStatus, string> = {
+export const STATUS_LABEL: Record<StatusSesi, string> = {
   belum_dibuka: 'Belum Dibuka',
   dibuka: 'Dibuka',
   ditutup: 'Ditutup',
 };
 
-export const STATUS_COLORS: Record<SessionStatus, { bg: string; text: string }> = {
+export const STATUS_COLORS: Record<StatusSesi, { bg: string; text: string }> = {
   belum_dibuka: { bg: '#F5F5F7', text: '#6B6B70' },
   dibuka: { bg: '#E8F2FF', text: '#007AFF' },
   ditutup: { bg: '#F5F5F7', text: '#AAAAAA' },

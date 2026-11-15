@@ -30,8 +30,6 @@ import { db } from "../lib/firebase";
 import type { Attendance, LeaveRequest, Profile, Session } from "../lib/types";
 import { formatTanggal } from "../utils/format";
 
-export type LeaveClassifier = (alasan: string) => Promise<string | null> | string | null;
-
 // ─── helper ───────────────────────────────────────────────────────────────────
 function mapDoc<T>(snap: QueryDocumentSnapshot | DocumentSnapshot): T {
   return { id: snap.id, ...(snap.data() ?? {}) } as T;
@@ -88,13 +86,22 @@ export function subscribeSessions(
     return () => {};
   }
 
-  // Batas maksimal klausa `in` Firestore adalah 30 item.
-  const q = query(collection(db, "sessions"), where("kelasId", "in", kelasIds.slice(0, 30)));
-  return onSnapshot(
-    q,
-    (snap: QuerySnapshot) => onData(snap.docs.map((d) => mapDoc<Session>(d))),
-    (err: FirestoreError) => onError?.(err)
+  // Batas klausa `in` Firestore adalah 30 item: kelas dipecah per 30 lalu hasilnya digabung.
+  const potongan: string[][] = [];
+  for (let i = 0; i < kelasIds.length; i += 30) potongan.push(kelasIds.slice(i, i + 30));
+
+  const hasil = new Map<number, Session[]>();
+  const unsubs = potongan.map((ids, i) =>
+    onSnapshot(
+      query(collection(db, "sessions"), where("kelasId", "in", ids)),
+      (snap: QuerySnapshot) => {
+        hasil.set(i, snap.docs.map((d) => mapDoc<Session>(d)));
+        if (hasil.size === potongan.length) onData([...hasil.values()].flat());
+      },
+      (err: FirestoreError) => onError?.(err)
+    )
   );
+  return () => unsubs.forEach((u) => u());
 }
 
 /** Ambil satu sesi (satu kali, bukan listener). */
@@ -150,7 +157,26 @@ export function subscribeAttendances(
   onData: (attendances: Attendance[]) => void,
   onError?: (e: Error) => void
 ): () => void {
-  return subscribeCollectionWhere<Attendance>("attendances", "sessionId", sessionId, onData, onError);
+  return subscribeCollectionWhere<Attendance>(
+    "attendances",
+    "sessionId",
+    sessionId,
+    (items) => onData(items.map(normalisasiPresensi)),
+    onError
+  );
+}
+
+/**
+ * Dokumen presensi lama (sebelum format disatukan) memakai `name` / `checkedInAt`.
+ * Dinormalkan ke `nama` / `waktuHadir` supaya rekap tetap terbaca untuk data lama.
+ */
+export function normalisasiPresensi(item: Attendance): Attendance {
+  const legacy = item as Attendance & { name?: string; checkedInAt?: unknown };
+  return {
+    ...item,
+    nama: item.nama ?? legacy.name ?? "",
+    waktuHadir: item.waktuHadir ?? legacy.checkedInAt ?? null,
+  };
 }
 
 /** Real-time listener presensi milik satu praktikan (untuk riwayat). */
@@ -159,44 +185,16 @@ export function subscribeMyAttendances(
   onData: (attendances: Attendance[]) => void,
   onError?: (e: Error) => void
 ): () => void {
-  return subscribeCollectionWhere<Attendance>("attendances", "userId", userId, onData, onError);
+  return subscribeCollectionWhere<Attendance>(
+    "attendances",
+    "userId",
+    userId,
+    (items) => onData(items.map(normalisasiPresensi)),
+    onError
+  );
 }
 
-/**
- * Simpan presensi ke Firestore. ID deterministik: att-{sessionId}-{userId}.
- * Melempar error jika sudah presensi pada sesi yang sama (duplikat dicegah).
- */
-export async function checkIn(
-  profile: Profile,
-  session: Session
-): Promise<Attendance> {
-  if (profile.role !== "praktikan") {
-    throw new Error("Hanya praktikan yang dapat melakukan presensi.");
-  }
-  if (session.status !== "dibuka") {
-    throw new Error(
-      session.status === "belum_dibuka"
-        ? "Sesi belum dibuka oleh asisten."
-        : "Sesi sudah ditutup."
-    );
-  }
-
-  const attId = `att-${session.id}-${profile.id}`;
-  const ref = doc(db, "attendances", attId);
-  const existing = await getDoc(ref);
-  if (existing.exists()) throw new Error("Kamu sudah presensi pada sesi ini.");
-
-  const attendance: Omit<Attendance, "id"> = {
-    sessionId: session.id,
-    kelasId: session.kelasId,
-    userId: profile.id,
-    nama: profile.nama,
-    nim: profile.nim ?? "",
-    waktuHadir: serverTimestamp(),
-  };
-  await setDoc(ref, attendance);
-  return { id: attId, ...attendance };
-}
+// Catatan: penulisan presensi HANYA lewat attendanceService.checkIn (satu format dokumen).
 
 // ─── IZIN ─────────────────────────────────────────────────────────────────────
 
@@ -224,65 +222,7 @@ export function subscribeLeaveRequestsForAsisten(
   );
 }
 
-async function runLocalClassifier(
-  alasan: string,
-  classifyReason?: LeaveClassifier
-): Promise<{ kategoriAI: string | null; aiStatus: "berhasil" | "gagal" }> {
-  if (!classifyReason) return { kategoriAI: null, aiStatus: "gagal" };
-
-  try {
-    const raw = await classifyReason(alasan);
-    const kategoriAI = raw?.trim() || null;
-    return {
-      kategoriAI,
-      aiStatus: kategoriAI ? "berhasil" : "gagal",
-    };
-  } catch {
-    // Model AI lokal gagal — pengajuan izin tetap tersimpan tanpa kategori.
-    return { kategoriAI: null, aiStatus: "gagal" };
-  }
-}
-
-/**
- * Ajukan izin dari praktikan. Menyimpan ke Firestore + menjalankan klasifikasi AI lokal (opsional).
- * Model AI hanya memberi kategori — tidak menentukan diterima/ditolak.
- * @param classifyReason Fungsi klasifikasi AI lokal yang sudah dipersiapkan.
- */
-export async function submitLeaveRequest(
-  profile: Profile,
-  session: Session,
-  alasan: string,
-  classifyReason?: LeaveClassifier
-): Promise<LeaveRequest> {
-  if (profile.role !== "praktikan") {
-    throw new Error("Hanya praktikan yang dapat mengajukan izin.");
-  }
-
-  const trimmedReason = alasan.trim();
-  if (!trimmedReason) {
-    throw new Error("Alasan izin harus diisi.");
-  }
-
-  const docRef = doc(collection(db, "leaveRequests"));
-  const { kategoriAI, aiStatus } = await runLocalClassifier(trimmedReason, classifyReason);
-
-  const leave: Omit<LeaveRequest, "id"> = {
-    sessionId: session.id,
-    kelasId: session.kelasId,
-    asistenId: session.asistenId,
-    praktikum: session.praktikum,
-    userId: profile.id,
-    nama: profile.nama,
-    nim: profile.nim ?? "",
-    alasan: trimmedReason,
-    kategoriAI,
-    aiStatus,
-    status: "menunggu",
-  };
-
-  await setDoc(docRef, leave);
-  return { id: docRef.id, ...leave };
-}
+// Pengajuan izin (sisi praktikan) ada di leaveService.submitLeave: ID dokumen deterministik + klasifikasi AI.
 
 /**
  * Asisten menerima atau menolak pengajuan izin.
@@ -307,7 +247,7 @@ export async function updateLeaveStatus(
 
   await updateDoc(ref, {
     status,
-    catatanAsisten: catatanAsisten?.trim() ?? "",
+    catatanAsisten: (catatanAsisten ?? "").trim().slice(0, 500),
   });
 }
 
@@ -381,6 +321,12 @@ async function getEditableSession(sessionId: string, asistenId: string) {
 /** Tambah sesi baru (status Belum Dibuka). Mengembalikan id sesi. */
 export async function createSession(asistenId: string, input: SessionInput): Promise<string> {
   const data = validasiSesi(input);
+  const hariIni = new Date();
+  const awalHariIni = new Date(hariIni.getFullYear(), hariIni.getMonth(), hariIni.getDate());
+  const [y, m, d] = data.tanggal.split("-").map(Number);
+  if (new Date(y, m - 1, d) < awalHariIni) {
+    throw new Error("Tanggal sesi tidak boleh sebelum hari ini.");
+  }
   await pastikanKelasMilik(data.kelasId, asistenId);
 
   const ref = doc(collection(db, "sessions"));

@@ -181,9 +181,9 @@ src/
 │   ├── EmptyState        # Tampilan kosong generik
 │   ├── LoadingState      # Indikator loading (Sprint 2)
 │   └── ErrorState        # Tampilan error (Sprint 2)
-├── context/              # Store bersama (AppContext / AuthContext)
-├── data/                 # Tipe data dan data dummy
+├── context/              # AuthContext (Firebase Auth + profil real-time)
 ├── constants/            # Warna, konstanta tampilan, dan konstanta status
+├── hooks/                # Custom hook bersama (useNamaKelas, useScrollKeFieldFokus)
 ├── utils/                # Helper format waktu
 ├── navigation/           # Konfigurasi navigator per peran (Sprint 2)
 └── services/             # Lapisan akses data ke Firestore & API AI (Sprint 2)

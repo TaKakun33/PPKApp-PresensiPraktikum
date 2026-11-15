@@ -1,3 +1,9 @@
+// Presensi praktikan (SRS presensi). SATU-SATUNYA jalur menulis presensi.
+// Format dokumen (harus sama dengan firestore.rules dan tipe `Attendance`):
+//   attendances/{sessionId}_{uid} = { sessionId, kelasId, userId, nama, nim, waktuHadir }
+// - ID deterministik + rules `update/delete: false` => satu presensi per praktikan per sesi, ditegakkan SERVER.
+// - Rules juga memeriksa status sesi `dibuka` saat commit, jadi sesi yang ditutup di tengah proses tetap ditolak.
+// - Transaksi di bawah hanya untuk memberi pesan error yang jelas; keamanan tetap di rules.
 import {
   doc,
   onSnapshot,
@@ -7,8 +13,10 @@ import {
   type FirestoreError,
 } from "@react-native-firebase/firestore";
 
+import { STATUS_SESI } from "../lib/constants";
 import { db } from "../lib/firebase";
 import type { Session } from "../lib/types";
+import { getErrorCode, isTimeoutError, withTimeout } from "./serviceUtils";
 
 export type CheckInUser = {
   uid?: string;
@@ -22,12 +30,19 @@ export type CheckInResult =
   | { ok: true }
   | { ok: false; message: string };
 
+const CHECKIN_TIMEOUT_MS = 12000;
+
+/** ID dokumen presensi. Harus sama dengan pola di firestore.rules. */
+export function attendanceDocId(sessionId: string, uid: string): string {
+  return `${sessionId}_${uid}`;
+}
+
 export async function checkIn(
   sessionId: string,
   user: CheckInUser
 ): Promise<CheckInResult> {
   const uid = user?.uid || user?.id;
-  const name = user?.name || user?.nama || "";
+  const nama = (user?.nama || user?.name || "").trim();
   const nim = user?.nim || "";
 
   if (!sessionId || !uid) {
@@ -36,33 +51,36 @@ export async function checkIn(
 
   try {
     const sessionRef = doc(db, "sessions", sessionId);
-    const attendanceRef = doc(db, "attendances", `${sessionId}_${uid}`);
+    const attendanceRef = doc(db, "attendances", attendanceDocId(sessionId, uid));
 
-    await runTransaction(db, async (transaction: any) => {
-      const sessionSnap = await transaction.get(sessionRef);
-      if (!sessionSnap.exists()) {
-        throw new Error("SESI_NOT_FOUND");
-      }
+    await withTimeout(
+      runTransaction(db, async (transaction: any) => {
+        const sessionSnap = await transaction.get(sessionRef);
+        if (!sessionSnap.exists()) {
+          throw new Error("SESI_NOT_FOUND");
+        }
 
-      const sessionData = sessionSnap.data() as Partial<Session> | undefined;
-      const statusStr = String(sessionData?.status ?? "");
-      if (statusStr !== "dibuka" && statusStr !== "Dibuka") {
-        throw new Error("SESI_NOT_OPEN");
-      }
+        const sessionData = sessionSnap.data() as Partial<Session> | undefined;
+        if (sessionData?.status !== STATUS_SESI.DIBUKA) {
+          throw new Error("SESI_NOT_OPEN");
+        }
 
-      const attSnap = await transaction.get(attendanceRef);
-      if (attSnap.exists()) {
-        throw new Error("ALREADY_ATTENDED");
-      }
+        const attSnap = await transaction.get(attendanceRef);
+        if (attSnap.exists()) {
+          throw new Error("ALREADY_ATTENDED");
+        }
 
-      transaction.set(attendanceRef, {
-        sessionId,
-        userId: uid,
-        name,
-        nim,
-        checkedInAt: serverTimestamp(),
-      });
-    });
+        transaction.set(attendanceRef, {
+          sessionId,
+          kelasId: sessionData?.kelasId ?? "",
+          userId: uid,
+          nama,
+          nim,
+          waktuHadir: serverTimestamp(),
+        });
+      }),
+      CHECKIN_TIMEOUT_MS
+    );
 
     return { ok: true };
   } catch (error: any) {
@@ -76,9 +94,25 @@ export async function checkIn(
     if (msg.includes("ALREADY_ATTENDED")) {
       return { ok: false, message: "Kamu sudah melakukan presensi pada sesi ini." };
     }
+
+    const code = getErrorCode(error);
+    if (isTimeoutError(error) || code === "firestore/unavailable" || code === "firestore/deadline-exceeded") {
+      return {
+        ok: false,
+        message:
+          "Koneksi bermasalah. Presensi mungkin belum tercatat; periksa internet lalu cek status presensimu.",
+      };
+    }
+    if (code === "firestore/permission-denied") {
+      return {
+        ok: false,
+        message:
+          "Presensi ditolak: sesi mungkin baru saja ditutup, atau kamu bukan peserta kelas ini.",
+      };
+    }
     return {
       ok: false,
-      message: "Gagal melakukan presensi. Periksa koneksi internet atau izin akun kamu.",
+      message: "Gagal melakukan presensi. Periksa koneksi internet lalu coba lagi.",
     };
   }
 }
@@ -100,7 +134,7 @@ export function subscribeCheckInState(
   let currentAttended = false;
 
   const sessionRef = doc(db, "sessions", sessionId);
-  const attRef = doc(db, "attendances", `${sessionId}_${uid}`);
+  const attRef = doc(db, "attendances", attendanceDocId(sessionId, uid));
 
   const emitIfReady = () => {
     if (sessionReady && attReady) {

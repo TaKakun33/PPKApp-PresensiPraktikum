@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { STATUS_SESI } from '../lib/constants';
-import type { Attendance, Session } from '../lib/types';
-import { subscribeAttendances, subscribeSessions } from '../services/sessionService';
+import { STATUS_IZIN, STATUS_SESI } from '../lib/constants';
+import type { Attendance, ClassDoc, LeaveRequest, Profile, Session } from '../lib/types';
+import { subscribeClass, subscribePeserta } from '../services/classService';
+import {
+  subscribeAttendances,
+  subscribeLeaveRequestsForAsisten,
+  subscribeSessions,
+} from '../services/sessionService';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';
 import ScreenHeader from '../components/ScreenHeader';
@@ -11,6 +16,7 @@ import StatusBadge from '../components/StatusBadge';
 import { colors, font, layout, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { formatTanggalJam } from '../utils/format';
+import { useNamaKelas } from '../hooks/useNamaKelas';
 
 function toDateFromValue(value: unknown): Date | null {
   if (!value) return null;
@@ -44,8 +50,75 @@ function normalizeTimestamp(value: unknown): string {
   return formatTanggalJam(date.toISOString());
 }
 
+type RekapStatus = 'hadir' | 'izin' | 'belum';
+
+type RekapRow = {
+  key: string;
+  nama: string;
+  nim: string;
+  status: RekapStatus;
+  waktuTampil: string;
+  waktuMs: number;
+};
+
+const REKAP_LABEL: Record<RekapStatus, string> = {
+  hadir: 'Hadir',
+  izin: 'Izin',
+  belum: 'Belum hadir',
+};
+
+const REKAP_ORDER: Record<RekapStatus, number> = { hadir: 0, izin: 1, belum: 2 };
+
+/**
+ * Gabungkan peserta kelas + presensi + izin yang DITERIMA menjadi satu daftar rekap.
+ * Presensi menang atas izin; praktikan yang tidak ada di daftar peserta tetap tampil jika sudah presensi.
+ */
+function buildRekap(
+  peserta: Profile[],
+  attendances: Attendance[],
+  izinDiterima: LeaveRequest[]
+): RekapRow[] {
+  const hadirByUser = new Map(attendances.map((a) => [a.userId, a]));
+  const izinUsers = new Set(izinDiterima.map((l) => l.userId));
+  const rows = new Map<string, RekapRow>();
+
+  for (const p of peserta) {
+    const att = hadirByUser.get(p.id);
+    const waktu = att ? toDateFromValue(att.waktuHadir) : null;
+    rows.set(p.id, {
+      key: p.id,
+      nama: p.nama,
+      nim: p.nim ?? '',
+      status: att ? 'hadir' : izinUsers.has(p.id) ? 'izin' : 'belum',
+      waktuTampil: att ? normalizeTimestamp(att.waktuHadir) : '—',
+      waktuMs: waktu?.getTime() ?? Number.MAX_SAFE_INTEGER,
+    });
+  }
+
+  for (const att of attendances) {
+    if (rows.has(att.userId)) continue;
+    const waktu = toDateFromValue(att.waktuHadir);
+    rows.set(att.userId, {
+      key: att.userId,
+      nama: att.nama || '(tanpa nama)',
+      nim: att.nim ?? '',
+      status: 'hadir',
+      waktuTampil: normalizeTimestamp(att.waktuHadir),
+      waktuMs: waktu?.getTime() ?? Number.MAX_SAFE_INTEGER,
+    });
+  }
+
+  return [...rows.values()].sort(
+    (a, b) =>
+      REKAP_ORDER[a.status] - REKAP_ORDER[b.status] ||
+      (a.status === 'hadir' ? a.waktuMs - b.waktuMs : a.nama.localeCompare(b.nama))
+  );
+}
+
 export default function RecapScreen() {
   const { profile, role, loading: authLoading } = useAuth();
+  const profileId = profile?.id;
+  const { labelKelas } = useNamaKelas();
   const [sessionState, setSessionState] = useState<{
     profileId: string;
     sessions: Session[];
@@ -53,6 +126,9 @@ export default function RecapScreen() {
     error: string | null;
   } | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [kelasState, setKelasState] = useState<{ kelasId: string; cls: ClassDoc | null } | null>(null);
+  const [pesertaState, setPesertaState] = useState<{ key: string; items: Profile[] } | null>(null);
+  const [izinAll, setIzinAll] = useState<LeaveRequest[]>([]);
   const [attendanceResult, setAttendanceResult] = useState<{
     sessionId: string;
     items: Attendance[];
@@ -91,7 +167,9 @@ export default function RecapScreen() {
     );
 
     return unsubscribe;
-  }, [profile, role]);
+    // profile berganti objek tiap snapshot profil; cukup bergantung pada id & peran.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileId, role]);
 
   const currentSessionState =
     sessionState && sessionState.profileId === profile?.id ? sessionState : null;
@@ -156,6 +234,40 @@ export default function RecapScreen() {
     };
   }, [selectedSessionKey]);
 
+  const selectedKelasId = selectedSession?.kelasId ?? null;
+
+  // Kelas sesi terpilih -> daftar peserta (untuk menghitung yang belum hadir).
+  useEffect(() => {
+    if (!selectedKelasId) return;
+    return subscribeClass(
+      selectedKelasId,
+      (cls) => setKelasState({ kelasId: selectedKelasId, cls }),
+      () => setKelasState({ kelasId: selectedKelasId, cls: null })
+    );
+  }, [selectedKelasId]);
+
+  const kelasAktif =
+    kelasState && kelasState.kelasId === selectedKelasId ? kelasState.cls : null;
+  const pesertaIds = kelasAktif?.pesertaIds ?? [];
+  const pesertaKey = `${selectedKelasId ?? ''}:${pesertaIds.join(',')}`;
+
+  useEffect(() => {
+    if (pesertaIds.length === 0) return;
+    return subscribePeserta(
+      pesertaIds,
+      (items) => setPesertaState({ key: pesertaKey, items }),
+      () => setPesertaState({ key: pesertaKey, items: [] })
+    );
+    // pesertaKey sudah mewakili isi pesertaIds.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pesertaKey]);
+
+  // Izin milik kelas-kelas asisten ini; yang dipakai hanya yang DITERIMA untuk sesi terpilih.
+  useEffect(() => {
+    if (!profileId || role !== 'asisten') return;
+    return subscribeLeaveRequestsForAsisten(profileId, setIzinAll, () => setIzinAll([]));
+  }, [profileId, role]);
+
   const currentAttendanceResult =
     attendanceResult && attendanceResult.sessionId === selectedSessionKey
       ? attendanceResult
@@ -165,10 +277,26 @@ export default function RecapScreen() {
     !!selectedSessionKey &&
     (!currentAttendanceResult || currentAttendanceResult.loading);
   const attendanceError = currentAttendanceResult?.error ?? null;
-  const attendanceRows = attendances.map((item) => ({
-    ...item,
-    waktuTampil: normalizeTimestamp(item.waktuHadir),
-  }));
+  const pesertaItems =
+    pesertaIds.length > 0 && pesertaState && pesertaState.key === pesertaKey
+      ? pesertaState.items
+      : [];
+  const izinDiterima = useMemo(
+    () =>
+      izinAll.filter(
+        (l) => l.sessionId === selectedSessionKey && l.status === STATUS_IZIN.DITERIMA
+      ),
+    [izinAll, selectedSessionKey]
+  );
+  const attendanceRows = useMemo(
+    () => buildRekap(pesertaItems, attendances, izinDiterima),
+    [pesertaItems, attendances, izinDiterima]
+  );
+  const jumlah = {
+    hadir: attendanceRows.filter((r) => r.status === 'hadir').length,
+    izin: attendanceRows.filter((r) => r.status === 'izin').length,
+    belum: attendanceRows.filter((r) => r.status === 'belum').length,
+  };
 
   if (authLoading) {
     return (
@@ -201,7 +329,7 @@ export default function RecapScreen() {
       <ScreenHeader title="Rekap" />
       <FlatList
         data={attendanceRows}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.key}
         contentContainerStyle={styles.content}
         ListHeaderComponent={
           <View style={styles.header}>
@@ -222,12 +350,12 @@ export default function RecapScreen() {
                 contentContainerStyle={styles.sessionSelector}
               >
                 {sessions.map((session) => {
-                  const selected = session.id === selectedSessionId;
+                  const selected = session.id === selectedSession?.id;
                   return (
                     <Pressable
                       key={session.id}
                       accessibilityRole="button"
-                      accessibilityLabel={`${session.praktikum}, kelas ${session.kelasId}, ${session.tanggal}`}
+                      accessibilityLabel={`${session.praktikum}, ${labelKelas(session.kelasId)}, ${session.tanggal}`}
                       accessibilityState={{ selected }}
                       onPress={() => setSelectedSessionId(session.id)}
                       style={({ pressed }) => [
@@ -251,7 +379,7 @@ export default function RecapScreen() {
                           selected && styles.sessionOptionTitleSelected,
                         ]}
                       >
-                        {session.kelasId} · {session.tanggal}
+                        {labelKelas(session.kelasId)} · {session.tanggal}
                       </Text>
                     </Pressable>
                   );
@@ -264,7 +392,7 @@ export default function RecapScreen() {
                 <View style={styles.selectedSessionTop}>
                   <View style={styles.selectedSessionInfo}>
                     <Text style={styles.selectedSessionTitle}>{selectedSession.praktikum}</Text>
-                    <Text style={styles.selectedSessionDetails}>Kelas {selectedSession.kelasId}</Text>
+                    <Text style={styles.selectedSessionDetails}>{labelKelas(selectedSession.kelasId)}</Text>
                   </View>
                   <StatusBadge status={selectedSession.status} />
                 </View>
@@ -274,8 +402,18 @@ export default function RecapScreen() {
                 <Text style={styles.selectedSessionDetails}>Ruangan: {selectedSession.ruangan}</Text>
                 {!isLoadingAttendances && selectedSession.status !== STATUS_SESI.BELUM ? (
                   <View style={styles.countContainer}>
-                    <Text style={styles.countValue}>{attendanceRows.length}</Text>
-                    <Text style={styles.countLabel}>praktikan hadir</Text>
+                    <View style={styles.countItem}>
+                      <Text style={styles.countValue}>{jumlah.hadir}</Text>
+                      <Text style={styles.countLabel}>hadir</Text>
+                    </View>
+                    <View style={styles.countItem}>
+                      <Text style={[styles.countValue, styles.countIzin]}>{jumlah.izin}</Text>
+                      <Text style={styles.countLabel}>izin</Text>
+                    </View>
+                    <View style={styles.countItem}>
+                      <Text style={[styles.countValue, styles.countBelum]}>{jumlah.belum}</Text>
+                      <Text style={styles.countLabel}>belum hadir</Text>
+                    </View>
                   </View>
                 ) : null}
               </View>
@@ -312,15 +450,23 @@ export default function RecapScreen() {
         renderItem={({ item }) => (
           <View style={styles.attendanceCard}>
             <View style={styles.studentBadge}>
-              <Text style={styles.studentInitial}>{item.nama?.trim().charAt(0).toUpperCase() || '?'}</Text>
+              <Text style={styles.studentInitial}>{item.nama.trim().charAt(0).toUpperCase() || '?'}</Text>
             </View>
             <View style={styles.studentInfo}>
               <Text style={styles.studentName}>{item.nama}</Text>
-              <Text style={styles.studentNim}>NIM: {item.nim}</Text>
+              <Text style={styles.studentNim}>NIM: {item.nim || '—'}</Text>
             </View>
             <View style={styles.timeContainer}>
-              <Text style={styles.timeLabel}>Waktu hadir</Text>
-              <Text style={styles.timeValue}>{item.waktuTampil}</Text>
+              <Text
+                style={[
+                  styles.statusText,
+                  item.status === 'hadir' && styles.statusHadir,
+                  item.status === 'izin' && styles.statusIzin,
+                ]}
+              >
+                {REKAP_LABEL[item.status]}
+              </Text>
+              {item.status === 'hadir' ? <Text style={styles.timeValue}>{item.waktuTampil}</Text> : null}
             </View>
           </View>
         )}
@@ -384,12 +530,18 @@ const styles = StyleSheet.create({
   countContainer: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 6,
+    gap: 18,
     marginTop: 4,
     paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
+  countItem: { flexDirection: 'row', alignItems: 'baseline', gap: 5 },
+  countIzin: { color: colors.warning },
+  countBelum: { color: colors.textSecondary },
+  statusText: { fontSize: 12, fontFamily: font.bold, color: colors.textSecondary, textAlign: 'right' },
+  statusHadir: { color: colors.success },
+  statusIzin: { color: colors.warning },
   countValue: { fontSize: 22, fontFamily: font.extraBold, color: colors.primary },
   countLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.textSecondary },
   attendanceCard: {

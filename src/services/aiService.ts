@@ -42,7 +42,13 @@ export type AiResult = {
   status: 'berhasil' | 'gagal';
   /** Alasan teknis singkat (untuk debugging / log), bukan untuk ditampilkan mentah. */
   reason?: string;
+  /** true jika model belum berstatus production (model EDOM = baseline riset). Tidak disimpan ke Firestore. */
+  eksperimental?: boolean;
 };
+
+/** Teks bantu untuk asisten: hasil AI hanya pendukung, keputusan tetap di tangan asisten. */
+export const CATATAN_AI =
+  'Prediksi otomatis (eksperimental, model sentimen). Hanya pendukung; keputusan tetap di tangan asisten.';
 
 // ─── pembuatan model ──────────────────────────────────────────────────────────
 
@@ -82,7 +88,7 @@ export async function classifyLeaveReason(alasan: string): Promise<AiResult> {
       return { kategori: null, status: 'gagal', reason: 'Kategori dari model tidak dikenali.' };
     }
 
-    return { kategori: hasil.label, status: 'berhasil' };
+    return { kategori: hasil.label, status: 'berhasil', eksperimental: hasil.experimental !== false };
   } catch (e) {
     return {
       kategori: null,

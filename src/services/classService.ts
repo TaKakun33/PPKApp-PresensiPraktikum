@@ -9,7 +9,6 @@ import {
   arrayUnion,
   collection,
   doc,
-  documentId,
   getDoc,
   getDocs,
   limit,
@@ -28,9 +27,6 @@ import { db } from '../lib/firebase';
 import type { ClassDoc, Profile } from '../lib/types';
 
 export type ClassInput = { namaKelas: string; praktikum: string };
-
-// Batas klausa `in` di Firestore.
-const BATAS_IN = 30;
 
 /** Ubah error Firestore menjadi pesan yang ramah untuk pengguna. */
 export function pesanFirestore(e: unknown, fallback = 'Terjadi kesalahan. Coba lagi.'): string {
@@ -68,11 +64,13 @@ function bersihkan(input: ClassInput): ClassInput {
   return { namaKelas, praktikum };
 }
 
-// Listener dokumen berdasarkan daftar id, dipecah per 30 karena batas klausa `in`.
+// Listener banyak dokumen berdasarkan daftar id. Tiap dokumen didengarkan lewat listener `get`
+// (bukan query `documentId() in [...]`), karena firestore.rules hanya mengizinkan `list` pada `users`
+// dengan filter role + limit kecil (lihat catatan di rules). Hasil digabung setelah semua dokumen terbaca.
 function subscribeByIds<T>(
   collectionName: string,
   ids: string[],
-  map: (snap: QueryDocumentSnapshot) => T,
+  map: (snap: DocumentSnapshot) => T,
   onData: (items: T[]) => void,
   onError?: (e: Error) => void,
 ): () => void {
@@ -82,16 +80,13 @@ function subscribeByIds<T>(
     return () => {};
   }
 
-  const potongan: string[][] = [];
-  for (let i = 0; i < unik.length; i += BATAS_IN) potongan.push(unik.slice(i, i + BATAS_IN));
-
-  const hasil = new Map<number, T[]>();
-  const unsubs = potongan.map((ids, i) =>
+  const hasil = new Map<string, T | null>();
+  const unsubs = unik.map((id) =>
     onSnapshot(
-      query(collection(db, collectionName), where(documentId(), 'in', ids)),
-      (snap) => {
-        hasil.set(i, snap.docs.map(map));
-        if (hasil.size === potongan.length) onData([...hasil.values()].flat());
+      doc(db, collectionName, id),
+      (snap: DocumentSnapshot) => {
+        hasil.set(id, snap.exists() ? map(snap) : null);
+        if (hasil.size === unik.length) onData([...hasil.values()].filter((x): x is T => x !== null));
       },
       (err: FirestoreError) => onError?.(err),
     ),
@@ -120,7 +115,28 @@ export function subscribeClassesByIds(
   onData: (classes: ClassDoc[]) => void,
   onError?: (e: Error) => void,
 ): () => void {
-  return subscribeByIds('classes', ids, mapClass, onData, onError);
+  // Praktikan hanya boleh `get` dokumen kelas miliknya (firestore.rules), bukan `list`.
+  // Jadi tiap kelas didengarkan lewat listener dokumen, bukan query `documentId() in [...]`.
+  const unik = [...new Set(ids)];
+  if (unik.length === 0) {
+    onData([]);
+    return () => {};
+  }
+
+  const hasil = new Map<string, ClassDoc | null>();
+  const unsubs = unik.map((id) =>
+    onSnapshot(
+      doc(db, 'classes', id),
+      (snap) => {
+        hasil.set(id, snap.exists() ? mapClass(snap) : null);
+        if (hasil.size === unik.length) {
+          onData([...hasil.values()].filter((c): c is ClassDoc => c !== null));
+        }
+      },
+      (err: FirestoreError) => onError?.(err),
+    ),
+  );
+  return () => unsubs.forEach((u) => u());
 }
 
 /** Real-time listener kelas milik pengguna sesuai perannya. */
@@ -203,7 +219,8 @@ export async function addPesertaByNim(cls: ClassDoc, nim: string): Promise<Profi
   if (!nimBersih) throw new Error('NIM harus diisi.');
 
   const snap = await getDocs(
-    query(collection(db, 'users'), where('nim', '==', nimBersih), limit(5)),
+    // Filter role + limit(5) wajib: firestore.rules hanya mengizinkan query users seperti ini.
+    query(collection(db, 'users'), where('nim', '==', nimBersih), where('role', '==', 'praktikan'), limit(5)),
   );
   const praktikan = snap.docs.map(mapProfile).find((p) => p.role === 'praktikan');
   if (!praktikan) throw new Error(`Praktikan dengan NIM ${nimBersih} tidak ditemukan.`);

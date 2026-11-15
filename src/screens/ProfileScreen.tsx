@@ -3,7 +3,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Pressable,
   ScrollView,
@@ -14,7 +13,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { COLORS } from '../constants/colors';
+import PrimaryButton from '../components/PrimaryButton';
+import { colors, font, layout, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import {
   PASSWORD_MIN,
@@ -33,9 +33,9 @@ function NoticeBox({ notice }: { notice: Notice }) {
       <Ionicons
         name={ok ? 'checkmark-circle' : 'alert-circle'}
         size={15}
-        color={ok ? COLORS.success : COLORS.danger}
+        color={ok ? colors.success : colors.danger}
       />
-      <Text style={[styles.noticeText, { color: ok ? COLORS.textSecondary : COLORS.danger }]}>{notice.text}</Text>
+      <Text style={[styles.noticeText, { color: colors.text }]}>{notice.text}</Text>
     </View>
   );
 }
@@ -58,11 +58,11 @@ function PasswordField({
     <View style={styles.fieldGroup}>
       <Text style={styles.label}>{label}</Text>
       <View style={styles.inputBox}>
-        <Ionicons name="lock-closed-outline" size={18} color={COLORS.muted} />
+        <Ionicons name="lock-closed-outline" size={18} color={colors.placeholder} />
         <TextInput
           style={styles.input}
           placeholder={placeholder}
-          placeholderTextColor={COLORS.muted}
+          placeholderTextColor={colors.placeholder}
           value={value}
           onChangeText={onChangeText}
           secureTextEntry={!show}
@@ -76,7 +76,7 @@ function PasswordField({
           accessibilityRole="button"
           accessibilityLabel={show ? 'Sembunyikan password' : 'Tampilkan password'}
         >
-          <Ionicons name={show ? 'eye-off-outline' : 'eye-outline'} size={19} color={COLORS.muted} />
+          <Ionicons name={show ? 'eye-off-outline' : 'eye-outline'} size={19} color={colors.placeholder} />
         </Pressable>
       </View>
     </View>
@@ -167,7 +167,7 @@ export default function ProfileScreen() {
           </View>
 
           <View style={styles.infoRow}>
-            <Ionicons name="mail-outline" size={16} color={COLORS.muted} />
+            <Ionicons name="mail-outline" size={16} color={colors.placeholder} />
             <Text style={styles.infoLabel}>Email</Text>
             <Text style={styles.infoValue} numberOfLines={1}>
               {profile.email}
@@ -175,7 +175,7 @@ export default function ProfileScreen() {
           </View>
           {!isAsisten && profile.nim ? (
             <View style={styles.infoRow}>
-              <Ionicons name="card-outline" size={16} color={COLORS.muted} />
+              <Ionicons name="card-outline" size={16} color={colors.placeholder} />
               <Text style={styles.infoLabel}>NIM</Text>
               <Text style={styles.infoValue}>{profile.nim}</Text>
             </View>
@@ -185,15 +185,15 @@ export default function ProfileScreen() {
 
         {/* Ubah nama */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Ubah Nama</Text>
+          <Text style={styles.sectionTitle}>Ubah nama</Text>
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Nama lengkap</Text>
             <View style={styles.inputBox}>
-              <Ionicons name="person-outline" size={18} color={COLORS.muted} />
+              <Ionicons name="person-outline" size={18} color={colors.placeholder} />
               <TextInput
                 style={styles.input}
                 placeholder="Nama lengkap"
-                placeholderTextColor={COLORS.muted}
+                placeholderTextColor={colors.placeholder}
                 value={nama}
                 onChangeText={(t) => {
                   setNama(t);
@@ -207,25 +207,18 @@ export default function ProfileScreen() {
             </View>
           </View>
           <NoticeBox notice={nameNotice} />
-          <Pressable
-            style={({ pressed }) => [
-              styles.button,
-              (!nameChanged || savingName) && styles.buttonDisabled,
-              pressed && styles.buttonPressed,
-            ]}
+          <PrimaryButton
+            label={savingName ? 'Menyimpan...' : 'Simpan nama'}
             onPress={handleSaveName}
-            disabled={!nameChanged || savingName}
-            accessibilityRole="button"
+            loading={savingName}
+            disabled={!nameChanged}
             accessibilityLabel="Simpan nama"
-          >
-            {savingName ? <ActivityIndicator size="small" color={COLORS.white} /> : null}
-            <Text style={styles.buttonText}>{savingName ? 'Menyimpan...' : 'Simpan Nama'}</Text>
-          </Pressable>
+          />
         </View>
 
         {/* Ubah password */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Ubah Password</Text>
+          <Text style={styles.sectionTitle}>Ubah password</Text>
           <PasswordField
             label="Password lama"
             value={currentPw}
@@ -257,16 +250,12 @@ export default function ProfileScreen() {
             autoComplete="new-password"
           />
           <NoticeBox notice={pwNotice} />
-          <Pressable
-            style={({ pressed }) => [styles.button, (savingPw || pressed) && styles.buttonPressed]}
+          <PrimaryButton
+            label={savingPw ? 'Memproses...' : 'Ubah password'}
             onPress={handleChangePassword}
-            disabled={savingPw}
-            accessibilityRole="button"
+            loading={savingPw}
             accessibilityLabel="Ubah password"
-          >
-            {savingPw ? <ActivityIndicator size="small" color={COLORS.white} /> : null}
-            <Text style={styles.buttonText}>{savingPw ? 'Memproses...' : 'Ubah Password'}</Text>
-          </Pressable>
+          />
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -274,79 +263,70 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: COLORS.background },
-  content: { padding: 16, gap: 16 },
-  card: { backgroundColor: COLORS.card, borderRadius: 20, padding: 20, gap: 14 },
+  flex: { flex: 1, backgroundColor: colors.bg },
+  content: { paddingHorizontal: layout.screenPadding, paddingTop: 12, gap: 12 },
+  card: {
+    gap: 14,
+    padding: 18,
+    backgroundColor: colors.card,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   avatar: {
     alignSelf: 'center',
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: colors.tint,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { fontSize: 30, fontFamily: 'PlusJakartaSans_800ExtraBold', color: COLORS.primary },
-  name: { textAlign: 'center', fontSize: 20, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
+  avatarText: { fontSize: 30, fontFamily: font.extraBold, color: colors.primary },
+  name: { textAlign: 'center', fontSize: 18, fontFamily: font.extraBold, color: colors.text },
   roleBadge: {
     alignSelf: 'center',
-    backgroundColor: COLORS.primaryLight,
-    borderRadius: 999,
+    backgroundColor: colors.tint,
+    borderRadius: radius.pill,
     paddingVertical: 4,
     paddingHorizontal: 12,
   },
-  roleText: { fontSize: 12, fontFamily: 'PlusJakartaSans_600SemiBold', color: COLORS.primary },
+  roleText: { fontSize: 12, fontFamily: font.semibold, color: colors.primary },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  infoLabel: { fontSize: 13, fontFamily: 'PlusJakartaSans_600SemiBold', color: COLORS.textSecondary },
-  infoValue: {
-    flex: 1,
-    textAlign: 'right',
-    fontSize: 13,
-    fontFamily: 'PlusJakartaSans_400Regular',
-    color: COLORS.text,
-  },
-  hint: { fontSize: 11, lineHeight: 16, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
-  sectionTitle: { fontSize: 16, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.text },
+  infoLabel: { ...text.bodyStrong, color: colors.textSecondary },
+  infoValue: { flex: 1, textAlign: 'right', ...text.bodyStrong },
+  hint: { fontSize: 11, lineHeight: 16, fontFamily: font.medium, color: colors.textSecondary },
+  sectionTitle: { ...text.sectionTitle },
   fieldGroup: { gap: 7 },
-  label: { fontSize: 13, fontFamily: 'PlusJakartaSans_600SemiBold', color: COLORS.text },
+  label: { fontSize: 10, letterSpacing: 0.4, fontFamily: font.bold, color: colors.textSecondary, textTransform: 'uppercase' },
   inputBox: {
     minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: COLORS.background,
-    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
     paddingHorizontal: 15,
   },
   input: {
     flex: 1,
-    fontSize: 15,
-    fontFamily: 'PlusJakartaSans_400Regular',
-    color: COLORS.text,
+    fontSize: 14,
+    fontFamily: font.medium,
+    color: colors.text,
     paddingVertical: 12,
   },
   notice: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    borderRadius: 12,
+    borderRadius: 14,
+    borderWidth: 1,
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
-  noticeOk: { backgroundColor: COLORS.successLight },
-  noticeErr: { backgroundColor: COLORS.dangerLight, borderWidth: 1, borderColor: COLORS.dangerBorder },
-  noticeText: { flex: 1, fontSize: 13, fontFamily: 'PlusJakartaSans_500Medium' },
-  button: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 15,
-    paddingHorizontal: 22,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 8,
-  },
-  buttonDisabled: { opacity: 0.4 },
-  buttonPressed: { opacity: 0.84 },
-  buttonText: { fontSize: 15, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.white },
+  noticeOk: { backgroundColor: colors.successTint, borderColor: colors.success },
+  noticeErr: { backgroundColor: colors.dangerTint, borderColor: colors.danger },
+  noticeText: { flex: 1, fontSize: 13, lineHeight: 19, fontFamily: font.medium },
 });

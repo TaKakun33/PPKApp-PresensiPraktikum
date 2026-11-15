@@ -19,7 +19,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { COLORS } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
-import { useScrollKeFieldFokus } from './useScrollKeFieldFokus';
+import { useScrollKeFieldFokus } from '../hooks/useScrollKeFieldFokus';
 import { getAuthErrorMessage, sendPasswordReset } from '../services/authService';
 import AuthLoadingGate from '../navigation/AuthLoadingGate';
 
@@ -32,7 +32,6 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
-  const [remember, setRemember] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [info, setInfo] = useState('');
@@ -192,22 +191,6 @@ export default function LoginScreen() {
 
             <View style={styles.optionsRow}>
               <Pressable
-                style={styles.rememberRow}
-                onPress={() => setRemember((v) => !v)}
-                hitSlop={8}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: remember }}
-                accessibilityLabel="Ingat Saya"
-              >
-                <Ionicons
-                  name={remember ? 'checkbox' : 'square-outline'}
-                  size={20}
-                  color={remember ? NAVY : COLORS.borderLight}
-                />
-                <Text style={styles.rememberText}>Ingat Saya</Text>
-              </Pressable>
-
-              <Pressable
                 onPress={handleForgotPassword}
                 disabled={resetting || loading}
                 hitSlop={8}
@@ -326,19 +309,9 @@ const styles = StyleSheet.create({
   optionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     paddingHorizontal: 2,
     marginTop: 2,
-  },
-  rememberRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  rememberText: {
-    fontSize: 13,
-    fontFamily: 'PlusJakartaSans_500Medium',
-    color: COLORS.textSecondary,
   },
   forgotText: {
     fontSize: 13,

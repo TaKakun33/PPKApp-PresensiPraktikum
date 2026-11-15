@@ -13,6 +13,7 @@ import ScreenHeader from '../components/ScreenHeader';
 import StatusBadge from '../components/StatusBadge';
 import { colors, font, layout, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
+import { useNamaKelas } from '../hooks/useNamaKelas';
 
 type SessionAction = 'open' | 'close';
 
@@ -34,6 +35,8 @@ const SESSION_PRIORITY: Record<string, number> = {
 
 export default function ManageSessionScreen() {
   const { profile, role, loading: authLoading } = useAuth();
+  const profileId = profile?.id;
+  const { labelKelas } = useNamaKelas();
   const [sessionState, setSessionState] = useState<{
     profileId: string;
     sessions: Session[];
@@ -76,7 +79,9 @@ export default function ManageSessionScreen() {
     );
 
     return unsubscribe;
-  }, [profile, role]);
+    // profile berganti objek tiap snapshot profil; cukup bergantung pada id & peran.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileId, role]);
 
   const currentSessionState =
     sessionState && sessionState.profileId === profile?.id ? sessionState : null;
@@ -220,7 +225,7 @@ export default function ManageSessionScreen() {
                   {session.praktikum}
                 </Text>
                 <Text style={styles.moduleTitle} numberOfLines={2}>
-                  Kelas {session.kelasId}
+                  {labelKelas(session.kelasId)}
                 </Text>
               </View>
               <StatusBadge status={session.status} />
