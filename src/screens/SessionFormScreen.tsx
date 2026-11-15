@@ -7,6 +7,7 @@ import { DateTimePicker } from '@expo/ui/community/datetime-picker';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -26,10 +27,16 @@ import PrimaryButton from '../components/PrimaryButton';
 import type { ClassDoc } from '../lib/types';
 import { colors, font, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
-import { pesanFirestore, subscribeClassesForAsisten } from '../services/classService';
+import {
+  isTertunda,
+  MAKS_PRAKTIKUM,
+  pesanFirestore,
+  subscribeClassesForAsisten,
+} from '../services/classService';
 import {
   createSession,
   getSession,
+  MAKS_RUANGAN,
   updateSession,
   validasiSesi,
   type SessionInput,
@@ -78,6 +85,7 @@ function Field({
   placeholder,
   keyboardType,
   editable,
+  maxLength,
 }: {
   label: string;
   value: string;
@@ -85,6 +93,7 @@ function Field({
   placeholder: string;
   keyboardType?: KeyboardTypeOptions;
   editable: boolean;
+  maxLength?: number;
 }) {
   return (
     <View style={styles.field}>
@@ -97,6 +106,7 @@ function Field({
         placeholderTextColor={colors.placeholder}
         keyboardType={keyboardType}
         editable={editable}
+        maxLength={maxLength}
         accessibilityLabel={label}
       />
     </View>
@@ -269,13 +279,23 @@ export default function SessionFormScreen() {
       const data = validasiSesi(form);
       if (id) await updateSession(id, asistenId!, data);
       else await createSession(asistenId!, data);
-      if (router.canGoBack()) router.back();
-      else router.replace('/asisten/jadwal');
+      kembali();
     } catch (e) {
+      if (isTertunda(e)) {
+        // Sudah tersimpan di perangkat; tinggalkan form agar sesi tidak tersimpan dua kali.
+        Alert.alert('Belum terkirim', pesanFirestore(e));
+        kembali();
+        return;
+      }
       setError(pesanFirestore(e, 'Gagal menyimpan sesi.'));
       setSaving(false);
     }
   };
+
+  function kembali() {
+    if (router.canGoBack()) router.back();
+    else router.replace('/asisten/jadwal');
+  }
 
   const header = <Stack.Screen options={{ headerShown: true, title: id ? 'Ubah Sesi' : 'Tambah Sesi' }} />;
   const wrap = (body: React.ReactNode) => (
@@ -351,6 +371,7 @@ export default function SessionFormScreen() {
           value={form.praktikum}
           onChangeText={set('praktikum')}
           placeholder="Contoh: Praktikum PPK - Modul 3"
+          maxLength={MAKS_PRAKTIKUM}
           editable={!saving}
         />
         <View style={styles.field}>
@@ -435,6 +456,7 @@ export default function SessionFormScreen() {
           value={form.ruangan}
           onChangeText={set('ruangan')}
           placeholder="Contoh: Lab Komputer 1"
+          maxLength={MAKS_RUANGAN}
           editable={!saving}
         />
 

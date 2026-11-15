@@ -17,7 +17,7 @@ import type { Role } from '../lib/constants';
 import type { ClassDoc, Session } from '../lib/types';
 import { colors, font, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
-import { getNamaPengguna, pesanFirestore, subscribeClass } from '../services/classService';
+import { getNamaPengguna, isTertunda, pesanFirestore, subscribeClass } from '../services/classService';
 import {
   deleteSession,
   labelTanggal,
@@ -261,6 +261,12 @@ export default function SessionDetailScreen() {
             await deleteSession(session.id, profile.id);
             kembali();
           } catch (e) {
+            if (isTertunda(e)) {
+              // Penghapusan sudah tercatat di perangkat dan dikirim saat koneksi kembali.
+              Alert.alert('Belum terkirim', pesanFirestore(e));
+              kembali();
+              return;
+            }
             setDeleting(false);
             Alert.alert('Gagal menghapus', pesanFirestore(e, 'Gagal menghapus sesi.'));
           }

@@ -29,6 +29,7 @@ import type { StatusIzin, StatusSesi } from "../lib/constants";
 import { db } from "../lib/firebase";
 import type { Attendance, LeaveRequest, Profile, Session } from "../lib/types";
 import { formatTanggal } from "../utils/format";
+import { MAKS_PRAKTIKUM, tungguTulis } from "./classService";
 
 export type LeaveClassifier = (alasan: string) => Promise<string | null> | string | null;
 
@@ -322,6 +323,7 @@ export type SessionInput = Pick<
 
 const POLA_TANGGAL = /^(\d{4})-(\d{2})-(\d{2})$/;
 const POLA_JAM = /^([01]\d|2[0-3]):[0-5]\d$/;
+export const MAKS_RUANGAN = 50;
 
 // "8.00" / "8:00" -> "08:00"
 function rapikanJam(jam: string): string {
@@ -359,6 +361,12 @@ export function validasiSesi(input: SessionInput): SessionInput {
     throw new Error("Waktu selesai harus setelah waktu mulai.");
   }
   if (!data.ruangan) throw new Error("Ruangan harus diisi.");
+  if (data.praktikum.length > MAKS_PRAKTIKUM) {
+    throw new Error(`Nama praktikum maksimal ${MAKS_PRAKTIKUM} karakter.`);
+  }
+  if (data.ruangan.length > MAKS_RUANGAN) {
+    throw new Error(`Ruangan maksimal ${MAKS_RUANGAN} karakter.`);
+  }
   return data;
 }
 
@@ -396,7 +404,7 @@ export async function createSession(asistenId: string, input: SessionInput): Pro
 
   const ref = doc(collection(db, "sessions"));
   const sesi: Omit<Session, "id"> = { ...data, asistenId, status: "belum_dibuka" };
-  await setDoc(ref, sesi);
+  await tungguTulis(setDoc(ref, sesi));
   return ref.id;
 }
 
@@ -411,7 +419,7 @@ export async function updateSession(
   // Sesi lama yang belum dibuka tetap boleh diubah (mis. ruangan) selama tanggalnya tidak diganti.
   if (data.tanggal !== sesi.tanggal) tolakTanggalLewat(data.tanggal);
   await pastikanKelasMilik(data.kelasId, asistenId);
-  await updateDoc(ref, data);
+  await tungguTulis(updateDoc(ref, data));
 }
 
 /** Hapus sesi. Ditolak jika sudah dibuka atau sudah ada pengajuan izin untuknya. */
@@ -428,7 +436,7 @@ export async function deleteSession(sessionId: string, asistenId: string): Promi
   if (!izin.empty) {
     throw new Error("Sesi ini sudah punya pengajuan izin, jadi tidak bisa dihapus.");
   }
-  await deleteDoc(ref);
+  await tungguTulis(deleteDoc(ref));
 }
 
 /** "2026-11-20" -> "20 Nov 2026". Format lain ditampilkan apa adanya. */
