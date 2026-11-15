@@ -461,6 +461,7 @@ export default function RecapScreen() {
           <View style={styles.header}>
             <Text style={styles.subtitle}>
               Pilih sesi untuk melihat daftar praktikan yang hadir.
+              {bisaUbahStatus ? ' Praktikan yang belum hadir bisa dicatat hadir secara manual.' : ''}
             </Text>
 
             {notice ? (

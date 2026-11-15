@@ -89,6 +89,9 @@ export default function ManageSessionScreen() {
   const isLoading = role === 'asisten' && (!currentSessionState || currentSessionState.loading);
   const loadError = currentSessionState?.error ?? null;
 
+  // Satu asisten hanya boleh membuka satu sesi sekaligus: sesi lain terkunci selama ada yang dibuka.
+  const sesiDibuka = sessions.find((session) => session.status === STATUS_SESI.DIBUKA) ?? null;
+
   const pendingSession = pendingAction
     ? sessions.find((session) => session.id === pendingAction.sessionId)
     : undefined;
@@ -245,12 +248,19 @@ export default function ManageSessionScreen() {
             </View>
 
             {session.status === STATUS_SESI.BELUM ? (
-              <PrimaryButton
-                label="Buka sesi"
-                onPress={() => requestAction(session.id, 'open')}
-                disabled={submitting}
-                accessibilityLabel={`Buka sesi ${session.praktikum}`}
-              />
+              <>
+                <PrimaryButton
+                  label="Buka sesi"
+                  onPress={() => requestAction(session.id, 'open')}
+                  disabled={submitting || sesiDibuka !== null}
+                  accessibilityLabel={`Buka sesi ${session.praktikum}`}
+                />
+                {sesiDibuka ? (
+                  <Text style={styles.lockHint}>
+                    Tutup sesi {sesiDibuka.praktikum} ({labelKelas(sesiDibuka.kelasId)}) terlebih dahulu.
+                  </Text>
+                ) : null}
+              </>
             ) : session.status === STATUS_SESI.DIBUKA ? (
               <PrimaryButton
                 label="Tutup sesi"
@@ -290,6 +300,7 @@ const styles = StyleSheet.create({
   },
   header: { gap: 8, marginBottom: 4 },
   subtitle: { ...text.body },
+  lockHint: { ...text.caption, textAlign: 'center' },
   feedback: {
     padding: 12,
     borderWidth: 1,

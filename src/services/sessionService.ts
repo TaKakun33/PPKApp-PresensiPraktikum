@@ -124,7 +124,8 @@ export function subscribeSession(
 }
 
 /**
- * Buka sesi (belum_dibuka → dibuka). Hanya asisten pengampu.
+ * Buka sesi (belum_dibuka → dibuka). Hanya asisten pengampu, dan hanya jika tidak ada sesi lain
+ * miliknya yang sedang dibuka.
  * Throws jika tidak diizinkan atau Firestore gagal.
  */
 export async function openSession(sessionId: string, asistenId: string): Promise<void> {
@@ -132,6 +133,22 @@ export async function openSession(sessionId: string, asistenId: string): Promise
   if (sesi.status === "dibuka") throw new Error("Sesi sudah dibuka.");
   if (sesi.status === "ditutup") {
     throw new Error("Sesi yang sudah ditutup tidak dapat dibuka kembali.");
+  }
+
+  // Satu asisten hanya boleh punya SATU sesi dibuka dalam satu waktu.
+  // Pemeriksaan di sisi aplikasi (rules Firestore tidak bisa melakukan query).
+  const sedangDibuka = await getDocs(
+    query(
+      collection(db, "sessions"),
+      where("asistenId", "==", asistenId),
+      where("status", "==", "dibuka"),
+      limit(2)
+    )
+  );
+  const lain = sedangDibuka.docs.find((d) => d.id !== sessionId);
+  if (lain) {
+    const nama = (lain.data() as Partial<Session>).praktikum ?? "lain";
+    throw new Error(`Sesi "${nama}" masih dibuka. Tutup sesi tersebut sebelum membuka sesi lain.`);
   }
 
   await updateDoc(ref, { status: "dibuka" as StatusSesi, openedAt: serverTimestamp() });
