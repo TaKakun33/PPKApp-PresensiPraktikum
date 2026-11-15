@@ -28,6 +28,9 @@ import {
   addPesertaByNim,
   createClass,
   deleteClass,
+  isTertunda,
+  MAKS_NAMA_KELAS,
+  MAKS_PRAKTIKUM,
   pesanFirestore,
   removePeserta,
   subscribeClassesForAsisten,
@@ -106,6 +109,8 @@ function PesertaPanel({ cls }: { cls: ClassDoc }) {
       setInfo({ ok: true, text: `${p.nama} ditambahkan ke ${cls.namaKelas}.` });
       setNim('');
     } catch (e) {
+      // Tertunda = sudah tersimpan di perangkat; kosongkan NIM agar tidak dikirim dua kali.
+      if (isTertunda(e)) setNim('');
       setInfo({ ok: false, text: pesanFirestore(e, 'Gagal menambah peserta.') });
     } finally {
       setSaving(false);
@@ -122,7 +127,7 @@ function PesertaPanel({ cls }: { cls: ClassDoc }) {
           try {
             await removePeserta(cls, p.id);
           } catch (e) {
-            Alert.alert('Gagal', pesanFirestore(e, 'Gagal mengeluarkan peserta.'));
+            Alert.alert(isTertunda(e) ? 'Belum terkirim' : 'Gagal', pesanFirestore(e, 'Gagal mengeluarkan peserta.'));
           }
         },
       },
@@ -138,6 +143,7 @@ function PesertaPanel({ cls }: { cls: ClassDoc }) {
           placeholder="NIM praktikan"
           placeholderTextColor={colors.placeholder}
           keyboardType="number-pad"
+          maxLength={20}
           returnKeyType="done"
           onSubmitEditing={tambah}
           editable={!saving}
@@ -212,6 +218,12 @@ function ClassFormModal({
       else await createClass(asistenId, { namaKelas, praktikum });
       onClose();
     } catch (e) {
+      if (isTertunda(e)) {
+        // Sudah tersimpan di perangkat; tutup form agar tidak tersimpan dua kali.
+        onClose();
+        Alert.alert('Belum terkirim', pesanFirestore(e));
+        return;
+      }
       setError(pesanFirestore(e, 'Gagal menyimpan kelas.'));
       setSaving(false);
     }
@@ -230,6 +242,7 @@ function ClassFormModal({
             onChangeText={setNamaKelas}
             placeholder="Contoh: Kelas A"
             placeholderTextColor={colors.placeholder}
+            maxLength={MAKS_NAMA_KELAS}
             editable={!saving}
           />
 
@@ -240,6 +253,7 @@ function ClassFormModal({
             onChangeText={setPraktikum}
             placeholder="Contoh: Praktikum PPK"
             placeholderTextColor={colors.placeholder}
+            maxLength={MAKS_PRAKTIKUM}
             editable={!saving}
           />
 
@@ -333,7 +347,7 @@ export default function ManageClassScreen() {
           try {
             await deleteClass(cls);
           } catch (e) {
-            Alert.alert('Gagal menghapus', pesanFirestore(e, 'Gagal menghapus kelas.'));
+            Alert.alert(isTertunda(e) ? 'Belum terkirim' : 'Gagal menghapus', pesanFirestore(e, 'Gagal menghapus kelas.'));
           }
         },
       },

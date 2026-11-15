@@ -12,6 +12,7 @@ import {
   documentId,
   getDoc,
   getDocs,
+  getDocsFromServer,
   limit,
   onSnapshot,
   query,
@@ -26,15 +27,51 @@ import {
 
 import { db } from '../lib/firebase';
 import type { ClassDoc, Profile } from '../lib/types';
+import { createAppError, getErrorCode, isTimeoutError, withTimeout } from './serviceUtils';
 
 export type ClassInput = { namaKelas: string; praktikum: string };
 
 // Batas klausa `in` di Firestore.
 const BATAS_IN = 30;
 
+// Batas panjang isian (karakter).
+export const MAKS_NAMA_KELAS = 50;
+export const MAKS_PRAKTIKUM = 100;
+
+// Saat offline, tulisan Firestore tidak gagal: disimpan di perangkat dan promise-nya menggantung
+// sampai koneksi kembali. Setelah batas ini, layar diberi tahu bahwa perubahan masih tertunda.
+const BATAS_TULIS_MS = 12000;
+const KODE_TERTUNDA = 'app/tertunda';
+
+/**
+ * Tunggu tulisan Firestore. Jika server belum mengonfirmasi dalam batas waktu (biasanya offline),
+ * lempar error `app/tertunda`. Perubahan TETAP tersimpan di perangkat dan dikirim otomatis nanti,
+ * jadi layar sebaiknya memperlakukannya sebagai berhasil (tutup form) agar tidak tersimpan dua kali.
+ */
+export async function tungguTulis(tulis: Promise<unknown>): Promise<void> {
+  try {
+    await withTimeout(tulis, BATAS_TULIS_MS);
+  } catch (e) {
+    if (isTimeoutError(e)) {
+      throw createAppError(
+        KODE_TERTUNDA,
+        'Koneksi bermasalah. Perubahan disimpan di perangkat dan akan dikirim otomatis saat koneksi kembali.',
+      );
+    }
+    throw e;
+  }
+}
+
+/** Tulisan belum terkirim ke server tetapi sudah tersimpan di perangkat. */
+export function isTertunda(e: unknown): boolean {
+  return getErrorCode(e) === KODE_TERTUNDA;
+}
+
 /** Ubah error Firestore menjadi pesan yang ramah untuk pengguna. */
 export function pesanFirestore(e: unknown, fallback = 'Terjadi kesalahan. Coba lagi.'): string {
   const code = String((e as { code?: unknown } | null)?.code ?? '');
+  // Error buatan aplikasi (app/...) sudah membawa pesan siap tampil.
+  if (code.startsWith('app/') && e instanceof Error && e.message) return e.message;
   if (code.includes('permission-denied')) return 'Kamu tidak punya akses ke data ini.';
   if (code.includes('unavailable') || code.includes('network')) {
     return 'Tidak dapat terhubung ke server. Periksa koneksi internet kamu.';
@@ -65,6 +102,12 @@ function bersihkan(input: ClassInput): ClassInput {
   const praktikum = input.praktikum.trim();
   if (!namaKelas) throw new Error('Nama kelas harus diisi.');
   if (!praktikum) throw new Error('Nama praktikum harus diisi.');
+  if (namaKelas.length > MAKS_NAMA_KELAS) {
+    throw new Error(`Nama kelas maksimal ${MAKS_NAMA_KELAS} karakter.`);
+  }
+  if (praktikum.length > MAKS_PRAKTIKUM) {
+    throw new Error(`Nama praktikum maksimal ${MAKS_PRAKTIKUM} karakter.`);
+  }
   return { namaKelas, praktikum };
 }
 
@@ -152,13 +195,13 @@ export async function createClass(asistenId: string, input: ClassInput): Promise
   const data = bersihkan(input);
   const ref = doc(collection(db, 'classes'));
   const kelas: Omit<ClassDoc, 'id'> = { ...data, asistenId, pesertaIds: [] };
-  await setDoc(ref, kelas);
+  await tungguTulis(setDoc(ref, kelas));
   return ref.id;
 }
 
 /** Ubah nama kelas dan praktikum. */
 export async function updateClass(classId: string, input: ClassInput): Promise<void> {
-  await updateDoc(doc(db, 'classes', classId), bersihkan(input));
+  await tungguTulis(updateDoc(doc(db, 'classes', classId), bersihkan(input)));
 }
 
 /**
@@ -183,7 +226,7 @@ export async function deleteClass(cls: ClassDoc): Promise<void> {
     batch.update(doc(db, 'users', uid), { kelasIds: arrayRemove(cls.id) }),
   );
   batch.delete(doc(db, 'classes', cls.id));
-  await batch.commit();
+  await tungguTulis(batch.commit());
 }
 
 // ─── PESERTA ──────────────────────────────────────────────────────────────────
@@ -201,8 +244,12 @@ export function subscribePeserta(
 export async function addPesertaByNim(cls: ClassDoc, nim: string): Promise<Profile> {
   const nimBersih = nim.trim();
   if (!nimBersih) throw new Error('NIM harus diisi.');
+  // Sama dengan aturan NIM saat registrasi (firestore.rules): 5-20 digit angka.
+  if (!/^[0-9]{5,20}$/.test(nimBersih)) throw new Error('NIM harus berupa 5-20 digit angka.');
 
-  const snap = await getDocs(
+  // Langsung dari server: cache offline bisa tidak memuat praktikan yang dicari,
+  // sehingga muncul "tidak ditemukan" padahal sebenarnya sedang offline.
+  const snap = await getDocsFromServer(
     query(collection(db, 'users'), where('nim', '==', nimBersih), limit(5)),
   );
   const praktikan = snap.docs.map(mapProfile).find((p) => p.role === 'praktikan');
@@ -214,7 +261,7 @@ export async function addPesertaByNim(cls: ClassDoc, nim: string): Promise<Profi
   const batch = writeBatch(db);
   batch.update(doc(db, 'classes', cls.id), { pesertaIds: arrayUnion(praktikan.id) });
   batch.update(doc(db, 'users', praktikan.id), { kelasIds: arrayUnion(cls.id) });
-  await batch.commit();
+  await tungguTulis(batch.commit());
   return praktikan;
 }
 
@@ -223,7 +270,7 @@ export async function removePeserta(cls: ClassDoc, userId: string): Promise<void
   const batch = writeBatch(db);
   batch.update(doc(db, 'classes', cls.id), { pesertaIds: arrayRemove(userId) });
   batch.update(doc(db, 'users', userId), { kelasIds: arrayRemove(cls.id) });
-  await batch.commit();
+  await tungguTulis(batch.commit());
 }
 
 /** Nama pengguna dari koleksi users. Mengembalikan null jika tidak bisa dibaca. */
