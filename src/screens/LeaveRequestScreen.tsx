@@ -32,6 +32,7 @@ import {
   cancelLeave,
   isActiveLeave,
   submitLeave,
+  subscribeAttendedSessionIds,
   subscribeLeaveSessionOptions,
   subscribeMyLeaves,
   validateLeaveReason,
@@ -62,6 +63,7 @@ export default function LeaveRequestScreen() {
 
   const [sessions, setSessions] = useState<Session[] | null>(null);
   const [leaves, setLeaves] = useState<LeaveItem[] | null>(null);
+  const [attendedIds, setAttendedIds] = useState<string[] | null>(null);
   const [loadError, setLoadError] = useState('');
   const [retryKey, setRetryKey] = useState(0);
 
@@ -93,9 +95,11 @@ export default function LeaveRequestScreen() {
 
     const unsubSessions = subscribeLeaveSessionOptions(profile, setSessions, onError);
     const unsubLeaves = subscribeMyLeaves(profile.id, setLeaves, onError);
+    const unsubAttended = subscribeAttendedSessionIds(profile.id, setAttendedIds, onError);
     return () => {
       unsubSessions();
       unsubLeaves();
+      unsubAttended();
     };
     // profile diganti objek baru tiap snapshot profil; cukup bergantung pada id & kelasIds.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -105,6 +109,7 @@ export default function LeaveRequestScreen() {
     setLoadError('');
     setSessions(null);
     setLeaves(null);
+    setAttendedIds(null);
     setRetryKey((k) => k + 1);
   };
 
@@ -129,7 +134,7 @@ export default function LeaveRequestScreen() {
       </View>
     );
   }
-  if (sessions === null || leaves === null) {
+  if (sessions === null || leaves === null || attendedIds === null) {
     return (
       <View style={styles.screen}>
         <ScreenHeader title="Izin" />
@@ -141,6 +146,7 @@ export default function LeaveRequestScreen() {
   }
 
   const activeSessionIds = new Set(leaves.filter(isActiveLeave).map((l) => l.sessionId));
+  const attendedSessionIds = new Set(attendedIds);
   const selectedSession = sessions.find((s) => s.id === selectedId) ?? null;
   const trimmedLength = alasan.trim().length;
 
@@ -151,6 +157,10 @@ export default function LeaveRequestScreen() {
 
     if (!selectedSession) {
       setFormError('Pilih sesi yang ingin diajukan izin.');
+      return;
+    }
+    if (attendedSessionIds.has(selectedSession.id)) {
+      setFormError('Kamu sudah presensi di sesi ini, jadi tidak bisa mengajukan izin.');
       return;
     }
     const reasonError = validateLeaveReason(alasan);
@@ -231,7 +241,8 @@ export default function LeaveRequestScreen() {
         ) : (
           <View style={styles.optionList}>
             {sessions.map((s) => {
-              const taken = activeSessionIds.has(s.id);
+              const attended = attendedSessionIds.has(s.id);
+              const taken = activeSessionIds.has(s.id) || attended;
               const selected = selectedId === s.id;
               return (
                 <Pressable
@@ -255,7 +266,11 @@ export default function LeaveRequestScreen() {
                     <Text style={styles.optionMeta}>
                       {s.tanggal} · {s.waktuMulai}–{s.waktuSelesai} · {s.ruangan}
                     </Text>
-                    {taken ? <Text style={styles.optionTaken}>Izin untuk sesi ini sudah diajukan</Text> : null}
+                    {attended ? (
+                      <Text style={styles.optionTaken}>Kamu sudah presensi, tidak bisa mengajukan izin</Text>
+                    ) : taken ? (
+                      <Text style={styles.optionTaken}>Izin untuk sesi ini sudah diajukan</Text>
+                    ) : null}
                   </View>
                 </Pressable>
               );

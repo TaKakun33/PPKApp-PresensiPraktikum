@@ -47,22 +47,49 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/allowedAssistants/$(request.auth.token.email.lower()));
     }
 
+    // --- nimIndex -----------------------------------------------------------
+    // Keunikan NIM ditegakkan SERVER. ID dokumen = NIM, isi { uid }.
+    // Dibuat bersama profil praktikan dalam satu batch (lihat authService.registerUser):
+    // - hanya pemilik uid yang boleh membuatnya, dan profil yang ditulis pada batch yang sama
+    //   harus berperan praktikan dengan NIM yang sama (mencegah orang lain "mengklaim" NIM);
+    // - dokumen yang sudah ada tidak bisa ditimpa (create pada dokumen yang ada = update = ditolak).
+    // Klien tidak bisa membaca/mengubah/menghapusnya.
+    // CATATAN: praktikan yang SUDAH terdaftar sebelum aturan ini perlu dibuatkan dokumennya lewat
+    // Firebase Console (ID = NIM, field uid = UID akunnya) agar NIM lamanya ikut terlindungi.
+    match /nimIndex/{nim} {
+      allow create: if signedIn()
+        && nim.matches('^[0-9]{5,20}$')
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'praktikan'
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.nim == nim;
+      allow read, update, delete: if false;
+    }
+
     // --- users --------------------------------------------------------------
-    // - Baca: pemilik dokumen, asisten (daftar peserta), atau praktikan yang
+    // - Baca (get): pemilik dokumen, asisten (daftar peserta), atau praktikan yang
     //          membutuhkan nama asisten pada dashboard.
-    // - Buat : registrasi dokumen milik uid sendiri. Praktikan: terbuka (NIM wajib, kelasIds kosong).
+    // - List : hanya asisten (mencari praktikan berdasarkan NIM). Praktikan TIDAK boleh query
+    //          koleksi ini, jadi NIM/email pengguna lain tidak bisa dienumerasi.
+    // - Buat : registrasi dokumen milik uid sendiri. Praktikan: NIM wajib & sudah diklaim di
+    //          nimIndex pada batch yang sama (kelasIds kosong).
     //          Asisten: hanya jika email Auth-nya ada di allowedAssistants (tanpa NIM/kelasIds).
-    // - Ubah : hanya asisten, hanya field kelasIds milik praktikan.
+    // - Ubah : asisten hanya field kelasIds praktikan (perubahan dibatasi maksimal satu kelas
+    //          per operasi); pengguna hanya namanya sendiri.
     // - Hapus: tidak boleh.
     match /users/{uid} {
-      allow read: if signedIn() && (
+      allow get: if signedIn() && (
         request.auth.uid == uid
         || isAsisten()
         || (isPraktikan() && resource.data.role == 'asisten')
       );
 
-      // Cek NIM unik saat registrasi: pengguna login boleh query users, tapi maksimal 1 dokumen per query.
-      allow list: if signedIn() && request.query.limit <= 1;
+      // List dibatasi: hanya query yang menyaring role == 'praktikan' dan memakai limit <= 5
+      // (dipakai addPesertaByNim). Data asisten lain tidak ikut terbaca, dan daftar peserta kelas
+      // dibaca per dokumen (get), bukan lewat query.
+      allow list: if isAsisten()
+        && request.query.limit <= 5
+        && resource.data.role == 'praktikan';
 
       allow create: if signedIn()
         && request.auth.uid == uid
@@ -79,6 +106,7 @@ service cloud.firestore {
             && request.resource.data.keys().hasAll(['nim'])
             && request.resource.data.nim is string
             && request.resource.data.nim.matches('^[0-9]{5,20}$')
+            && getAfter(/databases/$(database)/documents/nimIndex/$(request.resource.data.nim)).data.uid == request.auth.uid
             && (!('kelasIds' in request.resource.data) || request.resource.data.kelasIds.size() == 0))
           ||
           // Asisten (email harus terdaftar di allowedAssistants)
@@ -87,10 +115,26 @@ service cloud.firestore {
             && isAllowedAssistantEmail())
         );
 
+      // Kelas yang DITAMBAHKAN ke praktikan wajib milik asisten yang melakukannya
+      // (mencegah asisten memasukkan praktikan ke kelas asisten lain).
+      // Kelas yang dihapus dari kelasIds tidak dicek kepemilikannya: kelasnya mungkin sudah dihapus.
       allow update: if isAsisten()
         && resource.data.role == 'praktikan'
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['kelasIds'])
-        && request.resource.data.kelasIds is list;
+        && request.resource.data.kelasIds is list
+        && request.resource.data.kelasIds.toSet().difference(resource.data.get('kelasIds', []).toSet()).size() <= 1
+        && resource.data.get('kelasIds', []).toSet().difference(request.resource.data.kelasIds.toSet()).size() <= 1
+        && (
+          // (a) tidak ada kelas baru (hanya mengeluarkan kelas / tanpa perubahan), atau
+          request.resource.data.kelasIds.toSet().difference(resource.data.get('kelasIds', []).toSet()).size() == 0
+          // (b) tepat satu kelas ditambahkan di AKHIR daftar (arrayUnion menambah di akhir),
+          //     daftar lama tidak berubah, dan kelas baru itu milik asisten ini.
+          || (
+            request.resource.data.kelasIds.size() == resource.data.get('kelasIds', []).size() + 1
+            && request.resource.data.kelasIds[0:resource.data.get('kelasIds', []).size()] == resource.data.get('kelasIds', [])
+            && classOf(request.resource.data.kelasIds[resource.data.get('kelasIds', []).size()]).asistenId == request.auth.uid
+          )
+        );
 
       // Pengguna boleh mengubah NAMA miliknya sendiri (email, NIM, peran, kelasIds tidak boleh).
       allow update: if signedIn()
@@ -104,9 +148,15 @@ service cloud.firestore {
     }
 
     // --- classes ------------------------------------------------------------
-    // Baca: semua pengguna login. Tulis: hanya asisten pemilik kelas.
+    // Baca (get): asisten pemilik, atau praktikan yang kelasnya tercantum di profilnya.
+    // List : hanya asisten, hanya kelas miliknya (praktikan mendengarkan tiap kelas lewat get).
+    // Tulis: hanya asisten pemilik kelas.
     match /classes/{classId} {
-      allow read: if signedIn();
+      allow get: if signedIn() && (
+        (isPraktikan() && classId in myProfile().get('kelasIds', []))
+        || (isAsisten() && resource != null && resource.data.asistenId == request.auth.uid)
+      );
+      allow list: if isAsisten() && resource.data.asistenId == request.auth.uid;
 
       allow create: if isAsisten()
         && request.resource.data.keys().hasOnly(['namaKelas', 'praktikum', 'asistenId', 'pesertaIds'])
@@ -170,52 +220,57 @@ service cloud.firestore {
         && (
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['kelasId'])
           || classOf(request.resource.data.kelasId).asistenId == request.auth.uid
+        )
+        // Cap waktu buka/tutup harus waktu server dan hanya muncul pada transisi yang sesuai.
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['openedAt'])
+          || (resource.data.status == 'belum_dibuka'
+              && request.resource.data.status == 'dibuka'
+              && request.resource.data.openedAt == request.time)
+        )
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['closedAt'])
+          || (resource.data.status == 'dibuka'
+              && request.resource.data.status == 'ditutup'
+              && request.resource.data.closedAt == request.time)
         );
 
+      // Catatan: larangan menghapus sesi yang sudah punya izin dicek di aplikasi (rules tidak bisa query).
       allow delete: if isAsisten()
         && resource.data.asistenId == request.auth.uid
         && resource.data.status == 'belum_dibuka';
     }
 
     // --- attendances --------------------------------------------------------
-    // Mendukung dua format dokumen yang dipakai layar:
-    //   {sessionId}_{uid}         + name/nim/checkedInAt   (attendanceService)
-    //   att-{sessionId}-{uid}     + nama/nim/waktuHadir    (sessionService)
+    // SATU format dokumen (attendanceService.checkIn):
+    //   ID = {sessionId}_{uid}, isi { sessionId, kelasId, userId, nama, nim, waktuHadir }
+    // ID deterministik + update/delete ditolak => satu presensi per praktikan per sesi,
+    // ditegakkan server. Status sesi `dibuka` diperiksa saat commit, jadi tidak ada race
+    // dengan penutupan sesi oleh asisten.
     match /attendances/{attId} {
-      allow read: if signedIn() && (
+      // get: dipakai praktikan untuk mengecek "sudah hadir?" (termasuk saat dokumennya BELUM ada,
+      // sehingga `resource` null) dan di dalam transaksi presensi. Karena itu tidak boleh membaca
+      // resource.data: cukup cek bahwa ID dokumen berakhiran uid sendiri ({sessionId}_{uid}).
+      allow get: if isPraktikan() && attId.matches('^.+_' + request.auth.uid + '$');
+
+      // list: query rekap asisten (where sessionId) dan riwayat praktikan (where userId).
+      allow list: if signedIn() && (
         (isPraktikan() && resource.data.userId == request.auth.uid)
         || (isAsisten() && sessionOf(resource.data.sessionId).asistenId == request.auth.uid)
       );
 
       allow create: if isPraktikan()
-        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasOnly(['sessionId', 'kelasId', 'userId', 'nama', 'nim', 'waktuHadir'])
+        && request.resource.data.keys().hasAll(['sessionId', 'kelasId', 'userId', 'nama', 'nim', 'waktuHadir'])
         && request.resource.data.sessionId is string
+        && request.resource.data.userId == request.auth.uid
+        && attId == (request.resource.data.sessionId + '_' + request.auth.uid)
         && sessionOf(request.resource.data.sessionId).status == 'dibuka'
-        && sessionOf(request.resource.data.sessionId).kelasId in myProfile().get('kelasIds', [])
-        && (
-          (
-            attId == (request.resource.data.sessionId + '_' + request.auth.uid)
-            && request.resource.data.keys().hasOnly(['sessionId', 'userId', 'name', 'nim', 'checkedInAt'])
-            && request.resource.data.keys().hasAll(['sessionId', 'userId', 'name', 'nim', 'checkedInAt'])
-            && request.resource.data.name == myProfile().nama
-            && request.resource.data.nim == myProfile().get('nim', '')
-            && request.resource.data.checkedInAt == request.time
-          )
-          ||
-          (
-            attId == ('att-' + request.resource.data.sessionId + '-' + request.auth.uid)
-            && request.resource.data.keys().hasOnly([
-                 'sessionId', 'kelasId', 'userId', 'nama', 'nim', 'waktuHadir'
-               ])
-            && request.resource.data.keys().hasAll([
-                 'sessionId', 'kelasId', 'userId', 'nama', 'nim', 'waktuHadir'
-               ])
-            && request.resource.data.kelasId == sessionOf(request.resource.data.sessionId).kelasId
-            && request.resource.data.nama == myProfile().nama
-            && request.resource.data.nim == myProfile().get('nim', '')
-            && request.resource.data.waktuHadir == request.time
-          )
-        );
+        && sessionOf(request.resource.data.sessionId).kelasId == request.resource.data.kelasId
+        && request.resource.data.kelasId in myProfile().get('kelasIds', [])
+        && request.resource.data.nama == myProfile().nama
+        && request.resource.data.nim == myProfile().get('nim', '')
+        && request.resource.data.waktuHadir == request.time;
 
       allow update, delete: if false;
     }
@@ -236,7 +291,7 @@ service cloud.firestore {
                  'nama', 'nim', 'alasan', 'kategoriAI', 'aiStatus', 'status', 'createdAt'
                ])
           && request.resource.data.keys().hasAll([
-                 'sessionId', 'kelasId', 'asistenId', 'userId', 'alasan', 'aiStatus', 'status'
+                 'sessionId', 'kelasId', 'asistenId', 'userId', 'alasan', 'aiStatus', 'status', 'createdAt'
                ])
           && request.resource.data.userId == request.auth.uid
           && request.resource.data.status == 'menunggu'
@@ -251,17 +306,18 @@ service cloud.firestore {
           && sessionOf(request.resource.data.sessionId).kelasId == request.resource.data.kelasId
           && sessionOf(request.resource.data.sessionId).asistenId == request.resource.data.asistenId
           && sessionOf(request.resource.data.sessionId).status != 'ditutup'
+          // Sudah presensi di sesi ini (ID presensi = ID izin) = sudah hadir, jadi izin ditolak.
+          && !exists(/databases/$(database)/documents/attendances/$(docId))
           && request.resource.data.aiStatus in ['berhasil', 'gagal']
+          // Hasil AI hanya informasi pendukung: kategori ada jika dan hanya jika AI berhasil.
+          // (Status izin TIDAK pernah ditentukan AI; selalu `menunggu` saat dibuat.)
           && (
-            request.resource.data.kategoriAI == null
-            || request.resource.data.kategoriAI in [
-                 'positif', 'netral', 'negatif'
-               ]
+            (request.resource.data.aiStatus == 'berhasil'
+              && request.resource.data.get('kategoriAI', null) in ['positif', 'netral', 'negatif'])
+            || (request.resource.data.aiStatus == 'gagal'
+              && request.resource.data.get('kategoriAI', null) == null)
           )
-          && (
-            !('createdAt' in request.resource.data)
-            || request.resource.data.createdAt == request.time
-          );
+          && request.resource.data.createdAt == request.time;
       }
 
       allow read: if signedIn() && (
