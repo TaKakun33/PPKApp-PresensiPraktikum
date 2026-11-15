@@ -46,19 +46,6 @@ function formatTimestamp(value: unknown): string {
   return `${date.getDate()} ${BULAN[date.getMonth()]} ${date.getFullYear()} • ${jam}.${menit}`;
 }
 
-function getAttendanceDate(attendance: Attendance): Date | null {
-  return timestampToDate(attendance.waktuHadir ?? (attendance as any).checkedInAt);
-}
-
-function isTerlambat(attendance: Attendance, session?: Session): boolean {
-  if (!session?.tanggal || !session.waktuMulai) return false;
-  const checkIn = getAttendanceDate(attendance);
-  if (!checkIn) return false;
-  const mulai = new Date(`${session.tanggal}T${session.waktuMulai}:00`);
-  if (Number.isNaN(mulai.getTime())) return false;
-  return checkIn.getTime() > mulai.getTime() + 10 * 60 * 1000;
-}
-
 function tanggalLokal(): string {
   const now = new Date();
   const bulan = String(now.getMonth() + 1).padStart(2, '0');
@@ -267,7 +254,6 @@ export default function HistoryScreen() {
           <View style={styles.list}>
             {attendances.map((attendance) => {
               const session = sessionById.get(attendance.sessionId);
-              const terlambat = isTerlambat(attendance, session);
               return (
                 <View key={attendance.id} style={styles.itemCard}>
                   <View style={styles.itemIcon}>
@@ -281,7 +267,7 @@ export default function HistoryScreen() {
                       {formatTimestamp(attendance.waktuHadir ?? (attendance as any).checkedInAt)}
                     </Text>
                   </View>
-                  <StatusBadge status={terlambat ? 'terlambat' : 'hadir'} />
+                  <StatusBadge status="hadir" />
                 </View>
               );
             })}
