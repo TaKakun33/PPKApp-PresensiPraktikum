@@ -14,7 +14,8 @@ import SuccessBottomSheet from '../components/SuccessBottomSheet';
 import { STATUS_LABEL } from '../constants/colors';
 import { colors, font, layout, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
-import { STATUS_SESI } from '../lib/constants';
+import { STATUS_IZIN, STATUS_SESI } from '../lib/constants';
+import type { StatusIzin } from '../lib/constants';
 import type { Session } from '../lib/types';
 import { checkIn, subscribeCheckInState } from '../services/attendanceService';
 import { subscribeSessions } from '../services/sessionService';
@@ -44,6 +45,7 @@ export default function CheckInScreen({ route }: Props) {
 
   const [session, setSession] = useState<Session | null>(null);
   const [attended, setAttended] = useState(false);
+  const [izinStatus, setIzinStatus] = useState<StatusIzin | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -86,9 +88,10 @@ export default function CheckInScreen({ route }: Props) {
     const unsubscribe = subscribeCheckInState(
       sessionId,
       uid,
-      ({ session: s, attended: a }) => {
+      ({ session: s, attended: a, izinStatus: izin }) => {
         setSession(s);
         setAttended(a);
+        setIzinStatus(izin);
         setLoading(false);
       },
       (err) => {
@@ -192,9 +195,17 @@ export default function CheckInScreen({ route }: Props) {
   let reason = "";
   let canPress = false;
 
+  // Izin diterima = tidak bisa presensi lagi. Izin menunggu dibatalkan otomatis jika kamu presensi.
+  const izinDiterima = izinStatus === STATUS_IZIN.DITERIMA;
+  const izinMenunggu = izinStatus === STATUS_IZIN.MENUNGGU;
+
   if (attended) {
     buttonLabel = "Sudah Hadir";
     reason = "Kamu sudah melakukan presensi pada sesi ini.";
+    canPress = false;
+  } else if (izinDiterima) {
+    buttonLabel = "Izin Diterima";
+    reason = "Izinmu pada sesi ini sudah diterima asisten, jadi presensi tidak bisa dilakukan.";
     canPress = false;
   } else if (isBelumDibuka) {
     buttonLabel = "Belum Dibuka";
@@ -288,7 +299,7 @@ export default function CheckInScreen({ route }: Props) {
             </View>
           </View>
 
-          {isDibuka && !attended ? (
+          {isDibuka && !attended && !izinDiterima ? (
             <View style={styles.kodeSection}>
               <Text style={styles.kodeLabel}>Kode presensi</Text>
               <TextInput
@@ -308,6 +319,13 @@ export default function CheckInScreen({ route }: Props) {
                 accessibilityLabel="Kode presensi dari asisten"
               />
             </View>
+          ) : null}
+
+          {isDibuka && !attended && izinMenunggu ? (
+            <Text style={styles.izinNote}>
+              Kamu punya pengajuan izin yang masih menunggu. Jika kamu presensi, pengajuan izin itu akan
+              dibatalkan otomatis.
+            </Text>
           ) : null}
 
           <PrimaryButton
@@ -392,6 +410,13 @@ const styles = StyleSheet.create({
     fontFamily: font.extraBold,
     letterSpacing: 8,
     textAlign: "center",
+  },
+  izinNote: {
+    ...text.caption,
+    padding: 12,
+    borderRadius: radius.input,
+    backgroundColor: colors.surface,
+    color: colors.textSecondary,
   },
   button: { marginTop: 4 },
   reason: {

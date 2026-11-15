@@ -7,6 +7,10 @@
 //   attendances/{sessionId}_{uid} = { sessionId, kelasId, userId, nama, nim, waktuHadir, kode }
 //   (`kode` hanya ada pada presensi sendiri oleh praktikan; harus sama dengan sessionCodes/{sessionId}.kode)
 //   Presensi oleh asisten menambah dua field: { manual: true, dicatatOleh: <uid asisten> }
+// - Presensi vs izin (ID izin = ID presensi = {sessionId}_{uid}): jika praktikan masih punya izin berstatus
+//   `menunggu`, izin itu otomatis DIBATALKAN (dihapus) di transaksi yang sama dengan presensinya.
+//   Jika izin sudah `diterima`, presensi DITOLAK. Izin `ditolak` dibiarkan sebagai catatan.
+//   Keduanya ditegakkan juga oleh firestore.rules.
 // - ID deterministik + rules `update/delete: false` => satu presensi per praktikan per sesi, ditegakkan SERVER.
 // - Rules juga memeriksa status sesi `dibuka` saat commit, jadi sesi yang ditutup di tengah proses tetap ditolak.
 // - Transaksi di bawah hanya untuk memberi pesan error yang jelas; keamanan tetap di rules.
@@ -22,7 +26,8 @@ import {
   type FirestoreError,
 } from "@react-native-firebase/firestore";
 
-import { STATUS_SESI } from "../lib/constants";
+import { STATUS_IZIN, STATUS_SESI } from "../lib/constants";
+import type { StatusIzin } from "../lib/constants";
 import { db } from "../lib/firebase";
 import type { Session } from "../lib/types";
 import { buatKodePresensi, kodePresensiValid, normalisasiKode } from "../utils/kodePresensi";
@@ -72,6 +77,8 @@ export async function checkIn(
   try {
     const sessionRef = doc(db, "sessions", sessionId);
     const attendanceRef = doc(db, "attendances", attendanceDocId(sessionId, uid));
+    // ID izin sama dengan ID presensi (lihat leaveDocId di leaveService; tidak diimpor agar tidak melingkar).
+    const leaveRef = doc(db, "leaveRequests", attendanceDocId(sessionId, uid));
 
     await withTimeout(
       runTransaction(db, async (transaction: any) => {
@@ -88,6 +95,19 @@ export async function checkIn(
         const attSnap = await transaction.get(attendanceRef);
         if (attSnap.exists()) {
           throw new Error("ALREADY_ATTENDED");
+        }
+
+        // Semua baca dulu, baru tulis (syarat transaksi Firestore).
+        const leaveSnap = await transaction.get(leaveRef);
+        const izinStatus = leaveSnap.exists()
+          ? (leaveSnap.data() as { status?: string } | undefined)?.status
+          : undefined;
+        if (izinStatus === STATUS_IZIN.DITERIMA) {
+          throw new Error("IZIN_DITERIMA");
+        }
+        if (izinStatus === STATUS_IZIN.MENUNGGU) {
+          // Praktikan memilih hadir: pengajuan izin yang belum diputuskan dibatalkan.
+          transaction.delete(leaveRef);
         }
 
         transaction.set(attendanceRef, {
@@ -112,6 +132,12 @@ export async function checkIn(
     if (msg.includes("SESI_NOT_OPEN")) {
       return { ok: false, message: "Sesi praktikum belum dibuka atau sudah ditutup." };
     }
+    if (msg.includes("IZIN_DITERIMA")) {
+      return {
+        ok: false,
+        message: "Izinmu pada sesi ini sudah diterima asisten, jadi kamu tidak bisa presensi.",
+      };
+    }
     if (msg.includes("ALREADY_ATTENDED")) {
       return { ok: false, message: "Kamu sudah melakukan presensi pada sesi ini." };
     }
@@ -128,7 +154,7 @@ export async function checkIn(
       return {
         ok: false,
         message:
-          "Presensi ditolak: kode presensi salah, sesi baru saja ditutup, atau kamu bukan peserta kelas ini.",
+          "Presensi ditolak: kode presensi salah, izinmu baru saja diterima, sesi baru saja ditutup, atau kamu bukan peserta kelas ini.",
       };
     }
     return {
@@ -324,7 +350,12 @@ export async function resetIzin(
 export function subscribeCheckInState(
   sessionId: string,
   uid: string,
-  onChange: (state: { session: Session | null; attended: boolean }) => void,
+  onChange: (state: {
+    session: Session | null;
+    attended: boolean;
+    /** Status izin praktikan di sesi ini, atau null jika tidak mengajukan izin. */
+    izinStatus: StatusIzin | null;
+  }) => void,
   onError?: (err: Error) => void
 ): () => void {
   if (!sessionId || !uid) {
@@ -334,15 +365,18 @@ export function subscribeCheckInState(
 
   let sessionReady = false;
   let attReady = false;
+  let leaveReady = false;
   let currentSession: Session | null = null;
   let currentAttended = false;
+  let currentIzin: StatusIzin | null = null;
 
   const sessionRef = doc(db, "sessions", sessionId);
   const attRef = doc(db, "attendances", attendanceDocId(sessionId, uid));
+  const leaveRef = doc(db, "leaveRequests", attendanceDocId(sessionId, uid));
 
   const emitIfReady = () => {
-    if (sessionReady && attReady) {
-      onChange({ session: currentSession, attended: currentAttended });
+    if (sessionReady && attReady && leaveReady) {
+      onChange({ session: currentSession, attended: currentAttended, izinStatus: currentIzin });
     }
   };
 
@@ -370,8 +404,25 @@ export function subscribeCheckInState(
     }
   );
 
+  const unsubLeave = onSnapshot(
+    leaveRef,
+    (snap: DocumentSnapshot) => {
+      leaveReady = true;
+      const status = snap.exists() ? (snap.data() as { status?: StatusIzin } | undefined)?.status : null;
+      currentIzin = status ?? null;
+      emitIfReady();
+    },
+    (_err: FirestoreError) => {
+      // Status izin hanya untuk tampilan; server tetap menolak presensi jika izin sudah diterima.
+      leaveReady = true;
+      currentIzin = null;
+      emitIfReady();
+    }
+  );
+
   return () => {
     unsubSession();
     unsubAttendance();
+    unsubLeave();
   };
 }

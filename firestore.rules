@@ -306,6 +306,10 @@ service cloud.firestore {
         && request.resource.data.kelasId in myProfile().get('kelasIds', [])
         && request.resource.data.nama == myProfile().nama
         && request.resource.data.nim == myProfile().get('nim', '')
+        // Izin sesi ini (ID izin = ID presensi) yang sudah DITERIMA = tidak boleh presensi.
+        // Izin menunggu tidak menghalangi: dihapus bersama presensi (lihat rules leaveRequests).
+        && !(exists(/databases/$(database)/documents/leaveRequests/$(attId))
+             && get(/databases/$(database)/documents/leaveRequests/$(attId)).data.status == 'diterima')
         && request.resource.data.kode == codeOf(request.resource.data.sessionId).kode
         && request.resource.data.waktuHadir == request.time;
 
@@ -390,6 +394,10 @@ service cloud.firestore {
         || (isAsisten() && resource.data.asistenId == request.auth.uid)
       );
 
+      // get dokumen izin sendiri, termasuk saat BELUM ada (resource null): dipakai transaksi
+      // presensi untuk memeriksa izin. Cukup cek ID berakhiran uid sendiri ({sessionId}_{uid}).
+      allow get: if isPraktikan() && leaveId.matches('^.+_' + request.auth.uid + '$');
+
       allow create: if isPraktikan()
         && validLeavePayload(leaveId);
 
@@ -431,7 +439,8 @@ service cloud.firestore {
           )
         );
 
-      // Praktikan membatalkan pengajuannya sendiri selagi masih menunggu.
+      // Praktikan membatalkan pengajuannya sendiri selagi masih menunggu. Dipakai juga oleh transaksi
+      // presensi (attendanceService.checkIn): izin menunggu otomatis dibatalkan saat praktikan presensi.
       allow delete: if isPraktikan()
         && resource.data.userId == request.auth.uid
         && resource.data.status == 'menunggu';
