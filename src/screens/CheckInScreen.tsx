@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import Card from '../components/Card';
 import EmptyState from '../components/EmptyState';
@@ -12,13 +12,14 @@ import ScreenHeader from '../components/ScreenHeader';
 import StatusBadge from '../components/StatusBadge';
 import SuccessBottomSheet from '../components/SuccessBottomSheet';
 import { STATUS_LABEL } from '../constants/colors';
-import { colors, font, layout, text } from '../constants/theme';
+import { colors, font, layout, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { STATUS_SESI } from '../lib/constants';
 import type { Session } from '../lib/types';
 import { checkIn, subscribeCheckInState } from '../services/attendanceService';
 import { subscribeSessions } from '../services/sessionService';
 import { formatJam } from '../utils/format';
+import { KODE_PRESENSI_PANJANG, kodePresensiValid, normalisasiKode } from '../utils/kodePresensi';
 
 type Props = {
   route?: {
@@ -49,6 +50,8 @@ export default function CheckInScreen({ route }: Props) {
   const [showSuccess, setShowSuccess] = useState(false);
   const [successTime, setSuccessTime] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  // Kode unik 5 karakter dari asisten; selalu disimpan dalam huruf besar.
+  const [kode, setKode] = useState('');
 
   useEffect(() => {
     if (paramSessionId || !profile || profile.role !== 'praktikan') {
@@ -203,22 +206,30 @@ export default function CheckInScreen({ route }: Props) {
     canPress = false;
   } else if (isDibuka) {
     buttonLabel = isSubmitting ? "Memproses..." : "Presensi Sekarang";
-    canPress = !isSubmitting;
+    canPress = !isSubmitting && kodePresensiValid(kode);
+    if (!isSubmitting && !kodePresensiValid(kode)) {
+      reason = `Masukkan kode presensi ${KODE_PRESENSI_PANJANG} karakter dari asisten.`;
+    }
   }
 
   const handleCheckIn = async () => {
     if (!canPress || isSubmitting) return;
 
     setIsSubmitting(true);
-    const result = await checkIn(session.id, {
-      uid: profile?.id,
-      name: profile?.nama,
-      nim: profile?.nim,
-    });
+    const result = await checkIn(
+      session.id,
+      {
+        uid: profile?.id,
+        name: profile?.nama,
+        nim: profile?.nim,
+      },
+      kode
+    );
 
     setIsSubmitting(false);
 
     if (result.ok) {
+      setKode('');
       setSuccessTime(formatJam(new Date().toISOString()));
       setShowSuccess(true);
     } else {
@@ -235,7 +246,11 @@ export default function CheckInScreen({ route }: Props) {
   return (
     <View style={styles.screen}>
       <ScreenHeader title="Presensi" />
-      <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
         <Card style={styles.card}>
           <View style={styles.headerRow}>
             <Text style={styles.title}>{session.praktikum}</Text>
@@ -272,6 +287,28 @@ export default function CheckInScreen({ route }: Props) {
               <Text style={styles.infoValue}>{STATUS_LABEL[session.status]}</Text>
             </View>
           </View>
+
+          {isDibuka && !attended ? (
+            <View style={styles.kodeSection}>
+              <Text style={styles.kodeLabel}>Kode presensi</Text>
+              <TextInput
+                style={styles.kodeInput}
+                value={kode}
+                onChangeText={(t) => setKode(normalisasiKode(t))}
+                placeholder="• • • • •"
+                placeholderTextColor={colors.placeholder}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                autoComplete="off"
+                spellCheck={false}
+                maxLength={KODE_PRESENSI_PANJANG}
+                editable={!isSubmitting}
+                returnKeyType="done"
+                onSubmitEditing={handleCheckIn}
+                accessibilityLabel="Kode presensi dari asisten"
+              />
+            </View>
+          ) : null}
 
           <PrimaryButton
             label={buttonLabel}
@@ -340,6 +377,21 @@ const styles = StyleSheet.create({
     fontFamily: font.semibold,
     color: colors.text,
     textAlign: "right",
+  },
+  kodeSection: { gap: 8, paddingTop: 4 },
+  kodeLabel: { ...text.bodyStrong },
+  kodeInput: {
+    minHeight: 56,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.input,
+    backgroundColor: colors.surface,
+    color: colors.text,
+    fontSize: 24,
+    fontFamily: font.extraBold,
+    letterSpacing: 8,
+    textAlign: "center",
   },
   button: { marginTop: 4 },
   reason: {

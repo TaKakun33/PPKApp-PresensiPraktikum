@@ -1,10 +1,11 @@
 // Presensi (SRS presensi). SATU-SATUNYA jalur menulis presensi:
-//   - checkIn        : praktikan presensi sendiri.
+//   - checkIn        : praktikan presensi sendiri dengan memasukkan kode unik sesi.
 //   - checkInManual  : asisten pengampu mencatat presensi praktikan.
 //   - resetPresensi / resetIzin : asisten mengembalikan status Hadir / Izin praktikan ke awal di Rekap. "Tidak hadir" TIDAK disimpan: dihitung di layar Rekap
 //     untuk praktikan tanpa presensi dan tanpa izin setelah sesi ditutup / waktunya lewat.
 // Format dokumen (harus sama dengan firestore.rules dan tipe `Attendance`):
-//   attendances/{sessionId}_{uid} = { sessionId, kelasId, userId, nama, nim, waktuHadir }
+//   attendances/{sessionId}_{uid} = { sessionId, kelasId, userId, nama, nim, waktuHadir, kode }
+//   (`kode` hanya ada pada presensi sendiri oleh praktikan; harus sama dengan sessionCodes/{sessionId}.kode)
 //   Presensi oleh asisten menambah dua field: { manual: true, dicatatOleh: <uid asisten> }
 // - ID deterministik + rules `update/delete: false` => satu presensi per praktikan per sesi, ditegakkan SERVER.
 // - Rules juga memeriksa status sesi `dibuka` saat commit, jadi sesi yang ditutup di tengah proses tetap ditolak.
@@ -24,6 +25,7 @@ import {
 import { STATUS_SESI } from "../lib/constants";
 import { db } from "../lib/firebase";
 import type { Session } from "../lib/types";
+import { buatKodePresensi, kodePresensiValid, normalisasiKode } from "../utils/kodePresensi";
 import { getErrorCode, isTimeoutError, withTimeout } from "./serviceUtils";
 
 export type CheckInUser = {
@@ -45,16 +47,26 @@ export function attendanceDocId(sessionId: string, uid: string): string {
   return `${sessionId}_${uid}`;
 }
 
+/**
+ * Praktikan presensi sendiri. `kodeInput` = kode unik 5 karakter yang ditampilkan asisten.
+ * Kode dikirim di dokumen presensi dan dicocokkan oleh firestore.rules dengan sessionCodes/{sessionId}
+ * (praktikan tidak bisa membaca dokumen itu), jadi kode yang salah ditolak server.
+ */
 export async function checkIn(
   sessionId: string,
-  user: CheckInUser
+  user: CheckInUser,
+  kodeInput: string
 ): Promise<CheckInResult> {
   const uid = user?.uid || user?.id;
   const nama = (user?.nama || user?.name || "").trim();
   const nim = user?.nim || "";
+  const kode = normalisasiKode(kodeInput ?? "");
 
   if (!sessionId || !uid) {
     return { ok: false, message: "ID sesi atau identitas pengguna tidak valid." };
+  }
+  if (!kodePresensiValid(kode)) {
+    return { ok: false, message: "Masukkan kode presensi 5 karakter (huruf dan angka) dari asisten." };
   }
 
   try {
@@ -85,6 +97,7 @@ export async function checkIn(
           nama,
           nim,
           waktuHadir: serverTimestamp(),
+          kode,
         });
       }),
       CHECKIN_TIMEOUT_MS
@@ -115,13 +128,56 @@ export async function checkIn(
       return {
         ok: false,
         message:
-          "Presensi ditolak: sesi mungkin baru saja ditutup, atau kamu bukan peserta kelas ini.",
+          "Presensi ditolak: kode presensi salah, sesi baru saja ditutup, atau kamu bukan peserta kelas ini.",
       };
     }
     return {
       ok: false,
       message: "Gagal melakukan presensi. Periksa koneksi internet lalu coba lagi.",
     };
+  }
+}
+
+// ─── Kode unik presensi (sessionCodes) ───────────────────────────────────────
+// sessionCodes/{sessionId} = { sessionId, asistenId, kode, createdAt }
+// Hanya asisten pengampu yang dapat membacanya; praktikan hanya bisa mengirim tebakan lewat
+// dokumen presensi dan rules yang membandingkannya.
+
+/** Isi dokumen sessionCodes untuk sesi ini (dipakai openSession dan pastikanKodePresensi). */
+export function dataKodePresensi(sessionId: string, asistenId: string) {
+  return { sessionId, asistenId, kode: buatKodePresensi(), createdAt: serverTimestamp() };
+}
+
+/** Real-time kode presensi sebuah sesi. `null` = belum ada. Hanya untuk asisten pengampu. */
+export function subscribeKodePresensi(
+  sessionId: string,
+  onData: (kode: string | null) => void,
+  onError?: (err: Error) => void
+): () => void {
+  return onSnapshot(
+    doc(db, "sessionCodes", sessionId),
+    (snap: DocumentSnapshot) => {
+      const kode = snap.exists() ? (snap.data() as { kode?: string } | undefined)?.kode : null;
+      onData(typeof kode === "string" ? kode : null);
+    },
+    (_err: FirestoreError) => onError?.(new Error("Gagal memuat kode presensi. Periksa koneksi internet kamu."))
+  );
+}
+
+/**
+ * Buat kode untuk sesi yang sudah dibuka tetapi belum punya kode (mis. dibuka sebelum fitur ini ada).
+ * Kode tidak pernah ditimpa: rules menolak update, jadi dua perangkat asisten tidak bisa membuat dua kode.
+ */
+export async function pastikanKodePresensi(session: Session, asistenId: string): Promise<void> {
+  if (!session?.id || session.asistenId !== asistenId || session.status !== STATUS_SESI.DIBUKA) return;
+  try {
+    await withTimeout(
+      setDoc(doc(db, "sessionCodes", session.id), dataKodePresensi(session.id, asistenId)),
+      CHECKIN_TIMEOUT_MS
+    );
+  } catch {
+    // Gagal di sini (mis. kode sudah dibuat perangkat lain): listener subscribeKodePresensi
+    // tetap menampilkan kode yang ada, atau layar menawarkan coba lagi.
   }
 }
 

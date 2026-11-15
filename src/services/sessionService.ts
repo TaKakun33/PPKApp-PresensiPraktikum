@@ -18,6 +18,7 @@ import {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
   type DocumentSnapshot,
   type FirestoreError,
   type QueryDocumentSnapshot,
@@ -28,6 +29,7 @@ import { STATUS_IZIN } from "../lib/constants";
 import type { StatusIzin, StatusSesi } from "../lib/constants";
 import { db } from "../lib/firebase";
 import type { Attendance, LeaveRequest, Profile, Session } from "../lib/types";
+import { dataKodePresensi } from "./attendanceService";
 import { formatTanggal } from "../utils/format";
 
 // ─── helper ───────────────────────────────────────────────────────────────────
@@ -151,7 +153,12 @@ export async function openSession(sessionId: string, asistenId: string): Promise
     throw new Error(`Sesi "${nama}" masih dibuka. Tutup sesi tersebut sebelum membuka sesi lain.`);
   }
 
-  await updateDoc(ref, { status: "dibuka" as StatusSesi, openedAt: serverTimestamp() });
+  // Sesi dibuka dan kode unik presensinya dibuat dalam satu batch (atomik): sesi yang dibuka
+  // selalu punya kode. Kode disimpan di koleksi terpisah karena dokumen sesi bisa dibaca praktikan.
+  const batch = writeBatch(db);
+  batch.update(ref, { status: "dibuka" as StatusSesi, openedAt: serverTimestamp() });
+  batch.set(doc(db, "sessionCodes", sessionId), dataKodePresensi(sessionId, asistenId));
+  await batch.commit();
 }
 
 /**

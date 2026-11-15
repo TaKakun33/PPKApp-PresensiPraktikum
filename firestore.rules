@@ -27,6 +27,10 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/sessions/$(sessionId)).data;
     }
 
+    function codeOf(sessionId) {
+      return get(/databases/$(database)/documents/sessionCodes/$(sessionId)).data;
+    }
+
     function classOf(kelasId) {
       return get(/databases/$(database)/documents/classes/$(kelasId)).data;
     }
@@ -245,10 +249,37 @@ service cloud.firestore {
         && resource.data.status == 'belum_dibuka';
     }
 
+    // --- sessionCodes -------------------------------------------------------
+    // Kode unik presensi per sesi: sessionCodes/{sessionId} = { sessionId, asistenId, kode, createdAt }
+    // `kode` = 5 karakter huruf besar/angka, dibuat saat sesi dibuka (sessionService.openSession).
+    // Dibaca HANYA oleh asisten pengampu; praktikan tidak bisa membacanya. Praktikan mengirim kode
+    // di dokumen presensinya dan rules attendances yang mencocokkannya.
+    // Pakai get (bukan resource.data) supaya aman dibaca saat dokumennya belum ada.
+    // Dibuat bersama perubahan status sesi menjadi `dibuka` dalam satu batch, karena itu status
+    // sesi diperiksa dengan getAfter. Kode tidak bisa diubah atau dihapus (update/delete ditolak).
+    match /sessionCodes/{sessionId} {
+      allow get: if isAsisten() && sessionOf(sessionId).asistenId == request.auth.uid;
+      allow list: if false;
+
+      allow create: if isAsisten()
+        && request.resource.data.keys().hasOnly(['sessionId', 'asistenId', 'kode', 'createdAt'])
+        && request.resource.data.keys().hasAll(['sessionId', 'asistenId', 'kode', 'createdAt'])
+        && request.resource.data.sessionId == sessionId
+        && request.resource.data.asistenId == request.auth.uid
+        && request.resource.data.kode is string
+        && request.resource.data.kode.matches('^[A-Z0-9]{5}$')
+        && request.resource.data.createdAt == request.time
+        && sessionOf(sessionId).asistenId == request.auth.uid
+        && getAfter(/databases/$(database)/documents/sessions/$(sessionId)).data.status == 'dibuka';
+
+      allow update, delete: if false;
+    }
+
     // --- attendances --------------------------------------------------------
     // SATU format dokumen (attendanceService.checkIn / checkInManual):
     //   ID = {sessionId}_{uid}, isi { sessionId, kelasId, userId, nama, nim, waktuHadir }
-    //   (presensi oleh asisten menambah { manual: true, dicatatOleh })
+    //   (presensi sendiri oleh praktikan menambah { kode } = kode unik sesi, harus cocok dengan
+    //    sessionCodes/{sessionId}.kode; presensi oleh asisten menambah { manual: true, dicatatOleh })
     // ID deterministik + update/delete ditolak => satu presensi per praktikan per sesi,
     // ditegakkan server. Status sesi `dibuka` diperiksa saat commit, jadi tidak ada race
     // dengan penutupan sesi oleh asisten.
@@ -265,8 +296,8 @@ service cloud.firestore {
       );
 
       allow create: if isPraktikan()
-        && request.resource.data.keys().hasOnly(['sessionId', 'kelasId', 'userId', 'nama', 'nim', 'waktuHadir'])
-        && request.resource.data.keys().hasAll(['sessionId', 'kelasId', 'userId', 'nama', 'nim', 'waktuHadir'])
+        && request.resource.data.keys().hasOnly(['sessionId', 'kelasId', 'userId', 'nama', 'nim', 'waktuHadir', 'kode'])
+        && request.resource.data.keys().hasAll(['sessionId', 'kelasId', 'userId', 'nama', 'nim', 'waktuHadir', 'kode'])
         && request.resource.data.sessionId is string
         && request.resource.data.userId == request.auth.uid
         && attId == (request.resource.data.sessionId + '_' + request.auth.uid)
@@ -275,6 +306,7 @@ service cloud.firestore {
         && request.resource.data.kelasId in myProfile().get('kelasIds', [])
         && request.resource.data.nama == myProfile().nama
         && request.resource.data.nim == myProfile().get('nim', '')
+        && request.resource.data.kode == codeOf(request.resource.data.sessionId).kode
         && request.resource.data.waktuHadir == request.time;
 
       // Presensi oleh asisten pengampu (attendanceService.checkInManual).

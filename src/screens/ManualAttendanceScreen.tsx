@@ -3,9 +3,10 @@
 // - Hadir : catat praktikan hadir (attendanceService.checkInManual).
 // - Reset : kembalikan status Hadir / Izin praktikan ke awal.
 // Semua tulisan lewat attendanceService; aturan akhirnya ditegakkan firestore.rules.
+// - Kode presensi: kode unik 5 karakter sesi ini, dibagikan asisten ke praktikan untuk presensi sendiri.
 // Layar Rekap hanya menampilkan hasilnya (tidak bisa mengubah).
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -19,7 +20,13 @@ import { useAuth } from '../context/AuthContext';
 import { useNamaKelas } from '../hooks/useNamaKelas';
 import { STATUS_SESI } from '../lib/constants';
 import type { Attendance, ClassDoc, LeaveRequest, Profile, Session } from '../lib/types';
-import { checkInManual, resetIzin, resetPresensi } from '../services/attendanceService';
+import {
+  checkInManual,
+  pastikanKodePresensi,
+  resetIzin,
+  resetPresensi,
+  subscribeKodePresensi,
+} from '../services/attendanceService';
 import { subscribeClass, subscribePeserta } from '../services/classService';
 import {
   subscribeAttendances,
@@ -46,6 +53,13 @@ export default function ManualAttendanceScreen() {
   const [pesertaState, setPesertaState] = useState<{ key: string; items: Profile[] } | null>(null);
   const [attState, setAttState] = useState<{ sessionId: string; items: Attendance[] } | null>(null);
   const [izinAll, setIzinAll] = useState<LeaveRequest[]>([]);
+
+  const [kodeState, setKodeState] = useState<{
+    sessionId: string;
+    kode: string | null;
+    error: boolean;
+  } | null>(null);
+  const kodeDibuat = useRef<string | null>(null);
 
   const [aksi, setAksi] = useState<Aksi | null>(null);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -87,6 +101,31 @@ export default function ManualAttendanceScreen() {
   const sessionLoading = !!sessionId && !(sessionState && sessionState.id === sessionId);
 
   const kelasId = session?.kelasId ?? null;
+  const sesiMilikku = !!session && !!profileId && session.asistenId === profileId;
+  const sesiDibuka = session?.status === STATUS_SESI.DIBUKA;
+
+  // Kode unik presensi (hanya terbaca oleh asisten pengampu, lihat firestore.rules).
+  useEffect(() => {
+    if (!sessionId || !sesiMilikku) return;
+    return subscribeKodePresensi(
+      sessionId,
+      (kode) => setKodeState({ sessionId, kode, error: false }),
+      () => setKodeState({ sessionId, kode: null, error: true })
+    );
+  }, [sessionId, sesiMilikku]);
+
+  const kodeAktif = kodeState && kodeState.sessionId === sessionId ? kodeState : null;
+  const kodeLoaded = kodeAktif !== null;
+  const kodePresensi = kodeAktif?.kode ?? null;
+  const kodeError = kodeAktif?.error ?? false;
+
+  // Sesi yang sudah dibuka sebelum fitur kode ada belum punya kode: buatkan sekali.
+  useEffect(() => {
+    if (!session || !profileId || !sesiMilikku || !sesiDibuka) return;
+    if (!kodeLoaded || kodeError || kodePresensi || kodeDibuat.current === session.id) return;
+    kodeDibuat.current = session.id;
+    void pastikanKodePresensi(session, profileId);
+  }, [session, profileId, sesiMilikku, sesiDibuka, kodeLoaded, kodeError, kodePresensi]);
 
   useEffect(() => {
     if (!kelasId) return;
@@ -249,6 +288,24 @@ export default function ManualAttendanceScreen() {
               </Text>
             </View>
 
+            {dibuka ? (
+              <View style={styles.kodeCard} accessibilityLabel="Kode presensi sesi ini">
+                <Text style={styles.kodeLabel}>Kode presensi</Text>
+                <Text
+                  selectable
+                  style={styles.kodeValue}
+                  accessibilityLabel={kodePresensi ? `Kode presensi ${kodePresensi.split('').join(' ')}` : undefined}
+                >
+                  {kodePresensi ?? (kodeError ? '—' : '·····')}
+                </Text>
+                <Text style={styles.kodeHint}>
+                  {kodeError
+                    ? 'Kode tidak dapat dimuat. Periksa koneksi internet lalu buka ulang layar ini.'
+                    : 'Bagikan kode ini ke praktikan di kelas. Praktikan memasukkannya saat presensi sendiri.'}
+                </Text>
+              </View>
+            ) : null}
+
             {!dibuka ? (
               <View style={[styles.feedback, styles.errorFeedback]}>
                 <Text style={styles.feedbackText}>
@@ -359,6 +416,24 @@ const styles = StyleSheet.create({
   sessionInfo: { flex: 1, gap: 3 },
   sessionTitle: { fontSize: 16, fontFamily: font.bold, color: colors.text },
   caption: { ...text.caption },
+  kodeCard: {
+    alignItems: 'center',
+    padding: 16,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.card,
+    backgroundColor: colors.tint,
+  },
+  kodeLabel: { ...text.caption, fontFamily: font.semibold },
+  kodeValue: {
+    fontSize: 36,
+    lineHeight: 44,
+    fontFamily: font.extraBold,
+    letterSpacing: 10,
+    color: colors.primary,
+  },
+  kodeHint: { ...text.caption, textAlign: 'center' },
   feedback: { padding: 12, borderWidth: 1, borderRadius: 14, backgroundColor: colors.card },
   errorFeedback: { borderColor: colors.danger, backgroundColor: colors.dangerTint },
   successFeedback: { borderColor: colors.success, backgroundColor: colors.successTint },
