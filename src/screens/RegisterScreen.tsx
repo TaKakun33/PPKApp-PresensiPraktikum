@@ -1,10 +1,12 @@
 // FILE AKMAL (feat/auth-leave-ai) — SRS-11. Layar registrasi: peran, nama, NIM (praktikan), email, password.
 // Peran asisten hanya berhasil jika email-nya terdaftar di `allowedAssistants` (diisi admin di Firebase Console).
-// Tampilan mengikuti LoginScreen (header biru + sheet putih). Profil disimpan oleh authService.registerUser.
+// Tampilan mengikuti LoginScreen (latar putih, foto, judul di tengah, input abu-abu, tombol navy). Profil disimpan oleh authService.registerUser.
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { Image } from 'expo-image';
 import { Link, Redirect } from 'expo-router';
 import { useRef, useState, type ComponentRef } from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Pressable,
   ScrollView,
@@ -19,7 +21,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { Role } from '../lib/constants';
 import { COLORS } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
-import { useScrollKeFieldFokus } from './useScrollKeFieldFokus';
+import { useScrollKeFieldFokus } from '../hooks/useScrollKeFieldFokus';
 import {
   PASSWORD_MIN,
   getAuthErrorMessage,
@@ -27,6 +29,10 @@ import {
   type RegisterErrors,
   type RegisterField,
 } from '../services/authService';
+
+const NAVY = '#0B2447';
+const INPUT_BG = '#F5F6F8';
+const MUTED_TEXT = '#8A8F98';
 
 export default function RegisterScreen() {
   const { register, state } = useAuth();
@@ -88,59 +94,63 @@ export default function RegisterScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="dark-content" />
       {/* behavior="padding" di Android DAN iOS: Android edge-to-edge tidak me-resize jendela sendiri. */}
       <KeyboardAvoidingView style={styles.flex} behavior="padding">
         <ScrollView
           ref={scrollRef}
           style={styles.flex}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: Math.max(insets.bottom + 16, 28) },
+          ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
         >
-          <View style={styles.header}>
-            <Text style={styles.eyebrow}>Bergabung di aplikasi,</Text>
+          <Image
+            source={require('../../assets/images/4598597536534242688.jpg')}
+            style={styles.photoFrame}
+            contentFit="cover"
+            accessibilityLabel="Ilustrasi kelas praktikum"
+          />
+
+          <View style={styles.brand}>
             <Text style={styles.heroTitle}>Buat Akun Baru</Text>
-            <Text style={styles.heroSubtitle}>
-              Pilih peranmu, lalu isi data untuk mulai mengelola jadwal, presensi, dan izin praktikum.
-            </Text>
+            <Text style={styles.heroSubtitle}>Jadwal, Presensi, &amp; Perizinan Praktikum</Text>
           </View>
 
-          <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom + 14, 28) }]}>
-            <View style={styles.handle} />
+          {/* Peran */}
+          <View style={styles.roleSwitcher} accessibilityRole="tablist">
+            {(['praktikan', 'asisten'] as const).map((item) => {
+              const active = role === item;
+              return (
+                <Pressable
+                  key={item}
+                  onPress={() => pilihPeran(item)}
+                  style={[styles.roleOption, active && styles.roleOptionActive]}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={`Daftar sebagai ${item}`}
+                >
+                  <Text style={[styles.roleText, active && styles.roleTextActive]}>
+                    {item === 'praktikan' ? 'Praktikan' : 'Asisten'}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
 
-            {/* Peran */}
-            <View style={styles.roleSwitcher} accessibilityRole="tablist">
-              {(['praktikan', 'asisten'] as const).map((item) => {
-                const active = role === item;
-                return (
-                  <Pressable
-                    key={item}
-                    onPress={() => pilihPeran(item)}
-                    style={[styles.roleOption, active && styles.roleOptionActive]}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected: active }}
-                    accessibilityLabel={`Daftar sebagai ${item}`}
-                  >
-                    <Text style={[styles.roleText, active && styles.roleTextActive]}>
-                      {item === 'praktikan' ? 'Praktikan' : 'Asisten'}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <View style={styles.form} onLayout={saatLayoutForm}>
+          <View style={styles.form} onLayout={saatLayoutForm}>
               {/* Nama */}
               <View style={styles.fieldGroup} onLayout={saatLayoutField('nama')}>
                 <Text style={styles.label}>Nama lengkap</Text>
                 <View style={[styles.inputBox, fieldErrors.nama && styles.inputBoxError]}>
-                  <Ionicons name="person-outline" size={18} color={COLORS.muted} />
+                  <Ionicons name="person-outline" size={18} color={MUTED_TEXT} />
                   <TextInput
                     style={styles.input}
                     placeholder="Nama sesuai identitas"
-                    placeholderTextColor={COLORS.muted}
+                    placeholderTextColor={MUTED_TEXT}
                     value={nama}
                     onFocus={() => fokusKe('nama')}
                     onChangeText={(t) => {
@@ -160,12 +170,12 @@ export default function RegisterScreen() {
                 <View style={styles.fieldGroup} onLayout={saatLayoutField('nim')}>
                   <Text style={styles.label}>NIM</Text>
                   <View style={[styles.inputBox, fieldErrors.nim && styles.inputBoxError]}>
-                    <Ionicons name="id-card-outline" size={18} color={COLORS.muted} />
+                    <Ionicons name="id-card-outline" size={18} color={MUTED_TEXT} />
                     <TextInput
                       ref={nimRef}
                       style={styles.input}
                       placeholder="Nomor induk mahasiswa"
-                      placeholderTextColor={COLORS.muted}
+                      placeholderTextColor={MUTED_TEXT}
                       value={nim}
                       onFocus={() => fokusKe('nim')}
                       onChangeText={(t) => {
@@ -185,12 +195,12 @@ export default function RegisterScreen() {
               <View style={styles.fieldGroup} onLayout={saatLayoutField('email')}>
                 <Text style={styles.label}>Email</Text>
                 <View style={[styles.inputBox, fieldErrors.email && styles.inputBoxError]}>
-                  <Ionicons name="mail-outline" size={18} color={COLORS.muted} />
+                  <Ionicons name="mail-outline" size={18} color={MUTED_TEXT} />
                   <TextInput
                     ref={emailRef}
                     style={styles.input}
                     placeholder="email@kampus.ac.id"
-                    placeholderTextColor={COLORS.muted}
+                    placeholderTextColor={MUTED_TEXT}
                     value={email}
                     onFocus={() => fokusKe('email')}
                     onChangeText={(t) => {
@@ -211,12 +221,12 @@ export default function RegisterScreen() {
               <View style={styles.fieldGroup} onLayout={saatLayoutField('password')}>
                 <Text style={styles.label}>Password</Text>
                 <View style={[styles.inputBox, fieldErrors.password && styles.inputBoxError]}>
-                  <Ionicons name="lock-closed-outline" size={18} color={COLORS.muted} />
+                  <Ionicons name="lock-closed-outline" size={18} color={MUTED_TEXT} />
                   <TextInput
                     ref={passwordRef}
                     style={styles.input}
                     placeholder={`Minimal ${PASSWORD_MIN} karakter`}
-                    placeholderTextColor={COLORS.muted}
+                    placeholderTextColor={MUTED_TEXT}
                     value={password}
                     onFocus={() => fokusKe('password')}
                     onChangeText={(t) => {
@@ -235,7 +245,7 @@ export default function RegisterScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={showPass ? 'Sembunyikan password' : 'Tampilkan password'}
                   >
-                    <Ionicons name={showPass ? 'eye-off-outline' : 'eye-outline'} size={19} color={COLORS.muted} />
+                    <Ionicons name={showPass ? 'eye-off-outline' : 'eye-outline'} size={19} color={MUTED_TEXT} />
                   </Pressable>
                 </View>
                 {fieldErrors.password ? <Text style={styles.fieldError}>{fieldErrors.password}</Text> : null}
@@ -245,12 +255,12 @@ export default function RegisterScreen() {
               <View style={styles.fieldGroup} onLayout={saatLayoutField('confirmPassword')}>
                 <Text style={styles.label}>Ulangi password</Text>
                 <View style={[styles.inputBox, fieldErrors.confirmPassword && styles.inputBoxError]}>
-                  <Ionicons name="lock-closed-outline" size={18} color={COLORS.muted} />
+                  <Ionicons name="lock-closed-outline" size={18} color={MUTED_TEXT} />
                   <TextInput
                     ref={confirmRef}
                     style={styles.input}
                     placeholder="Ketik ulang password"
-                    placeholderTextColor={COLORS.muted}
+                    placeholderTextColor={MUTED_TEXT}
                     value={confirmPassword}
                     onFocus={() => fokusKe('confirmPassword')}
                     onChangeText={(t) => {
@@ -281,24 +291,26 @@ export default function RegisterScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={submitting ? 'Mendaftarkan' : submitLabel}
               >
+                {submitting ? <ActivityIndicator size="small" color={COLORS.white} /> : null}
                 <Text style={styles.buttonText}>{submitting ? 'Mendaftarkan...' : submitLabel}</Text>
               </Pressable>
-            </View>
 
-            <View style={styles.footer}>
               <Text style={styles.noteText}>
                 {role === 'asisten'
                   ? 'Pendaftaran asisten hanya berhasil dengan email yang sudah didaftarkan admin.'
                   : 'Praktikan mendaftar dengan NIM. Jika kamu asisten, pilih "Asisten" dan pakai email yang didaftarkan admin.'}
               </Text>
+
               <View style={styles.loginRow}>
                 <Text style={styles.infoText}>Sudah punya akun?</Text>
                 <Link href="/login" style={styles.link}>
                   Masuk
                 </Link>
               </View>
-              <Text style={styles.copyright}>© 2026 created by Kelompok 5</Text>
             </View>
+
+          <View style={styles.footer}>
+            <Text style={styles.copyright}>© 2026 created by Kelompok 5</Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -307,111 +319,68 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.primary },
+  safe: { flex: 1, backgroundColor: COLORS.white },
   flex: { flex: 1 },
-  scrollContent: { flexGrow: 1, backgroundColor: COLORS.card, paddingBottom: 32 },
-  header: {
-    backgroundColor: COLORS.primary,
+  scrollContent: {
+    flexGrow: 1,
+    backgroundColor: COLORS.white,
     paddingHorizontal: 24,
-    paddingTop: 22,
-    paddingBottom: 66,
-    gap: 10,
+    paddingTop: 18,
   },
-  eyebrow: {
-    fontSize: 11,
-    letterSpacing: 1.5,
-    fontFamily: 'PlusJakartaSans_700Bold',
-    color: 'rgba(255,255,255,0.78)',
-  },
+  photoFrame: { width: '100%', height: 150, borderRadius: 22, backgroundColor: '#F1F2F4' },
+  brand: { marginTop: 22, alignItems: 'center', gap: 6 },
   heroTitle: {
-    fontSize: 32,
-    lineHeight: 39,
+    fontSize: 27,
+    lineHeight: 33,
     fontFamily: 'PlusJakartaSans_800ExtraBold',
-    color: COLORS.white,
-    letterSpacing: -0.8,
+    color: NAVY,
+    letterSpacing: -0.6,
   },
-  heroSubtitle: {
-    maxWidth: 300,
-    fontSize: 14,
-    lineHeight: 21,
-    fontFamily: 'PlusJakartaSans_400Regular',
-    color: 'rgba(255,255,255,0.82)',
-  },
-  sheet: {
-    marginTop: -34,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    backgroundColor: COLORS.card,
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 28,
-    gap: 22,
-  },
-  handle: {
-    alignSelf: 'center',
-    width: 42,
-    height: 5,
-    borderRadius: 999,
-    backgroundColor: COLORS.background,
-    marginBottom: 2,
-  },
+  heroSubtitle: { fontSize: 13, lineHeight: 19, fontFamily: 'PlusJakartaSans_500Medium', color: MUTED_TEXT },
   roleSwitcher: {
+    marginTop: 24,
     flexDirection: 'row',
-    backgroundColor: COLORS.background,
-    borderRadius: 16,
+    backgroundColor: INPUT_BG,
+    borderRadius: 14,
     padding: 4,
     gap: 4,
   },
-  roleOption: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 11,
-    borderRadius: 13,
-  },
+  roleOption: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 11, borderRadius: 11 },
   roleOptionActive: {
-    backgroundColor: COLORS.card,
+    backgroundColor: COLORS.white,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 6,
     elevation: 2,
   },
-  roleText: { fontSize: 14, fontFamily: 'PlusJakartaSans_600SemiBold', color: COLORS.muted },
-  roleTextActive: { color: COLORS.text, fontFamily: 'PlusJakartaSans_700Bold' },
-  form: { gap: 16 },
+  roleText: { fontSize: 14, fontFamily: 'PlusJakartaSans_600SemiBold', color: MUTED_TEXT },
+  roleTextActive: { color: NAVY, fontFamily: 'PlusJakartaSans_700Bold' },
+  form: { marginTop: 18, gap: 14 },
   fieldGroup: { gap: 7 },
-  label: { fontSize: 13, fontFamily: 'PlusJakartaSans_600SemiBold', color: COLORS.text },
+  label: { fontSize: 13, fontFamily: 'PlusJakartaSans_600SemiBold', color: NAVY },
   inputBox: {
-    minHeight: 56,
+    minHeight: 54,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: COLORS.background,
-    borderRadius: 16,
+    backgroundColor: INPUT_BG,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'transparent', // ruang untuk garis error tanpa menggeser tata letak
-    paddingLeft: 15,
-    paddingRight: 15,
+    borderColor: '#F0F1F3',
+    paddingLeft: 16,
+    paddingRight: 12,
   },
   inputBoxError: { borderColor: COLORS.danger },
   input: {
     flex: 1,
     fontSize: 15,
     fontFamily: 'PlusJakartaSans_400Regular',
-    color: COLORS.text,
-    paddingVertical: 14,
+    color: NAVY,
+    paddingVertical: 13,
     paddingHorizontal: 0,
   },
-  eyeButton: {
-    minHeight: 32,
-    minWidth: 34,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    borderLeftWidth: 2,
-    borderLeftColor: COLORS.white,
-    paddingLeft: 12,
-  },
+  eyeButton: { minHeight: 32, minWidth: 34, alignItems: 'flex-end', justifyContent: 'center', paddingLeft: 10 },
   fieldError: { fontSize: 12, fontFamily: 'PlusJakartaSans_500Medium', color: COLORS.danger },
   errorBox: {
     flexDirection: 'row',
@@ -426,27 +395,36 @@ const styles = StyleSheet.create({
   },
   errorText: { flex: 1, fontSize: 13, fontFamily: 'PlusJakartaSans_500Medium', color: COLORS.danger },
   button: {
-    marginTop: 2,
-    backgroundColor: COLORS.primary,
+    marginTop: 8,
+    backgroundColor: NAVY,
     paddingVertical: 16,
     paddingHorizontal: 22,
-    borderRadius: 999,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
   },
   buttonPressed: { opacity: 0.84 },
-  buttonText: { fontSize: 15, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.white },
-  footer: { alignItems: 'center', gap: 10, paddingTop: 4 },
+  buttonText: {
+    fontSize: 15,
+    fontFamily: 'PlusJakartaSans_700Bold',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: COLORS.white,
+  },
   noteText: {
+    alignSelf: 'center',
     maxWidth: 300,
     fontSize: 11,
     lineHeight: 17,
     textAlign: 'center',
     fontFamily: 'PlusJakartaSans_400Regular',
-    color: COLORS.muted,
+    color: MUTED_TEXT,
   },
   loginRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6 },
-  infoText: { fontSize: 13, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
-  link: { fontSize: 13, fontFamily: 'PlusJakartaSans_700Bold', color: COLORS.primary },
-  copyright: { fontSize: 11, fontFamily: 'PlusJakartaSans_400Regular', color: COLORS.muted },
+  infoText: { fontSize: 13, fontFamily: 'PlusJakartaSans_400Regular', color: MUTED_TEXT },
+  link: { fontSize: 13, fontFamily: 'PlusJakartaSans_700Bold', color: NAVY },
+  footer: { marginTop: 'auto', paddingTop: 28, alignItems: 'center' },
+  copyright: { fontSize: 11, fontFamily: 'PlusJakartaSans_400Regular', color: MUTED_TEXT },
 });

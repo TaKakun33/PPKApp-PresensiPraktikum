@@ -1,5 +1,6 @@
 // STUB dari PM - pemilik: Naufal (feat/assistant-session-recap). Boleh diganti total,
 // tapi pertahankan props agar layar lain tidak rusak.
+import type { ReactNode } from 'react';
 import { Modal, StyleSheet, Text, View } from 'react-native';
 
 import { colors, font, text } from '../constants/theme';
@@ -12,6 +13,8 @@ type Props = {
   confirmLabel?: string;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Konten tambahan di bawah pesan (mis. kolom catatan). Opsional. */
+  children?: ReactNode;
 };
 
 export default function ConfirmModal({
@@ -21,6 +24,7 @@ export default function ConfirmModal({
   confirmLabel = 'Ya',
   onConfirm,
   onCancel,
+  children,
 }: Props) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
@@ -28,6 +32,7 @@ export default function ConfirmModal({
         <View style={styles.box}>
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
+          {children}
           <View style={styles.row}>
             <PrimaryButton
               label="Batal"

@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import Card from '../components/Card';
 import EmptyState from '../components/EmptyState';
@@ -12,11 +12,15 @@ import ScreenHeader from '../components/ScreenHeader';
 import StatusBadge from '../components/StatusBadge';
 import SuccessBottomSheet from '../components/SuccessBottomSheet';
 import { STATUS_LABEL } from '../constants/colors';
-import { colors, font, layout, text } from '../constants/theme';
+import { colors, font, layout, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
+import { STATUS_IZIN, STATUS_SESI } from '../lib/constants';
+import type { StatusIzin } from '../lib/constants';
 import type { Session } from '../lib/types';
 import { checkIn, subscribeCheckInState } from '../services/attendanceService';
+import { subscribeSessions } from '../services/sessionService';
 import { formatJam } from '../utils/format';
+import { KODE_PRESENSI_PANJANG, kodePresensiValid, normalisasiKode } from '../utils/kodePresensi';
 
 type Props = {
   route?: {
@@ -28,19 +32,53 @@ type Props = {
 
 export default function CheckInScreen({ route }: Props) {
   const localParams = useLocalSearchParams<{ sessionId?: string }>();
-  const sessionId = route?.params?.sessionId ?? localParams?.sessionId;
+  const paramSessionId = route?.params?.sessionId ?? localParams?.sessionId;
 
   const { profile } = useAuth();
   const uid = profile?.id ?? '';
 
+  // Tanpa parameter route (mis. dibuka dari tab Presensi), pilih otomatis sesi yang sedang Dibuka
+  // di kelas praktikan. Parameter sessionId tetap diprioritaskan jika ada.
+  const [autoSessionId, setAutoSessionId] = useState<string | null>(null);
+  const [autoLoaded, setAutoLoaded] = useState(false);
+  const sessionId = paramSessionId ?? autoSessionId ?? undefined;
+
   const [session, setSession] = useState<Session | null>(null);
   const [attended, setAttended] = useState(false);
+  const [izinStatus, setIzinStatus] = useState<StatusIzin | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [successTime, setSuccessTime] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  // Kode unik 5 karakter dari asisten; selalu disimpan dalam huruf besar.
+  const [kode, setKode] = useState('');
+
+  useEffect(() => {
+    if (paramSessionId || !profile || profile.role !== 'praktikan') {
+      return;
+    }
+
+    return subscribeSessions(
+      profile,
+      (items) => {
+        const dibuka = items
+          .filter((item) => item.status === STATUS_SESI.DIBUKA)
+          .sort((a, b) =>
+            `${a.tanggal} ${a.waktuMulai}`.localeCompare(`${b.tanggal} ${b.waktuMulai}`)
+          );
+        setAutoSessionId(dibuka[0]?.id ?? null);
+        setAutoLoaded(true);
+      },
+      (err) => {
+        setError(err.message || 'Gagal memuat sesi praktikum.');
+        setAutoLoaded(true);
+      }
+    );
+    // profile berganti objek tiap snapshot profil; cukup bergantung pada id, peran, dan kelasIds.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paramSessionId, profile?.id, profile?.role, (profile?.kelasIds ?? []).join(',')]);
 
   useEffect(() => {
     if (!sessionId || !uid) {
@@ -50,9 +88,10 @@ export default function CheckInScreen({ route }: Props) {
     const unsubscribe = subscribeCheckInState(
       sessionId,
       uid,
-      ({ session: s, attended: a }) => {
+      ({ session: s, attended: a, izinStatus: izin }) => {
         setSession(s);
         setAttended(a);
+        setIzinStatus(izin);
         setLoading(false);
       },
       (err) => {
@@ -66,6 +105,28 @@ export default function CheckInScreen({ route }: Props) {
     };
   }, [sessionId, uid, reloadKey]);
 
+  if (!sessionId && error) {
+    return (
+      <View style={styles.screen}>
+        <ScreenHeader title="Presensi" />
+        <View style={styles.state}>
+          <ErrorState message={error} onRetry={() => setError(null)} />
+        </View>
+      </View>
+    );
+  }
+
+  if (!sessionId && !autoLoaded) {
+    return (
+      <View style={styles.screen}>
+        <ScreenHeader title="Presensi" />
+        <View style={styles.state}>
+          <LoadingState message="Mencari sesi yang sedang dibuka..." />
+        </View>
+      </View>
+    );
+  }
+
   if (!sessionId) {
     return (
       <View style={styles.screen}>
@@ -74,8 +135,8 @@ export default function CheckInScreen({ route }: Props) {
           <EmptyState
             compact
             icon="checkbox-outline"
-            title="Sesi Belum Dipilih"
-            message="Silakan pilih sesi praktikum dari halaman jadwal untuk melakukan presensi."
+            title="Belum Ada Sesi yang Dibuka"
+            message="Presensi bisa dilakukan setelah asisten membuka sesi praktikum kelasmu."
           />
         </View>
       </View>
@@ -134,9 +195,17 @@ export default function CheckInScreen({ route }: Props) {
   let reason = "";
   let canPress = false;
 
+  // Izin diterima = tidak bisa presensi lagi. Izin menunggu dibatalkan otomatis jika kamu presensi.
+  const izinDiterima = izinStatus === STATUS_IZIN.DITERIMA;
+  const izinMenunggu = izinStatus === STATUS_IZIN.MENUNGGU;
+
   if (attended) {
     buttonLabel = "Sudah Hadir";
     reason = "Kamu sudah melakukan presensi pada sesi ini.";
+    canPress = false;
+  } else if (izinDiterima) {
+    buttonLabel = "Izin Diterima";
+    reason = "Izinmu pada sesi ini sudah diterima asisten, jadi presensi tidak bisa dilakukan.";
     canPress = false;
   } else if (isBelumDibuka) {
     buttonLabel = "Belum Dibuka";
@@ -148,22 +217,30 @@ export default function CheckInScreen({ route }: Props) {
     canPress = false;
   } else if (isDibuka) {
     buttonLabel = isSubmitting ? "Memproses..." : "Presensi Sekarang";
-    canPress = !isSubmitting;
+    canPress = !isSubmitting && kodePresensiValid(kode);
+    if (!isSubmitting && !kodePresensiValid(kode)) {
+      reason = `Masukkan kode presensi ${KODE_PRESENSI_PANJANG} karakter dari asisten.`;
+    }
   }
 
   const handleCheckIn = async () => {
     if (!canPress || isSubmitting) return;
 
     setIsSubmitting(true);
-    const result = await checkIn(session.id, {
-      uid: profile?.id,
-      name: profile?.nama,
-      nim: profile?.nim,
-    });
+    const result = await checkIn(
+      session.id,
+      {
+        uid: profile?.id,
+        name: profile?.nama,
+        nim: profile?.nim,
+      },
+      kode
+    );
 
     setIsSubmitting(false);
 
     if (result.ok) {
+      setKode('');
       setSuccessTime(formatJam(new Date().toISOString()));
       setShowSuccess(true);
     } else {
@@ -180,7 +257,11 @@ export default function CheckInScreen({ route }: Props) {
   return (
     <View style={styles.screen}>
       <ScreenHeader title="Presensi" />
-      <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
         <Card style={styles.card}>
           <View style={styles.headerRow}>
             <Text style={styles.title}>{session.praktikum}</Text>
@@ -217,6 +298,35 @@ export default function CheckInScreen({ route }: Props) {
               <Text style={styles.infoValue}>{STATUS_LABEL[session.status]}</Text>
             </View>
           </View>
+
+          {isDibuka && !attended && !izinDiterima ? (
+            <View style={styles.kodeSection}>
+              <Text style={styles.kodeLabel}>Kode presensi</Text>
+              <TextInput
+                style={styles.kodeInput}
+                value={kode}
+                onChangeText={(t) => setKode(normalisasiKode(t))}
+                placeholder="• • • • •"
+                placeholderTextColor={colors.placeholder}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                autoComplete="off"
+                spellCheck={false}
+                maxLength={KODE_PRESENSI_PANJANG}
+                editable={!isSubmitting}
+                returnKeyType="done"
+                onSubmitEditing={handleCheckIn}
+                accessibilityLabel="Kode presensi dari asisten"
+              />
+            </View>
+          ) : null}
+
+          {isDibuka && !attended && izinMenunggu ? (
+            <Text style={styles.izinNote}>
+              Kamu punya pengajuan izin yang masih menunggu. Jika kamu presensi, pengajuan izin itu akan
+              dibatalkan otomatis.
+            </Text>
+          ) : null}
 
           <PrimaryButton
             label={buttonLabel}
@@ -285,6 +395,28 @@ const styles = StyleSheet.create({
     fontFamily: font.semibold,
     color: colors.text,
     textAlign: "right",
+  },
+  kodeSection: { gap: 8, paddingTop: 4 },
+  kodeLabel: { ...text.bodyStrong },
+  kodeInput: {
+    minHeight: 56,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.input,
+    backgroundColor: colors.surface,
+    color: colors.text,
+    fontSize: 24,
+    fontFamily: font.extraBold,
+    letterSpacing: 8,
+    textAlign: "center",
+  },
+  izinNote: {
+    ...text.caption,
+    padding: 12,
+    borderRadius: radius.input,
+    backgroundColor: colors.surface,
+    color: colors.textSecondary,
   },
   button: { marginTop: 4 },
   reason: {

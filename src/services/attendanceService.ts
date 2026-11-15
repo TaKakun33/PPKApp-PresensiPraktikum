@@ -1,14 +1,37 @@
+// Presensi (SRS presensi). SATU-SATUNYA jalur menulis presensi:
+//   - checkIn        : praktikan presensi sendiri dengan memasukkan kode unik sesi.
+//   - checkInManual  : asisten pengampu mencatat presensi praktikan.
+//   - resetPresensi / resetIzin : asisten mengembalikan status Hadir / Izin praktikan ke awal di Rekap. "Tidak hadir" TIDAK disimpan: dihitung di layar Rekap
+//     untuk praktikan tanpa presensi dan tanpa izin setelah sesi ditutup / waktunya lewat.
+// Format dokumen (harus sama dengan firestore.rules dan tipe `Attendance`):
+//   attendances/{sessionId}_{uid} = { sessionId, kelasId, userId, nama, nim, waktuHadir, kode }
+//   (`kode` hanya ada pada presensi sendiri oleh praktikan; harus sama dengan sessionCodes/{sessionId}.kode)
+//   Presensi oleh asisten menambah dua field: { manual: true, dicatatOleh: <uid asisten> }
+// - Presensi vs izin (ID izin = ID presensi = {sessionId}_{uid}): jika praktikan masih punya izin berstatus
+//   `menunggu`, izin itu otomatis DIBATALKAN (dihapus) di transaksi yang sama dengan presensinya.
+//   Jika izin sudah `diterima`, presensi DITOLAK. Izin `ditolak` dibiarkan sebagai catatan.
+//   Keduanya ditegakkan juga oleh firestore.rules.
+// - ID deterministik + rules `update/delete: false` => satu presensi per praktikan per sesi, ditegakkan SERVER.
+// - Rules juga memeriksa status sesi `dibuka` saat commit, jadi sesi yang ditutup di tengah proses tetap ditolak.
+// - Transaksi di bawah hanya untuk memberi pesan error yang jelas; keamanan tetap di rules.
 import {
+  deleteDoc,
   doc,
   onSnapshot,
   runTransaction,
   serverTimestamp,
+  setDoc,
+  updateDoc,
   type DocumentSnapshot,
   type FirestoreError,
 } from "@react-native-firebase/firestore";
 
+import { STATUS_IZIN, STATUS_SESI } from "../lib/constants";
+import type { StatusIzin } from "../lib/constants";
 import { db } from "../lib/firebase";
 import type { Session } from "../lib/types";
+import { buatKodePresensi, kodePresensiValid, normalisasiKode } from "../utils/kodePresensi";
+import { getErrorCode, isTimeoutError, withTimeout } from "./serviceUtils";
 
 export type CheckInUser = {
   uid?: string;
@@ -22,47 +45,83 @@ export type CheckInResult =
   | { ok: true }
   | { ok: false; message: string };
 
+const CHECKIN_TIMEOUT_MS = 12000;
+
+/** ID dokumen presensi. Harus sama dengan pola di firestore.rules. */
+export function attendanceDocId(sessionId: string, uid: string): string {
+  return `${sessionId}_${uid}`;
+}
+
+/**
+ * Praktikan presensi sendiri. `kodeInput` = kode unik 5 karakter yang ditampilkan asisten.
+ * Kode dikirim di dokumen presensi dan dicocokkan oleh firestore.rules dengan sessionCodes/{sessionId}
+ * (praktikan tidak bisa membaca dokumen itu), jadi kode yang salah ditolak server.
+ */
 export async function checkIn(
   sessionId: string,
-  user: CheckInUser
+  user: CheckInUser,
+  kodeInput: string
 ): Promise<CheckInResult> {
   const uid = user?.uid || user?.id;
-  const name = user?.name || user?.nama || "";
+  const nama = (user?.nama || user?.name || "").trim();
   const nim = user?.nim || "";
+  const kode = normalisasiKode(kodeInput ?? "");
 
   if (!sessionId || !uid) {
     return { ok: false, message: "ID sesi atau identitas pengguna tidak valid." };
   }
+  if (!kodePresensiValid(kode)) {
+    return { ok: false, message: "Masukkan kode presensi 5 karakter (huruf dan angka) dari asisten." };
+  }
 
   try {
     const sessionRef = doc(db, "sessions", sessionId);
-    const attendanceRef = doc(db, "attendances", `${sessionId}_${uid}`);
+    const attendanceRef = doc(db, "attendances", attendanceDocId(sessionId, uid));
+    // ID izin sama dengan ID presensi (lihat leaveDocId di leaveService; tidak diimpor agar tidak melingkar).
+    const leaveRef = doc(db, "leaveRequests", attendanceDocId(sessionId, uid));
 
-    await runTransaction(db, async (transaction: any) => {
-      const sessionSnap = await transaction.get(sessionRef);
-      if (!sessionSnap.exists()) {
-        throw new Error("SESI_NOT_FOUND");
-      }
+    await withTimeout(
+      runTransaction(db, async (transaction: any) => {
+        const sessionSnap = await transaction.get(sessionRef);
+        if (!sessionSnap.exists()) {
+          throw new Error("SESI_NOT_FOUND");
+        }
 
-      const sessionData = sessionSnap.data() as Partial<Session> | undefined;
-      const statusStr = String(sessionData?.status ?? "");
-      if (statusStr !== "dibuka" && statusStr !== "Dibuka") {
-        throw new Error("SESI_NOT_OPEN");
-      }
+        const sessionData = sessionSnap.data() as Partial<Session> | undefined;
+        if (sessionData?.status !== STATUS_SESI.DIBUKA) {
+          throw new Error("SESI_NOT_OPEN");
+        }
 
-      const attSnap = await transaction.get(attendanceRef);
-      if (attSnap.exists()) {
-        throw new Error("ALREADY_ATTENDED");
-      }
+        const attSnap = await transaction.get(attendanceRef);
+        if (attSnap.exists()) {
+          throw new Error("ALREADY_ATTENDED");
+        }
 
-      transaction.set(attendanceRef, {
-        sessionId,
-        userId: uid,
-        name,
-        nim,
-        checkedInAt: serverTimestamp(),
-      });
-    });
+        // Semua baca dulu, baru tulis (syarat transaksi Firestore).
+        const leaveSnap = await transaction.get(leaveRef);
+        const izinStatus = leaveSnap.exists()
+          ? (leaveSnap.data() as { status?: string } | undefined)?.status
+          : undefined;
+        if (izinStatus === STATUS_IZIN.DITERIMA) {
+          throw new Error("IZIN_DITERIMA");
+        }
+        if (izinStatus === STATUS_IZIN.MENUNGGU) {
+          // Praktikan memilih hadir: pengajuan izin yang belum diputuskan dibatalkan.
+          transaction.delete(leaveRef);
+        }
+
+        transaction.set(attendanceRef, {
+          sessionId,
+          kelasId: sessionData?.kelasId ?? "",
+          userId: uid,
+          nama,
+          nim,
+          waktuHadir: serverTimestamp(),
+          kode,
+        });
+      }),
+      CHECKIN_TIMEOUT_MS
+    );
 
     return { ok: true };
   } catch (error: any) {
@@ -73,20 +132,230 @@ export async function checkIn(
     if (msg.includes("SESI_NOT_OPEN")) {
       return { ok: false, message: "Sesi praktikum belum dibuka atau sudah ditutup." };
     }
+    if (msg.includes("IZIN_DITERIMA")) {
+      return {
+        ok: false,
+        message: "Izinmu pada sesi ini sudah diterima asisten, jadi kamu tidak bisa presensi.",
+      };
+    }
     if (msg.includes("ALREADY_ATTENDED")) {
       return { ok: false, message: "Kamu sudah melakukan presensi pada sesi ini." };
     }
+
+    const code = getErrorCode(error);
+    if (isTimeoutError(error) || code === "firestore/unavailable" || code === "firestore/deadline-exceeded") {
+      return {
+        ok: false,
+        message:
+          "Koneksi bermasalah. Presensi mungkin belum tercatat; periksa internet lalu cek status presensimu.",
+      };
+    }
+    if (code === "firestore/permission-denied") {
+      return {
+        ok: false,
+        message:
+          "Presensi ditolak: kode presensi salah, izinmu baru saja diterima, sesi baru saja ditutup, atau kamu bukan peserta kelas ini.",
+      };
+    }
     return {
       ok: false,
-      message: "Gagal melakukan presensi. Periksa koneksi internet atau izin akun kamu.",
+      message: "Gagal melakukan presensi. Periksa koneksi internet lalu coba lagi.",
     };
+  }
+}
+
+// ─── Kode unik presensi (sessionCodes) ───────────────────────────────────────
+// sessionCodes/{sessionId} = { sessionId, asistenId, kode, createdAt }
+// Hanya asisten pengampu yang dapat membacanya; praktikan hanya bisa mengirim tebakan lewat
+// dokumen presensi dan rules yang membandingkannya.
+
+/** Isi dokumen sessionCodes untuk sesi ini (dipakai openSession dan pastikanKodePresensi). */
+export function dataKodePresensi(sessionId: string, asistenId: string) {
+  return { sessionId, asistenId, kode: buatKodePresensi(), createdAt: serverTimestamp() };
+}
+
+/** Real-time kode presensi sebuah sesi. `null` = belum ada. Hanya untuk asisten pengampu. */
+export function subscribeKodePresensi(
+  sessionId: string,
+  onData: (kode: string | null) => void,
+  onError?: (err: Error) => void
+): () => void {
+  return onSnapshot(
+    doc(db, "sessionCodes", sessionId),
+    (snap: DocumentSnapshot) => {
+      const kode = snap.exists() ? (snap.data() as { kode?: string } | undefined)?.kode : null;
+      onData(typeof kode === "string" ? kode : null);
+    },
+    (_err: FirestoreError) => onError?.(new Error("Gagal memuat kode presensi. Periksa koneksi internet kamu."))
+  );
+}
+
+/**
+ * Buat kode untuk sesi yang sudah dibuka tetapi belum punya kode (mis. dibuka sebelum fitur ini ada).
+ * Kode tidak pernah ditimpa: rules menolak update, jadi dua perangkat asisten tidak bisa membuat dua kode.
+ */
+export async function pastikanKodePresensi(session: Session, asistenId: string): Promise<void> {
+  if (!session?.id || session.asistenId !== asistenId || session.status !== STATUS_SESI.DIBUKA) return;
+  try {
+    await withTimeout(
+      setDoc(doc(db, "sessionCodes", session.id), dataKodePresensi(session.id, asistenId)),
+      CHECKIN_TIMEOUT_MS
+    );
+  } catch {
+    // Gagal di sini (mis. kode sudah dibuat perangkat lain): listener subscribeKodePresensi
+    // tetap menampilkan kode yang ada, atau layar menawarkan coba lagi.
+  }
+}
+
+export type ManualCheckInTarget = { id: string; nama: string; nim?: string };
+
+/**
+ * Asisten pengampu mencatat presensi seorang praktikan (mis. HP praktikan bermasalah).
+ * - Hanya saat sesi Dibuka dan hanya untuk peserta kelas sesi tersebut (ditegakkan firestore.rules).
+ * - ID dokumen sama dengan presensi biasa, jadi satu praktikan tetap hanya satu presensi per sesi:
+ *   mencatat praktikan yang sudah hadir ditolak server (dokumen ada = update = ditolak).
+ * - Waktu hadir = waktu server saat dicatat.
+ * - `nama` dan `nim` HARUS persis sama dengan profil praktikan (dicek rules), jadi tidak di-trim di sini.
+ */
+export async function checkInManual(
+  session: Session,
+  praktikan: ManualCheckInTarget,
+  asistenId: string
+): Promise<CheckInResult> {
+  if (!session?.id || !praktikan?.id || !asistenId) {
+    return { ok: false, message: "Data sesi atau praktikan tidak valid." };
+  }
+  if (session.asistenId !== asistenId) {
+    return { ok: false, message: "Hanya asisten pengampu sesi ini yang dapat mencatat presensi." };
+  }
+  if (session.status !== STATUS_SESI.DIBUKA) {
+    return { ok: false, message: "Presensi hanya dapat dicatat saat sesi sedang dibuka." };
+  }
+
+  try {
+    await withTimeout(
+      setDoc(doc(db, "attendances", attendanceDocId(session.id, praktikan.id)), {
+        sessionId: session.id,
+        kelasId: session.kelasId,
+        userId: praktikan.id,
+        nama: praktikan.nama,
+        nim: praktikan.nim ?? "",
+        waktuHadir: serverTimestamp(),
+        manual: true,
+        dicatatOleh: asistenId,
+      }),
+      CHECKIN_TIMEOUT_MS
+    );
+    return { ok: true };
+  } catch (error: any) {
+    const code = getErrorCode(error);
+    if (isTimeoutError(error) || code === "firestore/unavailable" || code === "firestore/deadline-exceeded") {
+      return {
+        ok: false,
+        message:
+          "Koneksi bermasalah. Presensi mungkin belum tercatat; periksa internet lalu cek rekap.",
+      };
+    }
+    if (code === "firestore/permission-denied") {
+      return {
+        ok: false,
+        message:
+          "Presensi ditolak: praktikan sudah tercatat hadir, sesi baru saja ditutup, atau bukan peserta kelas ini.",
+      };
+    }
+    return { ok: false, message: "Gagal mencatat presensi. Periksa koneksi internet lalu coba lagi." };
+  }
+}
+
+// ─── Status manual oleh asisten (Rekap) ──────────────────────────────────────
+
+type SesiAsisten = Pick<Session, "id" | "asistenId" | "status">;
+
+/** Pastikan sesi milik asisten ini dan sedang Dibuka. Mengembalikan pesan error atau null. */
+function cekSesiManual(session: SesiAsisten, asistenId: string): string | null {
+  if (!session?.id || !asistenId) return "Data sesi tidak valid.";
+  if (session.asistenId !== asistenId) {
+    return "Hanya asisten pengampu sesi ini yang dapat mengubah status praktikan.";
+  }
+  if (session.status !== STATUS_SESI.DIBUKA) {
+    return "Status praktikan hanya dapat diubah saat sesi sedang dibuka.";
+  }
+  return null;
+}
+
+function pesanGagalManual(error: unknown, aksi: string): CheckInResult {
+  const code = getErrorCode(error);
+  if (isTimeoutError(error) || code === "firestore/unavailable" || code === "firestore/deadline-exceeded") {
+    return {
+      ok: false,
+      message: `Koneksi bermasalah. ${aksi} mungkin belum tersimpan; periksa internet lalu cek rekap.`,
+    };
+  }
+  if (code === "firestore/permission-denied") {
+    return {
+      ok: false,
+      message: `${aksi} ditolak: data praktikan sudah berubah, sesi baru saja ditutup, atau bukan peserta kelas ini.`,
+    };
+  }
+  return { ok: false, message: `${aksi} gagal. Periksa koneksi internet lalu coba lagi.` };
+}
+
+/**
+ * Kembalikan praktikan ke status awal untuk HADIR: hapus dokumen presensinya (mis. salah catat).
+ * Setelah itu praktikan bisa presensi sendiri lagi. Hanya saat sesi Dibuka.
+ */
+export async function resetPresensi(
+  session: SesiAsisten,
+  praktikanId: string,
+  asistenId: string
+): Promise<CheckInResult> {
+  const invalid = cekSesiManual(session, asistenId);
+  if (invalid || !praktikanId) return { ok: false, message: invalid ?? "Data praktikan tidak valid." };
+
+  try {
+    await withTimeout(
+      deleteDoc(doc(db, "attendances", attendanceDocId(session.id, praktikanId))),
+      CHECKIN_TIMEOUT_MS
+    );
+    return { ok: true };
+  } catch (error) {
+    return pesanGagalManual(error, "Reset presensi");
+  }
+}
+
+/**
+ * Kembalikan praktikan ke status awal untuk IZIN.
+ * Izin adalah ajuan praktikan (alasan & hasil AI miliknya), jadi TIDAK dihapus: statusnya
+ * dikembalikan ke `menunggu` agar kembali masuk antrean tinjauan di tab Izin.
+ */
+export async function resetIzin(
+  session: SesiAsisten,
+  praktikanId: string,
+  asistenId: string
+): Promise<CheckInResult> {
+  const invalid = cekSesiManual(session, asistenId);
+  if (invalid || !praktikanId) return { ok: false, message: invalid ?? "Data praktikan tidak valid." };
+
+  try {
+    await withTimeout(
+      updateDoc(doc(db, "leaveRequests", `${session.id}_${praktikanId}`), { status: "menunggu" }),
+      CHECKIN_TIMEOUT_MS
+    );
+    return { ok: true };
+  } catch (error) {
+    return pesanGagalManual(error, "Reset izin");
   }
 }
 
 export function subscribeCheckInState(
   sessionId: string,
   uid: string,
-  onChange: (state: { session: Session | null; attended: boolean }) => void,
+  onChange: (state: {
+    session: Session | null;
+    attended: boolean;
+    /** Status izin praktikan di sesi ini, atau null jika tidak mengajukan izin. */
+    izinStatus: StatusIzin | null;
+  }) => void,
   onError?: (err: Error) => void
 ): () => void {
   if (!sessionId || !uid) {
@@ -96,15 +365,18 @@ export function subscribeCheckInState(
 
   let sessionReady = false;
   let attReady = false;
+  let leaveReady = false;
   let currentSession: Session | null = null;
   let currentAttended = false;
+  let currentIzin: StatusIzin | null = null;
 
   const sessionRef = doc(db, "sessions", sessionId);
-  const attRef = doc(db, "attendances", `${sessionId}_${uid}`);
+  const attRef = doc(db, "attendances", attendanceDocId(sessionId, uid));
+  const leaveRef = doc(db, "leaveRequests", attendanceDocId(sessionId, uid));
 
   const emitIfReady = () => {
-    if (sessionReady && attReady) {
-      onChange({ session: currentSession, attended: currentAttended });
+    if (sessionReady && attReady && leaveReady) {
+      onChange({ session: currentSession, attended: currentAttended, izinStatus: currentIzin });
     }
   };
 
@@ -132,8 +404,25 @@ export function subscribeCheckInState(
     }
   );
 
+  const unsubLeave = onSnapshot(
+    leaveRef,
+    (snap: DocumentSnapshot) => {
+      leaveReady = true;
+      const status = snap.exists() ? (snap.data() as { status?: StatusIzin } | undefined)?.status : null;
+      currentIzin = status ?? null;
+      emitIfReady();
+    },
+    (_err: FirestoreError) => {
+      // Status izin hanya untuk tampilan; server tetap menolak presensi jika izin sudah diterima.
+      leaveReady = true;
+      currentIzin = null;
+      emitIfReady();
+    }
+  );
+
   return () => {
     unsubSession();
     unsubAttendance();
+    unsubLeave();
   };
 }
