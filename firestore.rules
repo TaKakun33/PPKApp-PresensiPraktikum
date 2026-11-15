@@ -19,6 +19,10 @@ service cloud.firestore {
       return signedIn() && myProfile().get('role', '') == 'praktikan';
     }
 
+    function profileOf(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data;
+    }
+
     function sessionOf(sessionId) {
       return get(/databases/$(database)/documents/sessions/$(sessionId)).data;
     }
@@ -242,8 +246,9 @@ service cloud.firestore {
     }
 
     // --- attendances --------------------------------------------------------
-    // SATU format dokumen (attendanceService.checkIn):
+    // SATU format dokumen (attendanceService.checkIn / checkInManual):
     //   ID = {sessionId}_{uid}, isi { sessionId, kelasId, userId, nama, nim, waktuHadir }
+    //   (presensi manual asisten menambah { manual: true, dicatatOleh })
     // ID deterministik + update/delete ditolak => satu presensi per praktikan per sesi,
     // ditegakkan server. Status sesi `dibuka` diperiksa saat commit, jadi tidak ada race
     // dengan penutupan sesi oleh asisten.
@@ -272,7 +277,35 @@ service cloud.firestore {
         && request.resource.data.nim == myProfile().get('nim', '')
         && request.resource.data.waktuHadir == request.time;
 
-      allow update, delete: if false;
+      // Presensi MANUAL oleh asisten pengampu (attendanceService.checkInManual).
+      // Aturan yang sama seperti presensi sendiri (satu per praktikan per sesi, hanya saat sesi
+      // `dibuka`, waktu = waktu server), ditambah: sesi milik asisten ini, praktikan terdaftar
+      // sebagai peserta kelas sesi tersebut, nama/NIM sama dengan profil praktikan, dan ditandai
+      // `manual: true` + `dicatatOleh` = uid asisten. Praktikan tidak bisa membuat dokumen dengan
+      // field `manual` karena rule presensi sendiri memakai hasOnly tanpa field itu.
+      allow create: if isAsisten()
+        && request.resource.data.keys().hasOnly(['sessionId', 'kelasId', 'userId', 'nama', 'nim', 'waktuHadir', 'manual', 'dicatatOleh'])
+        && request.resource.data.keys().hasAll(['sessionId', 'kelasId', 'userId', 'nama', 'nim', 'waktuHadir', 'manual', 'dicatatOleh'])
+        && request.resource.data.sessionId is string
+        && request.resource.data.userId is string
+        && attId == (request.resource.data.sessionId + '_' + request.resource.data.userId)
+        && sessionOf(request.resource.data.sessionId).asistenId == request.auth.uid
+        && sessionOf(request.resource.data.sessionId).status == 'dibuka'
+        && sessionOf(request.resource.data.sessionId).kelasId == request.resource.data.kelasId
+        && request.resource.data.userId in classOf(request.resource.data.kelasId).get('pesertaIds', [])
+        && request.resource.data.nama == profileOf(request.resource.data.userId).nama
+        && request.resource.data.nim == profileOf(request.resource.data.userId).get('nim', '')
+        && request.resource.data.manual == true
+        && request.resource.data.dicatatOleh == request.auth.uid
+        && request.resource.data.waktuHadir == request.time;
+
+      allow update: if false;
+
+      // Asisten pengampu mereset presensi (kembali ke awal) hanya selagi sesi `dibuka`.
+      // Setelah sesi ditutup, rekap bersifat final. Praktikan tidak bisa menghapus presensinya.
+      allow delete: if isAsisten()
+        && sessionOf(resource.data.sessionId).asistenId == request.auth.uid
+        && sessionOf(resource.data.sessionId).status == 'dibuka';
     }
 
     // --- leaveRequests ------------------------------------------------------
@@ -341,6 +374,23 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data)
              .affectedKeys().hasOnly(['status', 'catatanAsisten'])
         && request.resource.data.status in ['diterima', 'ditolak']
+        && (
+          !('catatanAsisten' in request.resource.data)
+          || (
+            request.resource.data.catatanAsisten is string
+            && request.resource.data.catatanAsisten.size() <= 500
+          )
+        );
+
+      // Reset oleh asisten pengampu selagi sesi `dibuka` (hanya status + catatan):
+      //   diterima -> menunggu : izin ajuan praktikan kembali ke antrean tinjauan (tidak dihapus).
+      allow update: if isAsisten()
+        && resource.data.asistenId == request.auth.uid
+        && sessionOf(resource.data.sessionId).status == 'dibuka'
+        && request.resource.data.diff(resource.data)
+             .affectedKeys().hasOnly(['status', 'catatanAsisten'])
+        && resource.data.status == 'diterima'
+        && request.resource.data.status == 'menunggu'
         && (
           !('catatanAsisten' in request.resource.data)
           || (

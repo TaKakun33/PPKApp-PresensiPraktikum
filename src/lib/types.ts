@@ -25,6 +25,9 @@ export type Session = {
 export type Attendance = {
   id: string; sessionId: string; kelasId: string; userId: string;
   nama: string; nim: string; waktuHadir: unknown;
+  // Hanya ada pada presensi yang dicatat manual oleh asisten (attendanceService.checkInManual).
+  manual?: boolean;
+  dicatatOleh?: string; // uid asisten yang mencatat
 };
 
 export type LeaveRequest = {

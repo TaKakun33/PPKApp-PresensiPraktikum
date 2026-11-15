@@ -3,14 +3,21 @@ import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-n
 
 import { STATUS_IZIN, STATUS_SESI } from '../lib/constants';
 import type { Attendance, ClassDoc, LeaveRequest, Profile, Session } from '../lib/types';
+import {
+  checkInManual,
+  resetIzin,
+  resetPresensi,
+} from '../services/attendanceService';
 import { subscribeClass, subscribePeserta } from '../services/classService';
 import {
   subscribeAttendances,
   subscribeLeaveRequestsForAsisten,
   subscribeSessions,
 } from '../services/sessionService';
+import ConfirmModal from '../components/ConfirmModal';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';
+import PrimaryButton from '../components/PrimaryButton';
 import ScreenHeader from '../components/ScreenHeader';
 import StatusBadge from '../components/StatusBadge';
 import { colors, font, layout, radius, text } from '../constants/theme';
@@ -50,7 +57,7 @@ function normalizeTimestamp(value: unknown): string {
   return formatTanggalJam(date.toISOString());
 }
 
-type RekapStatus = 'hadir' | 'izin' | 'belum';
+type RekapStatus = 'hadir' | 'izin' | 'belum' | 'tidak';
 
 type RekapRow = {
   key: string;
@@ -59,39 +66,81 @@ type RekapRow = {
   status: RekapStatus;
   waktuTampil: string;
   waktuMs: number;
+  /** Presensi dicatat manual oleh asisten (bukan presensi sendiri oleh praktikan). */
+  manual: boolean;
+  /** Dokumen izin ajuan praktikan di sesi ini (status apa pun), atau null. */
+  leave: LeaveRequest | null;
 };
 
 const REKAP_LABEL: Record<RekapStatus, string> = {
   hadir: 'Hadir',
   izin: 'Izin',
   belum: 'Belum hadir',
+  tidak: 'Tidak hadir',
 };
 
-const REKAP_ORDER: Record<RekapStatus, number> = { hadir: 0, izin: 1, belum: 2 };
+/**
+ * Urutan pilihan sesi: yang masih berjalan di depan.
+ * Dibuka -> Belum Dibuka (keduanya yang terdekat dulu) -> Ditutup (yang terbaru dulu).
+ */
+const SESI_ORDER: Record<Session['status'], number> = {
+  [STATUS_SESI.DIBUKA]: 0,
+  [STATUS_SESI.BELUM]: 1,
+  [STATUS_SESI.DITUTUP]: 2,
+};
+
+function urutkanSesiRekap(items: Session[]): Session[] {
+  return [...items].sort((a, b) => {
+    const grup = (SESI_ORDER[a.status] ?? 3) - (SESI_ORDER[b.status] ?? 3);
+    if (grup !== 0) return grup;
+    const waktu = `${a.tanggal} ${a.waktuMulai}`.localeCompare(`${b.tanggal} ${b.waktuMulai}`);
+    return a.status === STATUS_SESI.DITUTUP ? -waktu : waktu;
+  });
+}
+
+const REKAP_ORDER: Record<RekapStatus, number> = { hadir: 0, izin: 1, belum: 2, tidak: 3 };
+
+/** Sesi dianggap sudah lewat waktunya jika tanggal + waktuSelesai (jam lokal) sudah terlewati. */
+function waktuSesiLewat(session: Session | null, now: number): boolean {
+  if (!session) return false;
+  const tgl = /^(\d{4})-(\d{2})-(\d{2})$/.exec(session.tanggal ?? '');
+  const jam = /^(\d{1,2}):(\d{2})$/.exec((session.waktuSelesai ?? '').replace('.', ':'));
+  if (!tgl || !jam) return false;
+  const akhir = new Date(Number(tgl[1]), Number(tgl[2]) - 1, Number(tgl[3]), Number(jam[1]), Number(jam[2]));
+  return now > akhir.getTime();
+}
 
 /**
- * Gabungkan peserta kelas + presensi + izin yang DITERIMA menjadi satu daftar rekap.
- * Presensi menang atas izin; praktikan yang tidak ada di daftar peserta tetap tampil jika sudah presensi.
+ * Gabungkan peserta kelas + presensi + izin menjadi satu daftar rekap.
+ * Prioritas status: Hadir > Izin (hanya yang DITERIMA) > Tidak hadir (sesi selesai) > Belum hadir.
+ * "Tidak hadir" tidak disimpan di database; ia hanya hasil perhitungan saat sesi sudah ditutup atau
+ * waktunya lewat dan praktikan tidak punya presensi maupun izin diterima.
+ * Praktikan yang tidak ada di daftar peserta tetap tampil jika sudah presensi.
  */
 function buildRekap(
   peserta: Profile[],
   attendances: Attendance[],
-  izinDiterima: LeaveRequest[]
+  izinSesi: LeaveRequest[],
+  sesiSelesai: boolean
 ): RekapRow[] {
   const hadirByUser = new Map(attendances.map((a) => [a.userId, a]));
-  const izinUsers = new Set(izinDiterima.map((l) => l.userId));
+  const izinByUser = new Map(izinSesi.map((l) => [l.userId, l]));
   const rows = new Map<string, RekapRow>();
 
   for (const p of peserta) {
     const att = hadirByUser.get(p.id);
+    const leave = izinByUser.get(p.id) ?? null;
     const waktu = att ? toDateFromValue(att.waktuHadir) : null;
+    const izinDiterima = leave?.status === STATUS_IZIN.DITERIMA;
     rows.set(p.id, {
       key: p.id,
       nama: p.nama,
       nim: p.nim ?? '',
-      status: att ? 'hadir' : izinUsers.has(p.id) ? 'izin' : 'belum',
+      status: att ? 'hadir' : izinDiterima ? 'izin' : sesiSelesai ? 'tidak' : 'belum',
       waktuTampil: att ? normalizeTimestamp(att.waktuHadir) : '—',
       waktuMs: waktu?.getTime() ?? Number.MAX_SAFE_INTEGER,
+      manual: att?.manual === true,
+      leave,
     });
   }
 
@@ -105,6 +154,8 @@ function buildRekap(
       status: 'hadir',
       waktuTampil: normalizeTimestamp(att.waktuHadir),
       waktuMs: waktu?.getTime() ?? Number.MAX_SAFE_INTEGER,
+      manual: att.manual === true,
+      leave: izinByUser.get(att.userId) ?? null,
     });
   }
 
@@ -136,6 +187,18 @@ export default function RecapScreen() {
     error: string | null;
   } | null>(null);
 
+  // Aksi manual asisten: aksi yang sedang dikonfirmasi, baris yang sedang disimpan, dan umpan balik.
+  const [aksi, setAksi] = useState<{ type: 'hadir' | 'reset'; row: RekapRow } | null>(null);
+  // Jam sekarang, diperbarui berkala supaya status "Tidak hadir" muncul saat waktu sesi habis.
+  const [now, setNow] = useState(() => Date.now());
+  const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
+
   useEffect(() => {
     if (!profile || role !== 'asisten') {
       return;
@@ -144,14 +207,9 @@ export default function RecapScreen() {
     const unsubscribe = subscribeSessions(
       profile,
       (items) => {
-        const sorted = [...items].sort(
-          (a, b) =>
-            a.tanggal.localeCompare(b.tanggal) ||
-            a.waktuMulai.localeCompare(b.waktuMulai)
-        );
         setSessionState({
           profileId: profile.id,
-          sessions: sorted,
+          sessions: urutkanSesiRekap(items),
           loading: false,
           error: null,
         });
@@ -281,22 +339,90 @@ export default function RecapScreen() {
     pesertaIds.length > 0 && pesertaState && pesertaState.key === pesertaKey
       ? pesertaState.items
       : [];
-  const izinDiterima = useMemo(
-    () =>
-      izinAll.filter(
-        (l) => l.sessionId === selectedSessionKey && l.status === STATUS_IZIN.DITERIMA
-      ),
+  const izinSesi = useMemo(
+    () => izinAll.filter((l) => l.sessionId === selectedSessionKey),
     [izinAll, selectedSessionKey]
   );
+  // "Tidak hadir" hanya berlaku untuk sesi yang sudah ditutup, atau yang sedang dibuka tetapi
+  // waktu selesainya sudah lewat. Sesi Belum Dibuka tidak pernah menandai siapa pun tidak hadir.
+  const sesiSelesai =
+    selectedSession?.status === STATUS_SESI.DITUTUP ||
+    (selectedSession?.status === STATUS_SESI.DIBUKA && waktuSesiLewat(selectedSession, now));
   const attendanceRows = useMemo(
-    () => buildRekap(pesertaItems, attendances, izinDiterima),
-    [pesertaItems, attendances, izinDiterima]
+    () => buildRekap(pesertaItems, attendances, izinSesi, sesiSelesai),
+    [pesertaItems, attendances, izinSesi, sesiSelesai]
   );
   const jumlah = {
     hadir: attendanceRows.filter((r) => r.status === 'hadir').length,
     izin: attendanceRows.filter((r) => r.status === 'izin').length,
     belum: attendanceRows.filter((r) => r.status === 'belum').length,
+    tidak: attendanceRows.filter((r) => r.status === 'tidak').length,
   };
+
+  // Tombol Hadir / Reset hanya aktif selagi sesi Dibuka (aturan bisnis + firestore.rules).
+  // Setelah sesi ditutup, rekap final.
+  const bisaUbahStatus = selectedSession?.status === STATUS_SESI.DIBUKA;
+
+  const pilihSesi = (sessionId: string) => {
+    setSelectedSessionId(sessionId);
+    setNotice(null);
+    setAksi(null);
+  };
+
+  const konfirmasiAksi = async () => {
+    const dipilih = aksi;
+    setAksi(null);
+    if (!dipilih || !selectedSession || !profileId || savingKey) return;
+
+    const { type, row } = dipilih;
+    const target = { id: row.key, nama: row.nama, nim: row.nim };
+
+    setSavingKey(row.key);
+    setNotice(null);
+
+    let result;
+    let berhasil = '';
+    if (type === 'hadir') {
+      result = await checkInManual(selectedSession, target, profileId);
+      berhasil = `${row.nama} dicatat hadir.`;
+    } else if (row.status === 'hadir') {
+      result = await resetPresensi(selectedSession, row.key, profileId);
+      berhasil = `Presensi ${row.nama} dikembalikan ke awal.`;
+    } else if (row.leave) {
+      result = await resetIzin(selectedSession, row.key, profileId);
+      berhasil = `Izin ${row.nama} dikembalikan ke awal.`;
+    } else {
+      result = { ok: false as const, message: 'Tidak ada status yang bisa direset.' };
+    }
+
+    setSavingKey(null);
+    setNotice(result.ok ? { type: 'success', message: berhasil } : { type: 'error', message: result.message });
+  };
+
+  const teksKonfirmasi = (() => {
+    if (!aksi) return { title: '', message: '', label: 'Ya' };
+    const { type, row } = aksi;
+    const orang = `${row.nama}${row.nim ? ` (${row.nim})` : ''}`;
+    const sesi = `"${selectedSession?.praktikum ?? ''}"`;
+    if (type === 'hadir') {
+      return {
+        title: 'Catat hadir?',
+        message: `${orang} akan dicatat hadir pada sesi ${sesi} dengan waktu saat ini.`,
+        label: 'Catat hadir',
+      };
+    }
+    return row.status === 'hadir'
+      ? {
+          title: 'Reset presensi?',
+          message: `Presensi ${orang} pada sesi ${sesi} akan dihapus. Praktikan bisa presensi sendiri lagi atau dicatat ulang.`,
+          label: 'Reset',
+        }
+      : {
+          title: 'Reset izin?',
+          message: `Izin yang diajukan ${orang} dikembalikan ke status Menunggu pada tab Izin.`,
+          label: 'Reset',
+        };
+  })();
 
   if (authLoading) {
     return (
@@ -337,6 +463,17 @@ export default function RecapScreen() {
               Pilih sesi untuk melihat daftar praktikan yang hadir.
             </Text>
 
+            {notice ? (
+              <View
+                style={[
+                  styles.feedback,
+                  notice.type === 'success' ? styles.successFeedback : styles.errorFeedback,
+                ]}
+              >
+                <Text style={styles.feedbackText}>{notice.message}</Text>
+              </View>
+            ) : null}
+
             {loadError ? (
               <View style={[styles.feedback, styles.errorFeedback]}>
                 <Text style={styles.feedbackText}>{loadError}</Text>
@@ -357,7 +494,7 @@ export default function RecapScreen() {
                       accessibilityRole="button"
                       accessibilityLabel={`${session.praktikum}, ${labelKelas(session.kelasId)}, ${session.tanggal}`}
                       accessibilityState={{ selected }}
-                      onPress={() => setSelectedSessionId(session.id)}
+                      onPress={() => pilihSesi(session.id)}
                       style={({ pressed }) => [
                         styles.sessionOption,
                         selected && styles.sessionOptionSelected,
@@ -410,10 +547,17 @@ export default function RecapScreen() {
                       <Text style={[styles.countValue, styles.countIzin]}>{jumlah.izin}</Text>
                       <Text style={styles.countLabel}>izin</Text>
                     </View>
-                    <View style={styles.countItem}>
-                      <Text style={[styles.countValue, styles.countBelum]}>{jumlah.belum}</Text>
-                      <Text style={styles.countLabel}>belum hadir</Text>
-                    </View>
+                    {sesiSelesai ? (
+                      <View style={styles.countItem}>
+                        <Text style={[styles.countValue, styles.countTidak]}>{jumlah.tidak}</Text>
+                        <Text style={styles.countLabel}>tidak hadir</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.countItem}>
+                        <Text style={[styles.countValue, styles.countBelum]}>{jumlah.belum}</Text>
+                        <Text style={styles.countLabel}>belum hadir</Text>
+                      </View>
+                    )}
                   </View>
                 ) : null}
               </View>
@@ -447,29 +591,76 @@ export default function RecapScreen() {
             />
           )
         }
-        renderItem={({ item }) => (
-          <View style={styles.attendanceCard}>
-            <View style={styles.studentBadge}>
-              <Text style={styles.studentInitial}>{item.nama.trim().charAt(0).toUpperCase() || '?'}</Text>
+        renderItem={({ item }) => {
+          const sibuk = savingKey !== null;
+          return (
+            <View style={styles.attendanceCard}>
+              <View style={styles.attendanceRow}>
+                <View style={styles.studentBadge}>
+                  <Text style={styles.studentInitial}>{item.nama.trim().charAt(0).toUpperCase() || '?'}</Text>
+                </View>
+                <View style={styles.studentInfo}>
+                  <Text style={styles.studentName}>{item.nama}</Text>
+                  <Text style={styles.studentNim}>NIM: {item.nim || '—'}</Text>
+                </View>
+                <View style={styles.timeContainer}>
+                  <Text
+                    style={[
+                      styles.statusText,
+                      item.status === 'hadir' && styles.statusHadir,
+                      item.status === 'izin' && styles.statusIzin,
+                      item.status === 'tidak' && styles.statusTidak,
+                    ]}
+                  >
+                    {REKAP_LABEL[item.status]}
+                  </Text>
+                  {item.status === 'hadir' ? <Text style={styles.timeValue}>{item.waktuTampil}</Text> : null}
+                  {item.status === 'hadir' && item.manual ? (
+                    <Text style={styles.manualTag}>Dicatat asisten</Text>
+                  ) : null}
+                </View>
+              </View>
+
+              {bisaUbahStatus ? (
+                <View style={styles.actionRow}>
+                  {item.status === 'hadir' || item.status === 'izin' ? (
+                    <PrimaryButton
+                      label="Reset"
+                      variant="secondary"
+                      size="sm"
+                      icon="refresh"
+                      loading={savingKey === item.key}
+                      disabled={sibuk}
+                      onPress={() => setAksi({ type: 'reset', row: item })}
+                      accessibilityLabel={`Reset status ${item.nama}`}
+                      style={styles.actionButton}
+                    />
+                  ) : (
+                    <PrimaryButton
+                      label="Hadir"
+                      size="sm"
+                      icon="checkmark"
+                      loading={savingKey === item.key}
+                      disabled={sibuk}
+                      onPress={() => setAksi({ type: 'hadir', row: item })}
+                      accessibilityLabel={`Catat ${item.nama} hadir`}
+                      style={styles.actionButton}
+                    />
+                  )}
+                </View>
+              ) : null}
             </View>
-            <View style={styles.studentInfo}>
-              <Text style={styles.studentName}>{item.nama}</Text>
-              <Text style={styles.studentNim}>NIM: {item.nim || '—'}</Text>
-            </View>
-            <View style={styles.timeContainer}>
-              <Text
-                style={[
-                  styles.statusText,
-                  item.status === 'hadir' && styles.statusHadir,
-                  item.status === 'izin' && styles.statusIzin,
-                ]}
-              >
-                {REKAP_LABEL[item.status]}
-              </Text>
-              {item.status === 'hadir' ? <Text style={styles.timeValue}>{item.waktuTampil}</Text> : null}
-            </View>
-          </View>
-        )}
+          );
+        }}
+      />
+
+      <ConfirmModal
+        visible={aksi !== null}
+        title={teksKonfirmasi.title}
+        message={teksKonfirmasi.message}
+        confirmLabel={teksKonfirmasi.label}
+        onConfirm={konfirmasiAksi}
+        onCancel={() => setAksi(null)}
       />
     </View>
   );
@@ -494,6 +685,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
   },
   errorFeedback: { borderColor: colors.danger, backgroundColor: colors.dangerTint },
+  successFeedback: { borderColor: colors.success, backgroundColor: colors.successTint },
   feedbackText: { fontSize: 13, lineHeight: 19, fontFamily: font.medium, color: colors.text },
   sessionSelector: { gap: 8, paddingVertical: 4 },
   sessionOption: {
@@ -529,8 +721,10 @@ const styles = StyleSheet.create({
   selectedSessionDetails: { ...text.caption },
   countContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'baseline',
-    gap: 18,
+    columnGap: 18,
+    rowGap: 4,
     marginTop: 4,
     paddingTop: 10,
     borderTopWidth: 1,
@@ -539,15 +733,24 @@ const styles = StyleSheet.create({
   countItem: { flexDirection: 'row', alignItems: 'baseline', gap: 5 },
   countIzin: { color: colors.warning },
   countBelum: { color: colors.textSecondary },
+  countTidak: { color: colors.danger },
   statusText: { fontSize: 12, fontFamily: font.bold, color: colors.textSecondary, textAlign: 'right' },
   statusHadir: { color: colors.success },
   statusIzin: { color: colors.warning },
+  statusTidak: { color: colors.danger },
   countValue: { fontSize: 22, fontFamily: font.extraBold, color: colors.primary },
   countLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.textSecondary },
-  attendanceCard: {
+  attendanceRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  actionRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+    gap: 8,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  actionButton: { flex: 1, minHeight: 40 },
+  attendanceCard: {
+    gap: 10,
     padding: 14,
     borderWidth: 1,
     borderColor: colors.border,
@@ -568,5 +771,6 @@ const styles = StyleSheet.create({
   studentNim: { ...text.caption },
   timeContainer: { alignItems: 'flex-end', gap: 4 },
   timeLabel: { ...text.caption },
+  manualTag: { fontSize: 11, fontFamily: font.semibold, color: colors.textSecondary, textAlign: 'right' },
   timeValue: { fontSize: 12, fontFamily: font.bold, color: colors.text, textAlign: 'right' },
 });

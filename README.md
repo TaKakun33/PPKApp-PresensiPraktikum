@@ -106,6 +106,9 @@ Seluruh kebutuhan berprioritas **Must** karena merupakan syarat dari deskripsi t
 - Presensi hanya valid saat sesi **Dibuka**.
 - Satu praktikan hanya boleh **satu presensi per sesi**.
 - Waktu hadir diambil dari **server** saat presensi berhasil.
+- **Asisten pengampu** dapat mencatat praktikan **Hadir** secara manual di tab Rekap, dan **Reset** status Hadir/Izin kembali ke awal. Hanya saat sesi **Dibuka**; setelah **Ditutup** rekap final.
+- **Tidak hadir** tidak disimpan di database. Status ini dihitung di Rekap untuk praktikan tanpa presensi dan tanpa izin diterima, setelah sesi ditutup atau waktu selesai sesi terlewati.
+- Presensi manual ditandai `manual: true` + `dicatatOleh` (uid asisten). Reset presensi menghapus dokumennya; reset izin mengembalikan ajuan praktikan ke status Menunggu (tidak dihapus).
 - Sesi yang sudah **Ditutup** tidak dapat dibuka kembali.
 - Hanya **asisten** yang dapat mengelola data praktikum dan memutuskan izin.
 - Hasil AI **tidak boleh** menerima atau menolak izin secara otomatis.
@@ -201,13 +204,17 @@ src/
 
 ### Skema koleksi Firestore (Sprint 2)
 
-| Koleksi | Deskripsi |
-|---|---|
-| `users` | Profil pengguna: nama, email, peran, NIM (praktikan) |
-| `classes` | Data kelas: nama, asisten pengampu, daftar peserta |
-| `sessions` | Sesi praktikum: nama, kelas, tanggal, waktu, ruangan, status |
-| `attendances` | Rekaman presensi per praktikan per sesi |
-| `leaveRequests` | Pengajuan izin: alasan, kategori AI, status keputusan |
+| Koleksi | ID dokumen | Isi utama |
+|---|---|---|
+| `users` | uid Firebase Auth | `nama`, `email`, `role`, `nim` + `kelasIds[]` (praktikan), `createdAt` |
+| `classes` | otomatis | `namaKelas`, `praktikum`, `asistenId`, `pesertaIds[]` |
+| `sessions` | otomatis | `praktikum`, `kelasId`, `asistenId`, `tanggal` (`YYYY-MM-DD`), `waktuMulai`, `waktuSelesai`, `ruangan`, `status`, `openedAt`, `closedAt` |
+| `attendances` | `{sessionId}_{uid}` | `sessionId`, `kelasId`, `userId`, `nama`, `nim`, `waktuHadir` (waktu server), opsional `manual`, `dicatatOleh` |
+| `leaveRequests` | `{sessionId}_{uid}` | `sessionId`, `kelasId`, `asistenId`, `praktikum`, `userId`, `nama`, `nim`, `alasan`, `kategoriAI`, `aiStatus`, `status`, `catatanAsisten`, `createdAt` |
+| `allowedAssistants` | email huruf kecil | Daftar email yang boleh mendaftar sebagai asisten (diisi admin lewat Console) |
+| `nimIndex` | NIM | `{ uid }` — menjamin NIM unik |
+
+Relasi: `classes.asistenId` → `users`; `classes.pesertaIds` ↔ `users.kelasIds` (dua arah, diperbarui bersamaan); `sessions.kelasId` → `classes`; `attendances`/`leaveRequests` → `sessions` + `users`.
 
 ---
 

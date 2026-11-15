@@ -265,6 +265,7 @@ export default function HistoryScreen() {
                     </Text>
                     <Text style={styles.itemMeta} numberOfLines={1}>
                       {formatTimestamp(attendance.waktuHadir ?? (attendance as any).checkedInAt)}
+                      {attendance.manual ? ' · Dicatat asisten' : ''}
                     </Text>
                   </View>
                   <StatusBadge status="hadir" />
