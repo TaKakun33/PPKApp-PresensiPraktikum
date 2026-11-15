@@ -134,6 +134,8 @@ export default function ManageSessionScreen() {
       ? `Apakah kamu yakin ingin menutup ${pendingSessionName}? Sesi yang sudah ditutup tidak dapat dibuka kembali.`
       : `Apakah kamu yakin ingin membuka ${pendingSessionName}?`;
 
+  const canConfirmAction = Boolean(pendingAction && !submitting);
+
   if (authLoading) {
     return <LoadingState message="Memuat profil asisten..." />;
   }
@@ -255,6 +257,7 @@ export default function ManageSessionScreen() {
         title={`${pendingActionLabel} sesi?`}
         message={confirmMessage}
         confirmLabel={submitting ? 'Memproses...' : 'Konfirmasi'}
+        confirmDisabled={!canConfirmAction}
         onConfirm={confirmAction}
         onCancel={() => {
           if (!submitting) setPendingAction(null);

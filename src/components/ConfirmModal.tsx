@@ -9,6 +9,7 @@ type Props = {
   title: string;
   message: string;
   confirmLabel?: string;
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 };
@@ -18,6 +19,7 @@ export default function ConfirmModal({
   title,
   message,
   confirmLabel = 'Ya',
+  confirmDisabled = false,
   onConfirm,
   onCancel,
 }: Props) {
@@ -28,10 +30,18 @@ export default function ConfirmModal({
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
           <View style={styles.row}>
-            <Pressable style={[styles.button, styles.cancel]} onPress={onCancel}>
+            <Pressable
+              disabled={confirmDisabled}
+              style={[styles.button, styles.cancel, confirmDisabled && styles.disabledButton]}
+              onPress={onCancel}
+            >
               <Text style={styles.cancelText}>Batal</Text>
             </Pressable>
-            <Pressable style={[styles.button, styles.confirm]} onPress={onConfirm}>
+            <Pressable
+              disabled={confirmDisabled}
+              style={[styles.button, styles.confirm, confirmDisabled && styles.disabledButton]}
+              onPress={onConfirm}
+            >
               <Text style={styles.confirmText}>{confirmLabel}</Text>
             </Pressable>
           </View>
@@ -63,6 +73,7 @@ const styles = StyleSheet.create({
   button: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
   cancel: { backgroundColor: COLORS.border },
   confirm: { backgroundColor: COLORS.primary },
+  disabledButton: { opacity: 0.7 },
   cancelText: { color: COLORS.text, fontFamily: 'PlusJakartaSans_600SemiBold' },
   confirmText: { color: COLORS.white, fontFamily: 'PlusJakartaSans_600SemiBold' },
 });

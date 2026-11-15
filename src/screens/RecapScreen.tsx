@@ -112,6 +112,10 @@ export default function RecapScreen() {
   );
 
   const selectedSessionKey = selectedSession?.id ?? null;
+  const highlightedSessionId =
+    selectedSessionId && sessions.some((session) => session.id === selectedSessionId)
+      ? selectedSessionId
+      : selectedSessionKey;
 
   useEffect(() => {
     if (!selectedSessionKey) {
@@ -207,7 +211,7 @@ export default function RecapScreen() {
               contentContainerStyle={styles.sessionSelector}
             >
               {sessions.map((session) => {
-                const selected = session.id === selectedSessionId;
+                const selected = session.id === highlightedSessionId;
                 return (
                   <Pressable
                     key={session.id}
