@@ -18,6 +18,7 @@ import React, { createContext, ReactNode, useContext, useEffect, useRef, useStat
 import { auth } from '../lib/firebase';
 import type { Profile } from '../lib/types';
 import {
+  discardIncompleteAccount,
   getAuthErrorMessage,
   isRegistering,
   registerUser,
@@ -82,6 +83,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setState({ status: 'unauthenticated' });
       signOutUser().catch(() => {});
     };
+    // Profil tidak ada di server (sudah dipastikan bukan cache): registrasi sebelumnya tidak selesai.
+    // Akun Auth yatim dihapus agar pengguna bisa mendaftar ulang dengan email yang sama.
+    const failMissingProfile = () => {
+      stopProfile();
+      setAuthError('Pendaftaran akun ini sebelumnya tidak selesai. Akun dibersihkan, silakan daftar ulang.');
+      setState({ status: 'unauthenticated' });
+      discardIncompleteAccount().catch(() => {});
+    };
 
     stopProfileRef.current = stopProfile;
 
@@ -115,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (!snap.exists) {
             if (isRegistering()) return; // profil sedang ditulis oleh register()
             if (snap.fromCache) return; // mungkin hanya belum sampai dari server; timer yang menjaga
-            failProfile('Profil pengguna belum terdaftar di database. Hubungi admin.');
+            failMissingProfile();
             return;
           }
 

@@ -20,7 +20,7 @@ import { db } from '../lib/firebase';
 import type { LeaveRequest, Profile, Session } from '../lib/types';
 import { classifyLeaveReason } from './aiService';
 import { createAppError, getErrorCode, isTimeoutError, withTimeout } from './serviceUtils';
-import { subscribeSessions } from './sessionService';
+import { subscribeMyAttendances, subscribeSessions } from './sessionService';
 
 // createdAt ditambahkan Akmal (belum ada di tipe PM) supaya daftar bisa diurutkan.
 // pending: true selama tulisan masih antre di perangkat (belum dikonfirmasi server).
@@ -107,6 +107,15 @@ export function subscribeLeaveSessionOptions(
   );
 }
 
+/** Real-time: id sesi yang sudah dipresensi praktikan (sesi ini tidak boleh diajukan izin). */
+export function subscribeAttendedSessionIds(
+  userId: string,
+  onData: (sessionIds: string[]) => void,
+  onError?: (e: unknown) => void,
+): () => void {
+  return subscribeMyAttendances(userId, (items) => onData(items.map((a) => a.sessionId)), onError);
+}
+
 export type LeaveWriteOutcome = { ok: true } | { ok: false; error: unknown };
 
 export type SubmitLeaveResult = {
@@ -151,6 +160,13 @@ export async function submitLeave(
   // Pemeriksaan ramah sebelum menulis. Penegakan sebenarnya ada di firestore.rules,
   // jadi jika pengecekan ini gagal (mis. offline tanpa cache) kita lanjut saja.
   try {
+    // Sudah presensi di sesi ini = sudah hadir, jadi tidak perlu dan tidak boleh izin.
+    // ID presensi memakai pola yang sama dengan ID izin: {sessionId}_{uid}.
+    const attendance = await withTimeout(getDoc(doc(db, 'attendances', leaveDocId(session.id, profile.id))), 5000);
+    if (attendance.exists()) {
+      throw createAppError('app/already-attended', 'Kamu sudah presensi di sesi ini, jadi tidak bisa mengajukan izin.');
+    }
+
     const existing = await withTimeout(getDoc(ref), 5000);
     if (existing.exists()) {
       const data = existing.data() as Partial<LeaveRequest> | undefined;
@@ -159,7 +175,8 @@ export async function submitLeave(
       }
     }
   } catch (e) {
-    if (getErrorCode(e) === 'app/duplicate-leave') throw e;
+    const code = getErrorCode(e);
+    if (code === 'app/duplicate-leave' || code === 'app/already-attended') throw e;
   }
 
   const ai = await classifyLeaveReason(text);
@@ -195,7 +212,7 @@ export async function submitLeave(
     if (getErrorCode(e) === 'firestore/permission-denied') {
       throw createAppError(
         'app/leave-rejected',
-        'Pengajuan ditolak server. Mungkin kamu sudah mengajukan izin untuk sesi ini, atau sesinya sudah ditutup.',
+        'Pengajuan ditolak server. Mungkin kamu sudah mengajukan izin atau presensi untuk sesi ini, atau sesinya sudah ditutup.',
       );
     }
     throw e;

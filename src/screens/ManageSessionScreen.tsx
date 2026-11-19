@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 
@@ -13,6 +14,7 @@ import ScreenHeader from '../components/ScreenHeader';
 import StatusBadge from '../components/StatusBadge';
 import { colors, font, layout, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
+import { useNamaKelas } from '../hooks/useNamaKelas';
 
 type SessionAction = 'open' | 'close';
 
@@ -34,6 +36,8 @@ const SESSION_PRIORITY: Record<string, number> = {
 
 export default function ManageSessionScreen() {
   const { profile, role, loading: authLoading } = useAuth();
+  const profileId = profile?.id;
+  const { labelKelas } = useNamaKelas();
   const [sessionState, setSessionState] = useState<{
     profileId: string;
     sessions: Session[];
@@ -76,13 +80,18 @@ export default function ManageSessionScreen() {
     );
 
     return unsubscribe;
-  }, [profile, role]);
+    // profile berganti objek tiap snapshot profil; cukup bergantung pada id & peran.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileId, role]);
 
   const currentSessionState =
     sessionState && sessionState.profileId === profile?.id ? sessionState : null;
   const sessions = currentSessionState?.sessions ?? [];
   const isLoading = role === 'asisten' && (!currentSessionState || currentSessionState.loading);
   const loadError = currentSessionState?.error ?? null;
+
+  // Satu asisten hanya boleh membuka satu sesi sekaligus: sesi lain terkunci selama ada yang dibuka.
+  const sesiDibuka = sessions.find((session) => session.status === STATUS_SESI.DIBUKA) ?? null;
 
   const pendingSession = pendingAction
     ? sessions.find((session) => session.id === pendingAction.sessionId)
@@ -173,7 +182,7 @@ export default function ManageSessionScreen() {
         ListHeaderComponent={
           <View style={styles.header}>
             <Text style={styles.subtitle}>
-              Buka atau tutup sesi praktikum yang ditugaskan kepadamu.
+              Buka atau tutup sesi praktikum yang ditugaskan kepadamu. Presensi tersedia selama sesi dibuka.
             </Text>
 
             {loadError ? (
@@ -220,7 +229,7 @@ export default function ManageSessionScreen() {
                   {session.praktikum}
                 </Text>
                 <Text style={styles.moduleTitle} numberOfLines={2}>
-                  Kelas {session.kelasId}
+                  {labelKelas(session.kelasId)}
                 </Text>
               </View>
               <StatusBadge status={session.status} />
@@ -240,20 +249,37 @@ export default function ManageSessionScreen() {
             </View>
 
             {session.status === STATUS_SESI.BELUM ? (
-              <PrimaryButton
-                label="Buka sesi"
-                onPress={() => requestAction(session.id, 'open')}
-                disabled={submitting}
-                accessibilityLabel={`Buka sesi ${session.praktikum}`}
-              />
+              <>
+                <PrimaryButton
+                  label="Buka sesi"
+                  onPress={() => requestAction(session.id, 'open')}
+                  disabled={submitting || sesiDibuka !== null}
+                  accessibilityLabel={`Buka sesi ${session.praktikum}`}
+                />
+                {sesiDibuka ? (
+                  <Text style={styles.lockHint}>
+                    Tutup sesi {sesiDibuka.praktikum} ({labelKelas(sesiDibuka.kelasId)}) terlebih dahulu.
+                  </Text>
+                ) : null}
+              </>
             ) : session.status === STATUS_SESI.DIBUKA ? (
-              <PrimaryButton
-                label="Tutup sesi"
-                variant="secondary"
-                onPress={() => requestAction(session.id, 'close')}
-                disabled={submitting}
-                accessibilityLabel={`Tutup sesi ${session.praktikum}`}
-              />
+              <View style={styles.actionRow}>
+                <PrimaryButton
+                  label="Presensi"
+                  onPress={() => router.push({ pathname: '/presensi-manual', params: { sessionId: session.id } })}
+                  disabled={submitting}
+                  accessibilityLabel={`Presensi sesi ${session.praktikum}`}
+                  style={styles.actionButton}
+                />
+                <PrimaryButton
+                  label="Tutup sesi"
+                  variant="secondary"
+                  onPress={() => requestAction(session.id, 'close')}
+                  disabled={submitting}
+                  accessibilityLabel={`Tutup sesi ${session.praktikum}`}
+                  style={styles.actionButton}
+                />
+              </View>
             ) : null}
           </View>
         )}
@@ -285,6 +311,9 @@ const styles = StyleSheet.create({
   },
   header: { gap: 8, marginBottom: 4 },
   subtitle: { ...text.body },
+  actionRow: { flexDirection: 'row', gap: 10 },
+  actionButton: { flex: 1 },
+  lockHint: { ...text.caption, textAlign: 'center' },
   feedback: {
     padding: 12,
     borderWidth: 1,

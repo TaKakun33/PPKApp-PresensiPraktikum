@@ -15,17 +15,13 @@ import {
   signOut as fbSignOut,
 } from '@react-native-firebase/auth';
 import {
-  collection,
   doc,
   getDoc,
-  getDocs,
-  limit,
-  query,
-  where,
   onSnapshot,
   serverTimestamp,
   setDoc,
   updateDoc,
+  writeBatch,
   type DocumentSnapshot,
   type FirestoreError,
 } from '@react-native-firebase/firestore';
@@ -174,7 +170,26 @@ export async function signOutUser(): Promise<void> {
   await fbSignOut(auth);
 }
 
-const NIM_TAKEN_MESSAGE = 'NIM ini sudah terdaftar pada akun lain.';
+/**
+ * Pemulihan registrasi yang terputus: akun Auth ada tetapi profil `users/{uid}` tidak pernah tertulis
+ * (mis. aplikasi mati / koneksi putus di tengah registrasi). Akun dihapus supaya email yang sama bisa
+ * dipakai mendaftar ulang; jika penghapusan gagal, pengguna tetap di-logout. Tidak pernah melempar error.
+ */
+export async function discardIncompleteAccount(): Promise<void> {
+  const user = auth.currentUser;
+  if (user) {
+    try {
+      await withTimeout(deleteUser(user), PROFILE_WRITE_TIMEOUT_MS);
+      return;
+    } catch {
+      // jatuh ke signOut di bawah
+    }
+  }
+  await fbSignOut(auth).catch(() => {});
+}
+
+const NIM_TAKEN_MESSAGE =
+  'Pendaftaran ditolak: NIM ini kemungkinan sudah terdaftar pada akun lain. Periksa kembali NIM kamu.';
 const NOT_ALLOWED_ASSISTANT_MESSAGE =
   'Email ini tidak terdaftar sebagai asisten. Hubungi admin atau daftar sebagai praktikan.';
 
@@ -249,30 +264,19 @@ export async function registerUser(input: RegisterInput): Promise<void> {
           createdAt: serverTimestamp(),
         };
 
-    // NIM harus unik. Akun Auth sudah dibuat (jadi pengguna sudah login dan boleh query dengan limit 1),
-    // jadi cek di sini; jika sudah dipakai, akun dibatalkan. Cek ini hanya di sisi aplikasi.
-    if (!isAsisten) {
-      try {
-        const dup = await withTimeout(
-          getDocs(query(collection(db, 'users'), where('nim', '==', input.nim.trim()), limit(1))),
-          PROFILE_WRITE_TIMEOUT_MS,
-        );
-        if (!dup.empty) {
-          await rollback();
-          throw createAppError('app/nim-taken', NIM_TAKEN_MESSAGE);
-        }
-      } catch (e) {
-        if (getErrorCode(e) === 'app/nim-taken') throw e;
-        await rollback();
-        throw createAppError(
-          'app/profile-save-failed',
-          getFriendlyError(e, 'Gagal memeriksa NIM. Periksa koneksi internet lalu coba lagi.'),
-        );
-      }
-    }
-
+    // Praktikan: profil + klaim NIM ditulis SATU batch (atomik).
+    // `nimIndex/{nim}` hanya bisa dibuat sekali (rules menolak create pada dokumen yang sudah ada),
+    // jadi keunikan NIM ditegakkan server, tidak lagi lewat query ke koleksi `users`.
+    // Asisten: cukup menulis profilnya.
     try {
-      await withTimeout(setDoc(doc(db, 'users', cred.user.uid), profile), PROFILE_WRITE_TIMEOUT_MS);
+      if (isAsisten) {
+        await withTimeout(setDoc(doc(db, 'users', cred.user.uid), profile), PROFILE_WRITE_TIMEOUT_MS);
+      } else {
+        const batch = writeBatch(db);
+        batch.set(doc(db, 'nimIndex', input.nim.trim()), { uid: cred.user.uid });
+        batch.set(doc(db, 'users', cred.user.uid), profile);
+        await withTimeout(batch.commit(), PROFILE_WRITE_TIMEOUT_MS);
+      }
     } catch (e) {
       await rollback();
       const denied = getErrorCode(e) === 'firestore/permission-denied';
@@ -281,7 +285,7 @@ export async function registerUser(input: RegisterInput): Promise<void> {
         denied
           ? isAsisten
             ? NOT_ALLOWED_ASSISTANT_MESSAGE
-            : 'Pendaftaran ditolak oleh aturan keamanan database. Hubungi PM.'
+            : NIM_TAKEN_MESSAGE
           : 'Profil gagal disimpan. Periksa koneksi internet lalu coba daftar lagi.',
       );
     }

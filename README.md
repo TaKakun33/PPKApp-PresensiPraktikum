@@ -38,13 +38,14 @@ Kegiatan praktikum membutuhkan pencatatan kehadiran yang mudah digunakan oleh pr
 
 **Alur presensi:**
 ```
-Asisten login → membuka sesi → Praktikan login dan presensi
+Asisten login → membuka sesi dan membagikan kode presensi
+  → Praktikan login, memasukkan kode, lalu presensi
   → data tersimpan di Firestore → Asisten melihat rekap real-time → Asisten menutup sesi
 ```
 
 **Alur izin:**
 ```
-Praktikan login → mengajukan izin → AI mengklasifikasikan alasan
+Praktikan login → mengajukan izin → model sentimen lokal mengklasifikasikan alasan
   → Asisten memeriksa dan memutuskan → Praktikan melihat status
 ```
 
@@ -152,62 +153,145 @@ _(Urutan ini hanya untuk penggabungan; pengerjaan kode tetap berjalan bersamaan.
 
 | Kebutuhan | Teknologi |
 |---|---|
-| Framework | React Native dengan [Expo](https://expo.dev) SDK 58 |
-| Bahasa | TypeScript (Sprint 1) / JavaScript (Sprint 2) |
+| Framework | React Native 0.88 dengan [Expo](https://expo.dev) SDK 58 |
+| Bahasa | TypeScript |
 | Navigasi | [Expo Router](https://docs.expo.dev/router/introduction) (Stack dan Bottom Tab) |
-| Autentikasi | [Firebase Authentication](https://firebase.google.com/docs/auth) |
-| Database | [Cloud Firestore](https://firebase.google.com/docs/firestore) (real-time listener) |
+| Autentikasi | [Firebase Authentication](https://firebase.google.com/docs/auth) via `@react-native-firebase/auth` |
+| Database | [Cloud Firestore](https://firebase.google.com/docs/firestore) via `@react-native-firebase/firestore` (real-time listener) |
 | State | React Context dan `useState` |
 | Tata letak | Flexbox (`StyleSheet`) |
-| Konfirmasi & umpan balik | `Modal` bawaan React Native |
-| Klasifikasi izin | API model AI dari pengajar |
-| Build | EAS Build (development build) |
+| Tipografi | Plus Jakarta Sans via `@expo-google-fonts/plus-jakarta-sans` |
+| Konfirmasi & umpan balik | `Modal` bawaan React Native dan bottom sheet kustom |
+| Klasifikasi izin | Model sentimen EDOM lokal (`ai/sentiment.js` + `ai/model-edom.json`), tanpa API key dan tanpa internet |
+| Build | EAS Build dengan `expo-dev-client` (development build) |
 
 ---
 
 ## Struktur Folder
 
+Folder utama di root project:
+
+```
+PPKApp-PresensiPraktikum/
+├── ai/                   # Model sentimen EDOM untuk klasifikasi alasan izin
+├── assets/               # Ikon, splash screen, dan gambar
+├── plugins/
+│   └── withFirebaseBom.js # Plugin Expo untuk Firebase BOM Android
+├── src/                  # Kode aplikasi (rincian di bawah)
+├── .env.example          # Contoh variabel lingkungan
+├── .gitignore            # Daftar file yang tidak di-commit
+├── app.json              # Konfigurasi Expo
+├── eas.json              # Konfigurasi EAS Build
+├── eslint.config.js      # Konfigurasi ESLint
+├── expo-env.d.ts         # Tipe lingkungan Expo
+├── firestore.rules       # Security Rules Firestore
+├── google-services.json  # Konfigurasi Firebase Android
+├── LICENSE               # Lisensi project
+├── package-lock.json     # Lockfile dependency
+├── package.json          # Dependency dan script npm
+├── tsconfig.json         # Konfigurasi TypeScript
+└── README.md
+```
+
+> Folder hasil build/cache seperti `.expo/`, `dist/`, dan `node_modules/` tidak ditampilkan.
+
+Isi folder `src/`:
+
 ```
 src/
 ├── app/                  # Route Expo Router (file route tipis)
 │   ├── _layout.tsx       # Root layout + provider state
-│   ├── index.tsx         # Pilih peran dan identitas (Sprint 1) / Login (Sprint 2)
+│   ├── index.tsx         # Gerbang awal / redirect sesuai sesi login
+│   ├── login.tsx         # Login
+│   ├── register.tsx      # Registrasi
+│   ├── profile.tsx       # Profil pengguna
+│   ├── kelas.tsx         # Kelola kelas dan peserta
+│   ├── session-form.tsx  # Form tambah / ubah sesi
+│   ├── presensi-manual.tsx # Presensi manual oleh asisten
 │   ├── session/[id].tsx  # Detail sesi
-│   ├── praktikan/        # Tab praktikan: Jadwal, Presensi, Riwayat
-│   └── asisten/          # Tab asisten: Jadwal, Kelola Sesi, Rekap
+│   ├── praktikan/        # Tab praktikan: Home, Jadwal, Presensi, Riwayat, Izin
+│   └── asisten/          # Tab asisten: Jadwal, Kelola, Rekap, Izin
 ├── screens/              # Isi layar
+│   ├── LoginScreen.tsx
+│   ├── RegisterScreen.tsx
+│   ├── HomeScreen.tsx
+│   ├── ProfileScreen.tsx
+│   ├── ScheduleScreen.tsx
+│   ├── SessionDetailScreen.tsx
+│   ├── SessionFormScreen.tsx
+│   ├── ManageClassScreen.tsx
+│   ├── ManageSessionScreen.tsx
+│   ├── CheckInScreen.tsx
+│   ├── ManualAttendanceScreen.tsx
+│   ├── HistoryScreen.tsx
+│   ├── LeaveRequestScreen.tsx
+│   ├── LeaveReviewScreen.tsx
+│   └── RecapScreen.tsx
 ├── components/           # Komponen yang dipakai ulang
 │   ├── StatusBadge       # Badge status sesi (Belum Dibuka / Dibuka / Ditutup)
 │   ├── EmptyState        # Tampilan kosong generik
-│   ├── LoadingState      # Indikator loading (Sprint 2)
-│   └── ErrorState        # Tampilan error (Sprint 2)
-├── context/              # Store bersama (AppContext / AuthContext)
-├── data/                 # Tipe data dan data dummy
-├── constants/            # Warna, konstanta tampilan, dan konstanta status
-├── utils/                # Helper format waktu
-├── navigation/           # Konfigurasi navigator per peran (Sprint 2)
-└── services/             # Lapisan akses data ke Firestore & API AI (Sprint 2)
-    ├── authService.js
-    ├── classService.js
-    ├── sessionService.js
-    ├── attendanceService.js
-    ├── historyService.js
-    ├── leaveService.js
-    ├── leaveReviewService.js
-    ├── recapService.js
-    ├── sessionStatusService.js
-    └── aiService.js
+│   ├── LoadingState      # Indikator loading
+│   ├── ErrorState        # Tampilan error
+│   ├── Card              # Kartu pembungkus konten
+│   ├── PrimaryButton     # Tombol utama
+│   ├── ScreenHeader      # Header layar
+│   ├── SessionCard       # Kartu ringkasan sesi
+│   ├── ConfirmModal      # Modal konfirmasi
+│   ├── SuccessBottomSheet # Bottom sheet umpan balik sukses
+│   └── FloatingTabBar    # Tab bar mengambang
+├── context/              # Store bersama (AuthContext.tsx)
+├── navigation/           # Konfigurasi navigator per peran
+│   ├── AuthLoadingGate   # Gerbang loading autentikasi
+│   ├── RoleGuard         # Penjaga akses sesuai peran
+│   ├── RoleTabs          # Bottom tab per peran
+│   ├── tabConfig         # Konfigurasi tab
+│   ├── LogoutButton      # Tombol logout
+│   └── ProfileButton     # Tombol menuju profil
+├── hooks/                # Custom hook (useNamaKelas, useScrollKeFieldFokus)
+├── lib/                  # Konfigurasi inti
+│   ├── firebase.ts       # Inisialisasi Firebase
+│   ├── constants.ts      # Konstanta bersama (status, peran)
+│   └── types.ts          # Tipe data
+├── constants/            # Warna dan tema tampilan
+│   ├── colors.ts
+│   └── theme.ts
+├── types/                # Deklarasi tipe tambahan (sentiment-js.d.ts)
+├── utils/                # Helper format waktu, kode presensi, dan rekap
+│   ├── format.ts
+│   ├── kodePresensi.ts
+│   └── rekap.ts
+└── services/             # Lapisan akses data ke Firestore & model AI
+    ├── authService.ts
+    ├── classService.ts
+    ├── sessionService.ts
+    ├── attendanceService.ts
+    ├── historyService.ts
+    ├── leaveService.ts
+    ├── aiService.ts
+    └── serviceUtils.ts
+```
+
+Folder `ai/` berada di root project dan berisi model klasifikasi sentimen alasan izin yang berjalan di perangkat:
+
+```
+ai/
+├── model-edom.json       # Data model sentimen (positif / netral / negatif)
+├── sentiment.js          # Fungsi prediksi sentimen
+├── requirements.txt      # Dependency Python untuk pelatihan model
+└── README.md             # Panduan penggunaan model di React Native
 ```
 
 ### Skema koleksi Firestore (Sprint 2)
 
 | Koleksi | Deskripsi |
 |---|---|
-| `users` | Profil pengguna: nama, email, peran, NIM (praktikan) |
-| `classes` | Data kelas: nama, asisten pengampu, daftar peserta |
-| `sessions` | Sesi praktikum: nama, kelas, tanggal, waktu, ruangan, status |
-| `attendances` | Rekaman presensi per praktikan per sesi |
-| `leaveRequests` | Pengajuan izin: alasan, kategori AI, status keputusan |
+| `users` | Profil pengguna: `nama`, `email`, `role`, `nim` (praktikan), `kelasIds` (praktikan) |
+| `classes` | Kelas: `namaKelas`, `praktikum`, `asistenId`, `pesertaIds[]` |
+| `sessions` | Sesi praktikum: `praktikum`, `kelasId`, `asistenId`, `tanggal`, `waktuMulai`, `waktuSelesai`, `ruangan`, `status` |
+| `attendances` | Presensi per praktikan per sesi: `sessionId`, `kelasId`, `userId`, `nama`, `nim`, `waktuHadir`, `kode`, `manual`, `dicatatOleh`. ID dokumen `{sessionId}_{uid}` |
+| `leaveRequests` | Pengajuan izin: `sessionId`, `kelasId`, `asistenId`, `praktikum`, `userId`, `nama`, `nim`, `alasan`, `kategoriAI`, `aiStatus`, `status`, `catatanAsisten`. ID dokumen `{sessionId}_{uid}` |
+| `allowedAssistants` | Daftar email asisten yang diizinkan registrasi. ID dokumen = email huruf kecil |
+| `sessionCodes` | Kode presensi unik per sesi; hanya dibaca asisten dan dicocokkan Security Rules saat praktikan presensi |
 
 ---
 
@@ -215,11 +299,11 @@ src/
 
 | Ketergantungan | SRS Terkait | Solusi |
 |---|---|---|
-| Semua fitur butuh pengguna login | SRS-11 dan SRS-15 s/d 25 | Gunakan `useAuth()` dummy dari PM sampai branch Akmal dimerge |
-| Presensi butuh sesi yang sudah dibuka | SRS-19 dan SRS-23 | Data awal sudah memiliki sesi Dibuka |
-| Rekap dan pemeriksaan izin butuh data | SRS-24, 25 dan SRS-13, 19 | Tambah dokumen contoh lewat Firebase Console untuk pengujian |
-| Daftar sesi dipakai banyak layar | SRS-13, 17, 23 | Pakai stub PM; versi final otomatis terpakai setelah merge |
-| Security Rules bisa memblokir fitur | SRS-22 dan semua | Rules dipasang PM setelah semua branch dimerge, lalu seluruh alur diuji ulang |
+| Semua fitur butuh pengguna login | SRS-11 dan SRS-15 s/d 25 | `AuthContext` menyediakan profil, dan `RoleGuard` membatasi akses sesuai peran |
+| Presensi butuh sesi yang sudah dibuka | SRS-19 dan SRS-23 | Status sesi dan kode unik di `sessionCodes` diperiksa lagi oleh Security Rules saat presensi |
+| Rekap dan pemeriksaan izin butuh data | SRS-24, 25 dan SRS-13, 19 | Data diisi lewat aplikasi asisten atau Firebase Console untuk pengujian |
+| Daftar sesi dipakai banyak layar | SRS-13, 17, 23 | Semua layar memakai `subscribeSessions` di `sessionService` |
+| Security Rules bisa memblokir fitur | SRS-22 dan semua | Rules final ada di `firestore.rules` dan seluruh alur diuji ulang |
 | Status harus konsisten di semua tampilan | SRS-17, 18, 23, 24 | Semua layar membaca Firestore lewat listener, tanpa state salinan sendiri |
 
 ---

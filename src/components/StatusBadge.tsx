@@ -2,18 +2,16 @@
 // Badge status sesi berwarna. Dipakai juga oleh layar lain, jadi props jangan diubah.
 import { StyleSheet, Text, View } from 'react-native';
 
-import type { SessionStatus } from '../data/types';
-import type { StatusIzin } from '../lib/constants';
+import type { StatusIzin, StatusSesi } from '../lib/constants';
 import { colors, font, radius, status as statusTokens } from '../constants/theme';
 
-type BadgeStatus = SessionStatus | StatusIzin | 'hadir' | 'terlambat';
+type BadgeStatus = StatusSesi | StatusIzin | 'hadir';
 
 const BADGE: Record<BadgeStatus, { label: string; bg: string; text: string }> = {
   belum_dibuka: { label: 'Belum Dibuka', bg: colors.surface, text: colors.textSecondary },
   dibuka: { label: 'Dibuka', bg: colors.tint, text: colors.primary },
   ditutup: { label: 'Ditutup', bg: colors.surface, text: colors.textSecondary },
   hadir: { label: 'Hadir', ...statusTokens.success },
-  terlambat: { label: 'Terlambat', ...statusTokens.warning },
   menunggu: { label: 'Menunggu', ...statusTokens.warning },
   diterima: { label: 'Diterima', ...statusTokens.success },
   ditolak: { label: 'Ditolak', ...statusTokens.danger },
