@@ -126,21 +126,26 @@ service cloud.firestore {
       // Kelas yang DITAMBAHKAN ke praktikan wajib milik asisten yang melakukannya
       // (mencegah asisten memasukkan praktikan ke kelas asisten lain).
       // Kelas yang dihapus dari kelasIds tidak dicek kepemilikannya: kelasnya mungkin sudah dihapus.
+      // Ditulis tanpa pemotongan list / perbandingan urutan supaya tidak rapuh:
+      //   (a) tidak ada kelas baru (hanya mengeluarkan satu kelas / tanpa perubahan), atau
+      //   (b) daftar lama masih utuh, ukuran bertambah tepat 1, dan elemen TERAKHIR (yang ditambahkan
+      //       arrayUnion) belum ada di daftar lama serta kelasnya milik asisten ini.
       allow update: if isAsisten()
         && resource.data.role == 'praktikan'
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['kelasIds'])
         && request.resource.data.kelasIds is list
-        && request.resource.data.kelasIds.toSet().difference(resource.data.get('kelasIds', []).toSet()).size() <= 1
-        && resource.data.get('kelasIds', []).toSet().difference(request.resource.data.kelasIds.toSet()).size() <= 1
         && (
-          // (a) tidak ada kelas baru (hanya mengeluarkan kelas / tanpa perubahan), atau
-          request.resource.data.kelasIds.toSet().difference(resource.data.get('kelasIds', []).toSet()).size() == 0
-          // (b) tepat satu kelas ditambahkan di AKHIR daftar (arrayUnion menambah di akhir),
-          //     daftar lama tidak berubah, dan kelas baru itu milik asisten ini.
+          (
+            request.resource.data.kelasIds.toSet().hasOnly(resource.data.get('kelasIds', []))
+            && resource.data.get('kelasIds', []).toSet().difference(request.resource.data.kelasIds.toSet()).size() <= 1
+          )
           || (
-            request.resource.data.kelasIds.size() == resource.data.get('kelasIds', []).size() + 1
-            && request.resource.data.kelasIds[0:resource.data.get('kelasIds', []).size()] == resource.data.get('kelasIds', [])
-            && classOf(request.resource.data.kelasIds[resource.data.get('kelasIds', []).size()]).asistenId == request.auth.uid
+            request.resource.data.kelasIds.toSet().hasAll(resource.data.get('kelasIds', []))
+            && request.resource.data.kelasIds.size() == resource.data.get('kelasIds', []).size() + 1
+            && !(request.resource.data.kelasIds[request.resource.data.kelasIds.size() - 1]
+                 in resource.data.get('kelasIds', []))
+            && classOf(request.resource.data.kelasIds[request.resource.data.kelasIds.size() - 1]).asistenId
+                 == request.auth.uid
           )
         );
 
