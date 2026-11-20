@@ -1,5 +1,6 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { STATUS_SESI } from '../lib/constants';
 import type { Attendance, ClassDoc, LeaveRequest, Profile, Session } from '../lib/types';
@@ -53,6 +54,7 @@ export default function RecapScreen() {
     error: string | null;
   } | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [kelasState, setKelasState] = useState<{ kelasId: string; cls: ClassDoc | null } | null>(null);
   const [pesertaState, setPesertaState] = useState<{ key: string; items: Profile[] } | null>(null);
   const [izinAll, setIzinAll] = useState<LeaveRequest[]>([]);
@@ -277,47 +279,90 @@ export default function RecapScreen() {
             ) : null}
 
             {sessions.length > 0 ? (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.sessionSelector}
-              >
-                {sessions.map((session) => {
-                  const selected = session.id === selectedSession?.id;
-                  return (
+              <View style={styles.dropdownWrap}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Pilih sesi rekap"
+                  accessibilityValue={{
+                    text: selectedSession
+                      ? `${selectedSession.praktikum}, ${labelKelas(selectedSession.kelasId)}`
+                      : 'Belum dipilih',
+                  }}
+                  onPress={() => setPickerOpen(true)}
+                  style={({ pressed }) => [styles.dropdownButton, pressed && styles.optionPressed]}
+                >
+                  <View style={styles.dropdownTextWrap}>
+                    <Text style={styles.dropdownCaption}>Sesi / Kelas</Text>
+                    <Text numberOfLines={1} style={styles.dropdownValue}>
+                      {selectedSession
+                        ? `${selectedSession.praktikum} · ${labelKelas(selectedSession.kelasId)} · ${selectedSession.tanggal}`
+                        : 'Pilih sesi'}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-down" size={18} color={colors.primary} />
+                </Pressable>
+
+                <Modal
+                  transparent
+                  animationType="fade"
+                  visible={pickerOpen}
+                  onRequestClose={() => setPickerOpen(false)}
+                >
+                  <View style={styles.pickerBackdrop}>
                     <Pressable
-                      key={session.id}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${session.praktikum}, ${labelKelas(session.kelasId)}, ${session.tanggal}`}
-                      accessibilityState={{ selected }}
-                      onPress={() => setSelectedSessionId(session.id)}
-                      style={({ pressed }) => [
-                        styles.sessionOption,
-                        selected && styles.sessionOptionSelected,
-                        pressed && styles.optionPressed,
-                      ]}
-                    >
-                      <Text
-                        numberOfLines={2}
-                        style={[
-                          styles.sessionOptionTitle,
-                          selected && styles.sessionOptionTitleSelected,
-                        ]}
-                      >
-                        {session.praktikum}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.sessionOptionDetails,
-                          selected && styles.sessionOptionTitleSelected,
-                        ]}
-                      >
-                        {labelKelas(session.kelasId)} · {session.tanggal}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
+                      style={styles.pickerBackdropPress}
+                      onPress={() => setPickerOpen(false)}
+                      accessibilityLabel="Tutup pilihan sesi"
+                    />
+                    <View style={styles.pickerCard}>
+                      <Text style={styles.pickerTitle}>Pilih Sesi Rekap</Text>
+                      <ScrollView style={styles.pickerList} showsVerticalScrollIndicator={false}>
+                        {sessions.map((session) => {
+                          const selected = session.id === selectedSession?.id;
+                          return (
+                            <Pressable
+                              key={session.id}
+                              accessibilityRole="menuitem"
+                              accessibilityState={{ selected }}
+                              accessibilityLabel={`${session.praktikum}, ${labelKelas(session.kelasId)}, ${session.tanggal}`}
+                              onPress={() => {
+                                setSelectedSessionId(session.id);
+                                setPickerOpen(false);
+                              }}
+                              style={({ pressed }) => [
+                                styles.pickerOption,
+                                selected && styles.pickerOptionSelected,
+                                pressed && styles.optionPressed,
+                              ]}
+                            >
+                              <View style={styles.dropdownTextWrap}>
+                                <Text
+                                  numberOfLines={2}
+                                  style={[
+                                    styles.pickerOptionTitle,
+                                    selected && styles.sessionOptionTitleSelected,
+                                  ]}
+                                >
+                                  {session.praktikum}
+                                </Text>
+                                <Text
+                                  style={[
+                                    styles.sessionOptionDetails,
+                                    selected && styles.sessionOptionTitleSelected,
+                                  ]}
+                                >
+                                  {labelKelas(session.kelasId)} · {session.tanggal}
+                                </Text>
+                              </View>
+                              {selected ? <Ionicons name="checkmark" size={18} color={colors.primary} /> : null}
+                            </Pressable>
+                          );
+                        })}
+                      </ScrollView>
+                    </View>
+                  </View>
+                </Modal>
+              </View>
             ) : null}
 
             {selectedSession ? (
@@ -444,21 +489,51 @@ const styles = StyleSheet.create({
   },
   errorFeedback: { borderColor: colors.danger, backgroundColor: colors.dangerTint },
   feedbackText: { fontSize: 13, lineHeight: 19, fontFamily: font.medium, color: colors.text },
-  sessionSelector: { gap: 8, paddingVertical: 4 },
-  sessionOption: {
-    width: 190,
-    padding: 13,
-    gap: 6,
+  optionPressed: { opacity: 0.8 },
+  dropdownWrap: { gap: 8 },
+  dropdownButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.input,
     backgroundColor: colors.card,
   },
-  sessionOptionSelected: { borderColor: colors.primary, backgroundColor: colors.tint },
-  optionPressed: { opacity: 0.8 },
-  sessionOptionTitle: { fontSize: 13, fontFamily: font.bold, color: colors.text },
+  dropdownTextWrap: { flex: 1, gap: 3 },
+  dropdownCaption: { fontSize: 11, fontFamily: font.semibold, color: colors.textSecondary },
+  dropdownValue: { fontSize: 14, fontFamily: font.bold, color: colors.text },
   sessionOptionTitleSelected: { color: colors.primary },
   sessionOptionDetails: { fontSize: 12, fontFamily: font.medium, color: colors.textSecondary },
+  pickerBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 24,
+    backgroundColor: 'rgba(20, 35, 74, 0.48)',
+  },
+  pickerBackdropPress: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
+  pickerCard: {
+    maxHeight: '75%',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+    borderRadius: radius.card,
+    backgroundColor: colors.card,
+  },
+  pickerTitle: { fontSize: 16, fontFamily: font.bold, color: colors.text },
+  pickerList: { marginTop: 8 },
+  pickerOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: radius.input,
+  },
+  pickerOptionSelected: { backgroundColor: colors.tint },
+  pickerOptionTitle: { fontSize: 13, fontFamily: font.bold, color: colors.text },
   selectedSessionCard: {
     padding: 16,
     gap: 8,
