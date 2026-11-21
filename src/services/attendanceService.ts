@@ -165,8 +165,8 @@ export async function checkIn(
 }
 
 // ─── Kode unik presensi (sessionCodes) ───────────────────────────────────────
-// sessionCodes/{sessionId} = { sessionId, asistenId, kode, createdAt }
-// Hanya asisten pengampu yang dapat membacanya; praktikan hanya bisa mengirim tebakan lewat
+// sessionCodes/{sessionId} = { sessionId, asistenId (yang membuka sesi), kode, createdAt }
+// Hanya asisten pengampu kelas (pembuat maupun partner) yang dapat membacanya; praktikan hanya bisa mengirim tebakan lewat
 // dokumen presensi dan rules yang membandingkannya.
 
 /** Isi dokumen sessionCodes untuk sesi ini (dipakai openSession dan pastikanKodePresensi). */
@@ -195,7 +195,8 @@ export function subscribeKodePresensi(
  * Kode tidak pernah ditimpa: rules menolak update, jadi dua perangkat asisten tidak bisa membuat dua kode.
  */
 export async function pastikanKodePresensi(session: Session, asistenId: string): Promise<void> {
-  if (!session?.id || session.asistenId !== asistenId || session.status !== STATUS_SESI.DIBUKA) return;
+  // Kepemilikan (pengampu kelas sesi) ditegakkan firestore.rules.
+  if (!session?.id || !asistenId || session.status !== STATUS_SESI.DIBUKA) return;
   try {
     await withTimeout(
       setDoc(doc(db, "sessionCodes", session.id), dataKodePresensi(session.id, asistenId)),
@@ -224,9 +225,6 @@ export async function checkInManual(
 ): Promise<CheckInResult> {
   if (!session?.id || !praktikan?.id || !asistenId) {
     return { ok: false, message: "Data sesi atau praktikan tidak valid." };
-  }
-  if (session.asistenId !== asistenId) {
-    return { ok: false, message: "Hanya asisten pengampu sesi ini yang dapat mencatat presensi." };
   }
   if (session.status !== STATUS_SESI.DIBUKA) {
     return { ok: false, message: "Presensi hanya dapat dicatat saat sesi sedang dibuka." };
@@ -269,14 +267,14 @@ export async function checkInManual(
 
 // ─── Status manual oleh asisten (Rekap) ──────────────────────────────────────
 
-type SesiAsisten = Pick<Session, "id" | "asistenId" | "status">;
+type SesiAsisten = Pick<Session, "id" | "status">;
 
-/** Pastikan sesi milik asisten ini dan sedang Dibuka. Mengembalikan pesan error atau null. */
+/**
+ * Pastikan sesi sedang Dibuka. Mengembalikan pesan error atau null.
+ * Bahwa asisten ini pengampu kelas sesi (pembuat atau partner) ditegakkan firestore.rules.
+ */
 function cekSesiManual(session: SesiAsisten, asistenId: string): string | null {
   if (!session?.id || !asistenId) return "Data sesi tidak valid.";
-  if (session.asistenId !== asistenId) {
-    return "Hanya asisten pengampu sesi ini yang dapat mengubah status praktikan.";
-  }
   if (session.status !== STATUS_SESI.DIBUKA) {
     return "Status praktikan hanya dapat diubah saat sesi sedang dibuka.";
   }

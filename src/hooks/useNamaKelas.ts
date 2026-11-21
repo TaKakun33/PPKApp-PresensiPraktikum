@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { useAuth } from '../context/AuthContext';
-import { subscribeClassesForUser } from '../services/classService';
+import { labelKelas, subscribeClassesForUser } from '../services/classService';
 
 export type NamaKelas = {
   /** Nama kelas untuk sebuah id. Selama belum termuat: "Memuat kelas..."; kalau kelasnya sudah tidak ada: "Kelas tidak ditemukan". */
@@ -26,7 +26,7 @@ export function useNamaKelas(): NamaKelas {
       (data) =>
         setState({
           userId: profile.id,
-          map: Object.fromEntries(data.map((c) => [c.id, c.namaKelas || 'Kelas tanpa nama'])),
+          map: Object.fromEntries(data.map((c) => [c.id, c.namaKelas ? labelKelas(c) : 'Kelas tanpa nama'])),
         }),
       () => setState({ userId: profile.id, map: {} }),
     );

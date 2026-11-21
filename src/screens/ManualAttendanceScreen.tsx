@@ -101,7 +101,9 @@ export default function ManualAttendanceScreen() {
   const sessionLoading = !!sessionId && !(sessionState && sessionState.id === sessionId);
 
   const kelasId = session?.kelasId ?? null;
-  const sesiMilikku = !!session && !!profileId && session.asistenId === profileId;
+  // Asisten hanya bisa membaca sesi kelas yang dia ampu (firestore.rules), jadi sesi yang terbaca
+  // oleh asisten = sesi miliknya, baik sebagai pembuat maupun partner.
+  const sesiMilikku = !!session && !!profileId && profile?.role === 'asisten';
   const sesiDibuka = session?.status === STATUS_SESI.DIBUKA;
 
   // Kode unik presensi (hanya terbaca oleh asisten pengampu, lihat firestore.rules).
@@ -252,7 +254,7 @@ export default function ManualAttendanceScreen() {
     );
   }
 
-  if (!sessionId || sessionError || !session || session.asistenId !== profileId) {
+  if (!sessionId || sessionError || !session || !sesiMilikku) {
     return layar(
       <View style={styles.state}>
         <EmptyState

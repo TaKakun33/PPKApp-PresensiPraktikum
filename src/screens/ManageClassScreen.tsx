@@ -1,6 +1,7 @@
 // Pemilik: Hadrian (feat/classsessioncrud), SRS-15.
-// Asisten mengelola kelas yang diampu: tambah, lihat, ubah, hapus kelas,
-// serta menambah (lewat NIM) dan mengeluarkan peserta kelas. Data real-time dari classService.
+// Asisten mengelola kelas yang diampu: membuat Kelas A–E atau bergabung sebagai partner (maks. 2
+// asisten per kelas), keluar, hapus kelas, serta mencari (awalan NIM / nama) dan menambah atau
+// mengeluarkan peserta kelas. Data real-time dari classService.
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -21,22 +22,30 @@ import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import LoadingState from '../components/LoadingState';
 import PrimaryButton from '../components/PrimaryButton';
+import SelectField from '../components/SelectField';
+import { KODE_KELAS, MAKS_ASISTEN_KELAS, type KodeKelas } from '../lib/constants';
 import type { ClassDoc, Profile } from '../lib/types';
 import { colors, font, layout, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import {
+  addPeserta,
   addPesertaByNim,
-  createClass,
+  cariPraktikan,
   deleteClass,
+  getDaftarPraktikum,
+  getNamaPengguna,
+  isTertunda,
+  keluarDariKelas,
+  labelKelas,
+  MAKS_PRAKTIKUM,
   pesanFirestore,
   removePeserta,
+  simpanKelas,
   subscribeClassesForAsisten,
   subscribePeserta,
-  updateClass,
 } from '../services/classService';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
-type FormState = { mode: 'tambah' } | { mode: 'ubah'; cls: ClassDoc };
 
 const urutNama = <T,>(items: T[], nama: (item: T) => string) =>
   [...items].sort((a, b) => nama(a).localeCompare(nama(b), 'id'));
@@ -75,12 +84,13 @@ function ActionButton({
   );
 }
 
-// Daftar peserta satu kelas + form tambah peserta lewat NIM.
+// Daftar peserta satu kelas + pencarian praktikan (awalan NIM atau nama) untuk ditambahkan.
 function PesertaPanel({ cls }: { cls: ClassDoc }) {
   const [peserta, setPeserta] = useState<Profile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [nim, setNim] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [cari, setCari] = useState('');
+  const [hasilCari, setHasilCari] = useState<{ teks: string; idsKey: string; list: Profile[] } | null>(null);
+  const [savingId, setSavingId] = useState<string | null>(null);
   const [info, setInfo] = useState<{ ok: boolean; text: string } | null>(null);
 
   // Kunci string supaya listener hanya dibuat ulang saat daftar peserta benar-benar berubah.
@@ -98,22 +108,50 @@ function PesertaPanel({ cls }: { cls: ClassDoc }) {
     [idsKey],
   );
 
-  const tambah = async () => {
-    setSaving(true);
+  // Cari otomatis 400 ms setelah berhenti mengetik. Hasil disimpan bersama teks & daftar peserta
+  // saat dicari, jadi hasil lama (teks sudah berubah / peserta sudah bertambah) tidak ditampilkan.
+  const teksCari = cari.trim();
+  useEffect(() => {
+    if (teksCari.length < 2) return;
+    let aktif = true;
+    const t = setTimeout(() => {
+      cariPraktikan(cls, teksCari)
+        .then((list) => aktif && setHasilCari({ teks: teksCari, idsKey, list }))
+        .catch((e) => {
+          if (!aktif) return;
+          setHasilCari({ teks: teksCari, idsKey, list: [] });
+          setInfo({ ok: false, text: pesanFirestore(e, 'Gagal mencari praktikan.') });
+        });
+    }, 400);
+    return () => {
+      aktif = false;
+      clearTimeout(t);
+    };
+    // cls berganti objek di setiap snapshot; yang menentukan hasil hanya teks dan daftar peserta.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teksCari, idsKey]);
+  const hasil =
+    teksCari.length >= 2 && hasilCari?.teks === teksCari && hasilCari.idsKey === idsKey ? hasilCari.list : null;
+  const mencari = teksCari.length >= 2 && hasil === null;
+
+  const tambah = async (p: Profile | null) => {
+    setSavingId(p?.id ?? 'nim');
     setInfo(null);
     try {
-      const p = await addPesertaByNim(cls, nim);
-      setInfo({ ok: true, text: `${p.nama} ditambahkan ke ${cls.namaKelas}.` });
-      setNim('');
+      const ditambah = p ? await addPeserta(cls, p) : await addPesertaByNim(cls, cari);
+      setInfo({ ok: true, text: `${ditambah.nama} ditambahkan ke ${labelKelas(cls)}.` });
+      setCari('');
     } catch (e) {
+      // Tertunda = sudah tersimpan di perangkat; kosongkan pencarian agar tidak dikirim dua kali.
+      if (isTertunda(e)) setCari('');
       setInfo({ ok: false, text: pesanFirestore(e, 'Gagal menambah peserta.') });
     } finally {
-      setSaving(false);
+      setSavingId(null);
     }
   };
 
   const keluarkan = (p: Profile) =>
-    Alert.alert('Keluarkan peserta?', `${p.nama} tidak akan lagi melihat jadwal ${cls.namaKelas}.`, [
+    Alert.alert('Keluarkan peserta?', `${p.nama} tidak akan lagi melihat jadwal ${labelKelas(cls)}.`, [
       { text: 'Batal', style: 'cancel' },
       {
         text: 'Keluarkan',
@@ -122,47 +160,73 @@ function PesertaPanel({ cls }: { cls: ClassDoc }) {
           try {
             await removePeserta(cls, p.id);
           } catch (e) {
-            Alert.alert('Gagal', pesanFirestore(e, 'Gagal mengeluarkan peserta.'));
+            Alert.alert(isTertunda(e) ? 'Belum terkirim' : 'Gagal', pesanFirestore(e, 'Gagal mengeluarkan peserta.'));
           }
         },
       },
     ]);
 
+  const nimLengkap = /^[0-9]{5,20}$/.test(cari.trim());
+
   return (
     <View style={styles.panel}>
-      <View style={styles.addRow}>
-        <TextInput
-          style={[styles.input, styles.addInput]}
-          value={nim}
-          onChangeText={setNim}
-          placeholder="NIM praktikan"
-          placeholderTextColor={colors.placeholder}
-          keyboardType="number-pad"
-          returnKeyType="done"
-          onSubmitEditing={tambah}
-          editable={!saving}
-          accessibilityLabel="NIM praktikan yang ditambahkan"
-        />
-        <PrimaryButton
-          label="Tambah"
-          size="sm"
-          onPress={tambah}
-          disabled={saving || !nim.trim()}
-          loading={saving}
-          accessibilityLabel="Tambah peserta"
-          style={styles.addButton}
-        />
-      </View>
+      <TextInput
+        style={styles.input}
+        value={cari}
+        onChangeText={(t) => {
+          setCari(t);
+          setInfo(null);
+        }}
+        placeholder="Cari NIM atau nama praktikan"
+        placeholderTextColor={colors.placeholder}
+        maxLength={100}
+        returnKeyType="search"
+        onSubmitEditing={() => nimLengkap && hasil?.length === 0 && tambah(null)}
+        editable={!savingId}
+        accessibilityLabel="Cari praktikan berdasarkan NIM atau nama"
+      />
+      <Text style={styles.hintText}>Ketik minimal 2 karakter, misalnya awal NIM atau awal nama.</Text>
+
+      {mencari ? <ActivityIndicator style={styles.panelLoading} color={colors.primary} /> : null}
+      {!mencari && hasil ? (
+        hasil.length === 0 ? (
+          <Text style={styles.emptyText}>
+            Tidak ada praktikan yang cocok dan belum menjadi peserta kelas ini.
+          </Text>
+        ) : (
+          <View style={styles.hasilList}>
+            {hasil.map((p) => (
+              <View key={p.id} style={styles.hasilRow}>
+                <View style={styles.flex}>
+                  <Text style={styles.pesertaNama}>{p.nama}</Text>
+                  <Text style={styles.pesertaNim}>NIM {p.nim ?? '-'}</Text>
+                </View>
+                <PrimaryButton
+                  label="Tambah"
+                  size="sm"
+                  onPress={() => tambah(p)}
+                  disabled={!!savingId}
+                  loading={savingId === p.id}
+                  accessibilityLabel={`Tambah ${p.nama}`}
+                  style={styles.addButton}
+                />
+              </View>
+            ))}
+          </View>
+        )
+      ) : null}
+
       {info ? (
         <Text style={[styles.info, { color: info.ok ? colors.success : colors.danger }]}>{info.text}</Text>
       ) : null}
 
+      <Text style={styles.label}>Peserta ({cls.pesertaIds.length})</Text>
       {error ? (
         <Text style={[styles.info, { color: colors.danger }]}>{error}</Text>
       ) : peserta === null ? (
         <ActivityIndicator style={styles.panelLoading} color={colors.primary} />
       ) : peserta.length === 0 ? (
-        <Text style={styles.emptyText}>Belum ada peserta. Tambahkan lewat NIM.</Text>
+        <Text style={styles.emptyText}>Belum ada peserta. Cari praktikan di atas untuk menambahkannya.</Text>
       ) : (
         peserta.map((p) => (
           <View key={p.id} style={styles.pesertaRow}>
@@ -188,29 +252,41 @@ function PesertaPanel({ cls }: { cls: ClassDoc }) {
   );
 }
 
-// Modal tambah/ubah kelas.
-function ClassFormModal({
-  form,
-  asistenId,
-  onClose,
-}: {
-  form: FormState;
-  asistenId: string;
-  onClose: () => void;
-}) {
-  const awal = form.mode === 'ubah' ? form.cls : null;
-  const [namaKelas, setNamaKelas] = useState(awal?.namaKelas ?? '');
-  const [praktikum, setPraktikum] = useState(awal?.praktikum ?? '');
+// Modal buat Kelas A–E, atau gabung sebagai asisten partner jika kelas itu sudah dibuat asisten lain.
+function ClassFormModal({ asistenId, onClose }: { asistenId: string; onClose: () => void }) {
+  const [praktikum, setPraktikum] = useState('');
+  const [kode, setKode] = useState<KodeKelas | null>(null);
+  const [daftarPraktikum, setDaftarPraktikum] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    let aktif = true;
+    getDaftarPraktikum()
+      .then((list) => aktif && setDaftarPraktikum(list))
+      .catch(() => {});
+    return () => {
+      aktif = false;
+    };
+  }, []);
+
+  const saran = daftarPraktikum.filter(
+    (p) => p !== praktikum && p.toLowerCase().includes(praktikum.trim().toLowerCase()),
+  );
+
   const simpan = async () => {
+    if (!kode) {
+      setError('Pilih kelas A, B, C, D, atau E.');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
-      if (awal) await updateClass(awal.id, { namaKelas, praktikum });
-      else await createClass(asistenId, { namaKelas, praktikum });
+      const hasil = await simpanKelas(asistenId, { praktikum, kode });
       onClose();
+      if (hasil.bergabung) {
+        Alert.alert('Bergabung ke kelas', `Kamu sekarang asisten partner Kelas ${kode}. Sesi kelas ini kalian kelola bersama.`);
+      }
     } catch (e) {
       setError(pesanFirestore(e, 'Gagal menyimpan kelas.'));
       setSaving(false);
@@ -221,17 +297,11 @@ function ClassFormModal({
     <Modal transparent animationType="fade" visible onRequestClose={onClose}>
       <KeyboardAvoidingView style={styles.backdrop} behavior="height">
         <View style={styles.modal}>
-          <Text style={styles.modalTitle}>{awal ? 'Ubah Kelas' : 'Tambah Kelas'}</Text>
-
-          <Text style={styles.label}>Nama kelas</Text>
-          <TextInput
-            style={styles.input}
-            value={namaKelas}
-            onChangeText={setNamaKelas}
-            placeholder="Contoh: Kelas A"
-            placeholderTextColor={colors.placeholder}
-            editable={!saving}
-          />
+          <Text style={styles.modalTitle}>Tambah / Gabung Kelas</Text>
+          <Text style={styles.hintText}>
+            Jika kelas yang sama sudah dibuat asisten lain, kamu otomatis bergabung sebagai partner
+            (maksimal {MAKS_ASISTEN_KELAS} asisten per kelas).
+          </Text>
 
           <Text style={styles.label}>Praktikum</Text>
           <TextInput
@@ -240,7 +310,35 @@ function ClassFormModal({
             onChangeText={setPraktikum}
             placeholder="Contoh: Praktikum PPK"
             placeholderTextColor={colors.placeholder}
+            maxLength={MAKS_PRAKTIKUM}
             editable={!saving}
+          />
+          {saran.length > 0 ? (
+            <View style={styles.saranRow}>
+              {saran.slice(0, 4).map((p) => (
+                <Pressable
+                  key={p}
+                  style={({ pressed }) => [styles.saran, pressed && styles.actionPressed]}
+                  onPress={() => setPraktikum(p)}
+                  disabled={saving}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Pakai praktikum ${p}`}
+                >
+                  <Text style={styles.saranText} numberOfLines={1}>
+                    {p}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+
+          <SelectField
+            label="Kelas"
+            value={kode}
+            options={KODE_KELAS.map((k) => ({ value: k, label: `Kelas ${k}` }))}
+            onChange={setKode}
+            placeholder="Pilih kelas"
+            disabled={saving}
           />
 
           {error ? <Text style={[styles.info, { color: colors.danger }]}>{error}</Text> : null}
@@ -267,6 +365,23 @@ function ClassFormModal({
   );
 }
 
+// Nama asisten pengampu kelas (mis. "Budi & Sari"), dibaca sekali per perubahan daftar.
+function useNamaPengampu(classes: ClassDoc[] | null): Record<string, string> {
+  const [nama, setNama] = useState<Record<string, string>>({});
+  const key = [...new Set((classes ?? []).flatMap((c) => c.asistenIds))].sort().join('|');
+  useEffect(() => {
+    const ids = key ? key.split('|') : [];
+    let aktif = true;
+    Promise.all(ids.map(async (id) => [id, (await getNamaPengguna(id)) ?? 'Asisten'] as const)).then(
+      (pasangan) => aktif && setNama(Object.fromEntries(pasangan)),
+    );
+    return () => {
+      aktif = false;
+    };
+  }, [key]);
+  return nama;
+}
+
 export default function ManageClassScreen() {
   const { profile } = useAuth();
   const asistenId = profile?.role === 'asisten' ? profile.id : null;
@@ -275,14 +390,15 @@ export default function ManageClassScreen() {
   const [error, setError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [form, setForm] = useState<FormState | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const namaPengampu = useNamaPengampu(classes);
 
   useEffect(() => {
     if (!asistenId) return;
     return subscribeClassesForAsisten(
       asistenId,
       (data) => {
-        setClasses(urutNama(data, (c) => c.namaKelas));
+        setClasses(urutNama(data, (c) => `${c.praktikum} ${c.namaKelas}`));
         setError(null);
       },
       (e) => setError(pesanFirestore(e, 'Gagal memuat daftar kelas.')),
@@ -323,8 +439,24 @@ export default function ManageClassScreen() {
     );
   }
 
+  const keluar = (cls: ClassDoc) =>
+    Alert.alert('Keluar dari kelas?', `Kamu tidak lagi mengampu ${labelKelas(cls)} (${cls.praktikum}). Partnermu tetap mengampu kelas ini.`, [
+      { text: 'Batal', style: 'cancel' },
+      {
+        text: 'Keluar',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await keluarDariKelas(cls, asistenId);
+          } catch (e) {
+            Alert.alert(isTertunda(e) ? 'Belum terkirim' : 'Gagal', pesanFirestore(e, 'Gagal keluar dari kelas.'));
+          }
+        },
+      },
+    ]);
+
   const hapus = (cls: ClassDoc) =>
-    Alert.alert('Hapus kelas?', `${cls.namaKelas} (${cls.praktikum}) akan dihapus beserta daftar pesertanya.`, [
+    Alert.alert('Hapus kelas?', `${labelKelas(cls)} (${cls.praktikum}) akan dihapus beserta daftar pesertanya.`, [
       { text: 'Batal', style: 'cancel' },
       {
         text: 'Hapus',
@@ -333,7 +465,7 @@ export default function ManageClassScreen() {
           try {
             await deleteClass(cls);
           } catch (e) {
-            Alert.alert('Gagal menghapus', pesanFirestore(e, 'Gagal menghapus kelas.'));
+            Alert.alert(isTertunda(e) ? 'Belum terkirim' : 'Gagal menghapus', pesanFirestore(e, 'Gagal menghapus kelas.'));
           }
         },
       },
@@ -359,22 +491,30 @@ export default function ManageClassScreen() {
               label="Kelas"
               size="sm"
               icon="add"
-              onPress={() => setForm({ mode: 'tambah' })}
-              accessibilityLabel="Tambah kelas"
+              onPress={() => setFormOpen(true)}
+              accessibilityLabel="Tambah atau gabung kelas"
               style={styles.addClassButton}
             />
           </View>
         }
         ListEmptyComponent={
-          <EmptyState icon="people-outline" title="Belum ada kelas" message="Tekan tombol + Kelas untuk membuat kelas pertama." />
+          <EmptyState
+            icon="people-outline"
+            title="Belum ada kelas"
+            message="Tekan tombol + Kelas untuk membuat Kelas A–E atau bergabung ke kelas partnermu."
+          />
         }
         renderItem={({ item }) => {
           const open = openId === item.id;
           return (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>{item.namaKelas}</Text>
+              <Text style={styles.cardTitle}>{labelKelas(item)}</Text>
               <Text style={styles.cardMeta}>
                 {item.praktikum} · {item.pesertaIds.length} peserta
+              </Text>
+              <Text style={styles.cardMeta}>
+                Asisten ({item.asistenIds.length}/{MAKS_ASISTEN_KELAS}):{' '}
+                {item.asistenIds.map((id) => namaPengampu[id] ?? '…').join(' & ')}
               </Text>
               <View style={styles.actions}>
                 <ActionButton
@@ -383,7 +523,9 @@ export default function ManageClassScreen() {
                   tone="primary"
                   onPress={() => setOpenId(open ? null : item.id)}
                 />
-                <ActionButton icon="create-outline" label="Ubah" onPress={() => setForm({ mode: 'ubah', cls: item })} />
+                {item.asistenIds.length > 1 ? (
+                  <ActionButton icon="exit-outline" label="Keluar" onPress={() => keluar(item)} />
+                ) : null}
                 <ActionButton icon="trash-outline" label="Hapus" tone="danger" onPress={() => hapus(item)} />
               </View>
               {open ? <PesertaPanel cls={item} /> : null}
@@ -391,7 +533,7 @@ export default function ManageClassScreen() {
           );
         }}
       />
-      {form ? <ClassFormModal form={form} asistenId={asistenId} onClose={() => setForm(null)} /> : null}
+      {formOpen ? <ClassFormModal asistenId={asistenId} onClose={() => setFormOpen(false)} /> : null}
     </View>
   );
 }
@@ -434,9 +576,19 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.5 },
   panel: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border, gap: 8 },
   panelLoading: { paddingVertical: 12 },
-  addRow: { flexDirection: 'row', gap: 8 },
-  addInput: { flex: 1 },
   addButton: { minWidth: 88 },
+  hintText: { ...text.caption },
+  hasilList: { gap: 2, borderRadius: radius.input, backgroundColor: colors.surface, paddingHorizontal: 10 },
+  hasilRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
+  saranRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  saran: {
+    maxWidth: '100%',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    backgroundColor: colors.tint,
+  },
+  saranText: { fontSize: 12, fontFamily: font.semibold, color: colors.primary },
   info: { fontSize: 12, lineHeight: 18, fontFamily: font.medium },
   emptyText: { ...text.caption, paddingVertical: 6 },
   pesertaRow: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 8 },

@@ -1,12 +1,14 @@
-// Pemilik: Hadrian (feat/classsessioncrud), SRS-16.
-// Form tambah/ubah sesi oleh asisten: kelas, praktikum, tanggal, waktu, dan ruangan.
+// Pemilik: Hadrian (feat/classsessioncrud), SRS-16. Disesuaikan evaluasi Sprint 2.
+// Form tambah/ubah sesi oleh asisten: kelas, tanggal, ruangan lab, dan jam (slot 2 jam).
+// Semua pilihan lewat dropdown; jam yang sudah dibooking sesi lain di lab itu tidak bisa dipilih.
 // /session-form        -> tambah sesi baru
-// /session-form?id=xx  -> ubah jadwal sesi xx (hanya selama Belum Dibuka)
+// /session-form?id=xx  -> ubah jadwal sesi xx (hanya selama Belum Dibuka; kelas tidak bisa diganti)
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { DateTimePicker } from '@expo/ui/community/datetime-picker';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -14,23 +16,34 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
-  type KeyboardTypeOptions,
 } from 'react-native';
 
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import LoadingState from '../components/LoadingState';
 import PrimaryButton from '../components/PrimaryButton';
-import type { ClassDoc } from '../lib/types';
+import SelectField, { type SelectOption } from '../components/SelectField';
+import { SLOT_WAKTU } from '../lib/constants';
+import type { ClassDoc, Lab } from '../lib/types';
 import { colors, font, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
-import { pesanFirestore, subscribeClassesForAsisten } from '../services/classService';
 import {
-  BATAS_DURASI_MENIT,
+  isTertunda,
+  labelKelas,
+  pesanFirestore,
+  subscribeClassesForAsisten,
+} from '../services/classService';
+import {
+  hariIniWib,
+  slotDariJam,
+  slotSudahLewat,
+  subscribeBookingLab,
+  subscribeLabs,
+  type LabBooking,
+} from '../services/jadwalService';
+import {
   createSession,
-  durasiMenit,
   getSession,
   updateSession,
   validasiSesi,
@@ -38,30 +51,7 @@ import {
 } from '../services/sessionService';
 import { formatTanggal } from '../utils/format';
 
-const KOSONG: SessionInput = {
-  kelasId: '',
-  praktikum: '',
-  tanggal: '',
-  waktuMulai: '',
-  waktuSelesai: '',
-  ruangan: '',
-};
-
-const JAM_AWAL = 7;
-const JAM_AKHIR = 21;
-const OPSI_JAM = Array.from({ length: (JAM_AKHIR - JAM_AWAL) * 2 + 1 }, (_, i) => {
-  const totalMenit = JAM_AWAL * 60 + i * 30;
-  return `${String(Math.floor(totalMenit / 60)).padStart(2, '0')}:${String(totalMenit % 60).padStart(2, '0')}`;
-});
-
-function awalHariIni(): Date {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-}
-
-function tanggalKeYmd(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
+const KOSONG: SessionInput = { kelasId: '', tanggal: '', labKode: '', slot: 0 };
 
 function ymdKeTanggal(value: string): Date {
   const cocok = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -69,138 +59,21 @@ function ymdKeTanggal(value: string): Date {
   return new Date(Number(cocok[1]), Number(cocok[2]) - 1, Number(cocok[3]));
 }
 
+function awalHariIni(): Date {
+  return ymdKeTanggalWib(hariIniWib());
+}
+
+function ymdKeTanggalWib(ymd: string): Date {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function tanggalKeYmd(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 function labelJam(jam: string): string {
   return jam.replace(':', '.');
-}
-
-/** Jam selesai terakhir yang masih diperbolehkan (maksimal 2 jam setelah jam mulai). */
-function batasJamSelesai(jamMulai: string): string | undefined {
-  if (!/^\d{2}:\d{2}$/.test(jamMulai)) return undefined;
-  const [jam, menit] = jamMulai.split(':').map(Number);
-  const total = jam * 60 + menit + BATAS_DURASI_MENIT;
-  if (total >= 24 * 60) return undefined;
-  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
-}
-
-function Field({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  keyboardType,
-  editable,
-}: {
-  label: string;
-  value: string;
-  onChangeText: (text: string) => void;
-  placeholder: string;
-  keyboardType?: KeyboardTypeOptions;
-  editable: boolean;
-}) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
-      <TextInput
-        style={styles.input}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={colors.placeholder}
-        keyboardType={keyboardType}
-        editable={editable}
-        accessibilityLabel={label}
-      />
-    </View>
-  );
-}
-
-function TimeField({
-  label,
-  value,
-  onChange,
-  disabled,
-  minJam,
-  maxJam,
-}: {
-  label: string;
-  value: string;
-  onChange: (jam: string) => void;
-  disabled: boolean;
-  minJam?: string;
-  maxJam?: string;
-}) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
-      <Pressable
-        style={({ pressed }) => [
-          styles.input,
-          styles.selectInput,
-          pressed && styles.selectPressed,
-          disabled && styles.selectDisabled,
-        ]}
-        onPress={() => setOpen(true)}
-        disabled={disabled}
-        accessibilityRole="button"
-        accessibilityLabel={label}
-        accessibilityValue={{ text: value ? labelJam(value) : 'Belum dipilih' }}
-      >
-        <Text style={[styles.selectText, !value && styles.selectPlaceholder]}>
-          {value ? labelJam(value) : 'Pilih jam'}
-        </Text>
-        <Ionicons name="chevron-down" size={16} color={colors.primary} />
-      </Pressable>
-
-      <Modal transparent animationType="fade" visible={open} onRequestClose={() => setOpen(false)}>
-        <View style={styles.timeBackdrop}>
-          <Pressable
-            style={styles.timeBackdropPress}
-            onPress={() => setOpen(false)}
-            accessibilityLabel="Tutup pilihan jam"
-          />
-          <View style={styles.timeCard}>
-            <Text style={styles.timeTitle}>{label}</Text>
-            <ScrollView style={styles.timeList} showsVerticalScrollIndicator={false}>
-              {OPSI_JAM.map((jam) => {
-                const aktif = jam === value;
-                const nonaktif = Boolean((minJam && jam <= minJam) || (maxJam && jam > maxJam));
-                return (
-                  <Pressable
-                    key={jam}
-                    style={({ pressed }) => [
-                      styles.timeOption,
-                      aktif && styles.timeOptionActive,
-                      pressed && !nonaktif && styles.timeOptionPressed,
-                    ]}
-                    onPress={() => {
-                      onChange(jam);
-                      setOpen(false);
-                    }}
-                    disabled={nonaktif}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: aktif, disabled: nonaktif }}
-                  >
-                    <Text
-                      style={[
-                        styles.timeOptionText,
-                        aktif && styles.timeOptionTextActive,
-                        nonaktif && styles.timeOptionTextDisabled,
-                      ]}
-                    >
-                      {labelJam(jam)}
-                    </Text>
-                    {aktif ? <Ionicons name="checkmark" size={18} color={colors.primary} /> : null}
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-    </View>
-  );
 }
 
 export default function SessionFormScreen() {
@@ -209,6 +82,8 @@ export default function SessionFormScreen() {
   const asistenId = profile?.role === 'asisten' ? profile.id : null;
 
   const [classes, setClasses] = useState<ClassDoc[] | null>(null);
+  const [labs, setLabs] = useState<Lab[] | null>(null);
+  const [bookingState, setBookingState] = useState<{ key: string; list: LabBooking[] } | null>(null);
   const [form, setForm] = useState<SessionInput>(KOSONG);
   const [loaded, setLoaded] = useState(!id);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -221,10 +96,34 @@ export default function SessionFormScreen() {
     if (!asistenId) return;
     return subscribeClassesForAsisten(
       asistenId,
-      (data) => setClasses([...data].sort((a, b) => a.namaKelas.localeCompare(b.namaKelas, 'id'))),
+      (data) =>
+        setClasses(
+          [...data].sort(
+            (a, b) => a.praktikum.localeCompare(b.praktikum, 'id') || a.namaKelas.localeCompare(b.namaKelas, 'id'),
+          ),
+        ),
       (e) => setLoadError(pesanFirestore(e, 'Gagal memuat daftar kelas.')),
     );
   }, [asistenId, retryKey]);
+
+  useEffect(() => {
+    if (!asistenId) return;
+    return subscribeLabs(setLabs, (e) => setLoadError(pesanFirestore(e, 'Gagal memuat daftar lab.')));
+  }, [asistenId, retryKey]);
+
+  // Booking lab terpilih pada tanggal terpilih (real-time), untuk menonaktifkan jam yang terpakai.
+  const bookingKey = form.labKode && form.tanggal ? `${form.labKode}|${form.tanggal}` : '';
+  useEffect(() => {
+    if (!bookingKey) return;
+    const [labKode, tanggal] = bookingKey.split('|');
+    return subscribeBookingLab(
+      labKode,
+      tanggal,
+      (list) => setBookingState({ key: bookingKey, list }),
+      () => setBookingState({ key: bookingKey, list: [] }),
+    );
+  }, [bookingKey]);
+  const booking = bookingState && bookingState.key === bookingKey ? bookingState.list : [];
 
   // Mode ubah: isi form dari data sesi (sekali baca, bukan listener).
   useEffect(() => {
@@ -234,16 +133,14 @@ export default function SessionFormScreen() {
       .then((sesi) => {
         if (!aktif) return;
         if (!sesi) setLoadError('Sesi tidak ditemukan atau sudah dihapus.');
-        else if (sesi.asistenId !== asistenId) setLoadError('Hanya asisten pengampu yang dapat mengubah sesi ini.');
         else if (sesi.status !== 'belum_dibuka') setLoadError('Jadwal tidak bisa diubah setelah sesi dibuka.');
         else {
           setForm({
             kelasId: sesi.kelasId,
-            praktikum: sesi.praktikum,
             tanggal: sesi.tanggal,
-            waktuMulai: sesi.waktuMulai,
-            waktuSelesai: sesi.waktuSelesai,
-            ruangan: sesi.ruangan,
+            labKode: sesi.labKode ?? '',
+            // Sesi lama tanpa slot: cocokkan dari jamnya jika tepat satu slot, jika tidak pilih ulang.
+            slot: sesi.slot ?? slotDariJam(sesi.waktuMulai, sesi.waktuSelesai) ?? 0,
           });
           setLoaded(true);
         }
@@ -254,40 +151,65 @@ export default function SessionFormScreen() {
     };
   }, [id, asistenId, retryKey]);
 
-  const set = (key: keyof SessionInput) => (value: string) => setForm((f) => ({ ...f, [key]: value }));
+  const opsiKelas: SelectOption<string>[] = useMemo(
+    () => (classes ?? []).map((c) => ({ value: c.id, label: labelKelas(c), sub: c.praktikum })),
+    [classes],
+  );
 
-  const pilihMulai = (jam: string) =>
-    setForm((f) => ({
-      ...f,
-      waktuMulai: jam,
-      waktuSelesai:
-        f.waktuSelesai &&
-        f.waktuSelesai > jam &&
-        durasiMenit(jam, f.waktuSelesai) <= BATAS_DURASI_MENIT
-          ? f.waktuSelesai
-          : '',
-    }));
+  const opsiLab: SelectOption<string>[] = useMemo(
+    () =>
+      (labs ?? []).map((l) => ({
+        value: l.kode,
+        label: l.nama,
+        sub: l.kapasitas ? `Kapasitas ${l.kapasitas} orang` : undefined,
+      })),
+    [labs],
+  );
 
-  const pilihTanggal = (date: Date) =>
-    setForm((f) => ({ ...f, tanggal: tanggalKeYmd(date) }));
+  // Jam yang sudah dibooking sesi lain (bukan sesi yang sedang diubah) atau sudah lewat: nonaktif.
+  const opsiSlot: SelectOption<number>[] = SLOT_WAKTU.map((s) => {
+    const dipakai = booking.some((b) => b.slot === s.slot && b.sessionId !== id);
+    const lewat = !!form.tanggal && slotSudahLewat(form.tanggal, s);
+    return {
+      value: s.slot,
+      label: `${labelJam(s.mulai)} – ${labelJam(s.selesai)} WIB`,
+      sub: dipakai ? 'Sudah dibooking sesi lain' : lewat ? 'Jam sudah lewat' : 'Tersedia (2 jam)',
+      disabled: dipakai || lewat,
+    };
+  });
 
-  const pilihKelas = (cls: ClassDoc) =>
-    setForm((f) => ({ ...f, kelasId: cls.id, praktikum: f.praktikum || cls.praktikum }));
+  const slotTerpilihNonaktif = opsiSlot.find((o) => o.value === form.slot)?.disabled ?? false;
+
+  const pilihTanggal = (date: Date) => setForm((f) => ({ ...f, tanggal: tanggalKeYmd(date) }));
 
   const simpan = async () => {
     setError('');
+    if (slotTerpilihNonaktif) {
+      setError('Jam yang dipilih sudah dibooking atau sudah lewat. Pilih jam lain.');
+      return;
+    }
     setSaving(true);
     try {
       const data = validasiSesi(form);
       if (id) await updateSession(id, asistenId!, data);
       else await createSession(asistenId!, data);
-      if (router.canGoBack()) router.back();
-      else router.replace('/asisten/jadwal');
+      kembali();
     } catch (e) {
+      if (isTertunda(e)) {
+        // Sudah tersimpan di perangkat; tinggalkan form agar sesi tidak tersimpan dua kali.
+        Alert.alert('Belum terkirim', pesanFirestore(e));
+        kembali();
+        return;
+      }
       setError(pesanFirestore(e, 'Gagal menyimpan sesi.'));
       setSaving(false);
     }
   };
+
+  function kembali() {
+    if (router.canGoBack()) router.back();
+    else router.replace('/asisten/jadwal');
+  }
 
   const header = <Stack.Screen options={{ headerShown: true, title: id ? 'Ubah Sesi' : 'Tambah Sesi' }} />;
   const wrap = (body: React.ReactNode) => (
@@ -311,19 +233,28 @@ export default function SessionFormScreen() {
       />,
     );
   }
-  if (classes === null || !loaded) {
-    return wrap(<LoadingState message={id ? 'Memuat data sesi...' : 'Memuat daftar kelas...'} />);
+  if (classes === null || labs === null || !loaded) {
+    return wrap(<LoadingState message={id ? 'Memuat data sesi...' : 'Memuat daftar kelas dan lab...'} />);
   }
   if (classes.length === 0) {
     return wrap(
       <View style={styles.flex}>
-        <EmptyState icon="people-outline" title="Belum ada kelas" message="Buat kelas terlebih dahulu sebelum menambah sesi." />
+        <EmptyState icon="people-outline" title="Belum ada kelas" message="Buat atau gabung kelas terlebih dahulu sebelum menambah sesi." />
         <PrimaryButton
           label="Kelola Kelas"
           onPress={() => router.push('/kelas')}
           style={styles.centerButton}
         />
       </View>,
+    );
+  }
+  if (labs.length === 0) {
+    return wrap(
+      <EmptyState
+        icon="business-outline"
+        title="Data lab belum ada"
+        message="Koleksi labs (Lab A, B, C, D, AP) belum diisi admin di Firebase Console."
+      />,
     );
   }
 
@@ -334,37 +265,16 @@ export default function SessionFormScreen() {
   return wrap(
     <KeyboardAvoidingView style={styles.flex} behavior="height">
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.field}>
-          <Text style={styles.label}>Kelas</Text>
-          <View style={styles.chips}>
-            {classes.map((cls) => {
-              const aktif = form.kelasId === cls.id;
-              return (
-                <Pressable
-                  key={cls.id}
-                  style={[styles.chip, aktif && styles.chipActive]}
-                  onPress={() => pilihKelas(cls)}
-                  disabled={saving}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected: aktif }}
-                >
-                  <Text style={[styles.chipText, aktif && styles.chipTextActive]}>{cls.namaKelas}</Text>
-                  <Text style={[styles.chipSub, aktif && styles.chipTextActive]} numberOfLines={1}>
-                    {cls.praktikum}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
-        <Field
-          label="Praktikum / modul"
-          value={form.praktikum}
-          onChangeText={set('praktikum')}
-          placeholder="Contoh: Praktikum PPK - Modul 3"
-          editable={!saving}
+        <SelectField
+          label="Kelas"
+          value={form.kelasId || null}
+          options={opsiKelas}
+          onChange={(kelasId) => setForm((f) => ({ ...f, kelasId }))}
+          placeholder="Pilih kelas"
+          disabled={saving || !!id}
         />
+        {id ? <Text style={styles.hint}>Kelas sesi tidak bisa diganti. Buat sesi baru untuk kelas lain.</Text> : null}
+
         <View style={styles.field}>
           <Text style={styles.label}>Tanggal</Text>
           <Pressable
@@ -423,34 +333,27 @@ export default function SessionFormScreen() {
             </Modal>
           )
         ) : null}
-        <View style={styles.row}>
-          <View style={styles.flex}>
-            <TimeField
-              label="Jam mulai"
-              value={form.waktuMulai}
-              onChange={pilihMulai}
-              disabled={saving}
-            />
-          </View>
-          <View style={styles.flex}>
-            <TimeField
-              label="Jam selesai"
-              value={form.waktuSelesai}
-              onChange={set('waktuSelesai')}
-              disabled={saving}
-              minJam={form.waktuMulai || undefined}
-              maxJam={batasJamSelesai(form.waktuMulai)}
-            />
-          </View>
-        </View>
-        <Text style={styles.hint}>Durasi sesi praktikum maksimal {BATAS_DURASI_MENIT / 60} jam.</Text>
-        <Field
-          label="Ruangan"
-          value={form.ruangan}
-          onChangeText={set('ruangan')}
-          placeholder="Contoh: Lab Komputer 1"
-          editable={!saving}
+
+        <SelectField
+          label="Ruangan Lab"
+          value={form.labKode || null}
+          options={opsiLab}
+          onChange={(labKode) => setForm((f) => ({ ...f, labKode }))}
+          placeholder="Pilih lab"
+          disabled={saving}
         />
+
+        <SelectField
+          label="Jam"
+          value={form.slot || null}
+          options={opsiSlot}
+          onChange={(slot) => setForm((f) => ({ ...f, slot }))}
+          placeholder={form.labKode && form.tanggal ? 'Pilih jam' : 'Pilih tanggal dan lab dulu'}
+          disabled={saving || !form.labKode || !form.tanggal}
+        />
+        <Text style={styles.hint}>
+          Setiap sesi tepat 2 jam. Jam yang sudah dibooking sesi lain di lab ini tidak bisa dipilih.
+        </Text>
 
         {error ? (
           <Text style={styles.error} accessibilityLiveRegion="polite">
@@ -475,7 +378,6 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { padding: 20, paddingTop: 8, paddingBottom: 32, gap: 14 },
   field: { gap: 6 },
-  row: { flexDirection: 'row', gap: 12 },
   label: { ...text.bodyStrong, color: colors.textSecondary },
   hint: { ...text.caption, marginTop: -8 },
   input: {
@@ -489,20 +391,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     backgroundColor: colors.surface,
   },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    maxWidth: '100%',
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: radius.input,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-  },
-  chipActive: { borderColor: colors.primary, backgroundColor: colors.primary },
-  chipText: { fontSize: 14, fontFamily: font.semibold, color: colors.text },
-  chipSub: { fontSize: 11, fontFamily: font.medium, color: colors.textSecondary },
-  chipTextActive: { color: colors.white },
   selectInput: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -527,36 +415,6 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   pickerTitle: { fontSize: 17, fontFamily: font.bold, color: colors.text },
-  timeBackdrop: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: 24,
-    backgroundColor: 'rgba(20, 35, 74, 0.48)',
-  },
-  timeBackdropPress: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
-  timeCard: {
-    backgroundColor: colors.card,
-    borderRadius: radius.card,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 12,
-    maxHeight: '75%',
-  },
-  timeTitle: { fontSize: 16, fontFamily: font.bold, color: colors.text },
-  timeList: { marginTop: 8 },
-  timeOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: radius.input,
-  },
-  timeOptionActive: { backgroundColor: colors.tint },
-  timeOptionPressed: { backgroundColor: colors.surface },
-  timeOptionText: { fontSize: 15, fontFamily: font.medium, color: colors.text },
-  timeOptionTextActive: { fontFamily: font.semibold, color: colors.primary },
-  timeOptionTextDisabled: { color: colors.placeholder, opacity: 0.5 },
   error: { fontSize: 13, fontFamily: font.medium, color: colors.danger },
   submit: { marginTop: 6 },
   centerButton: { alignSelf: 'center', minWidth: 180, marginBottom: 32 },

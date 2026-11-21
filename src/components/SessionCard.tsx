@@ -1,6 +1,6 @@
 // Pemilik: Hadrian (feat/classsessioncrud), SRS-17.
 // Kartu satu sesi di daftar jadwal. Props session dan onPress dipertahankan agar layar lain tidak rusak;
-// kelasNama opsional (nama kelas dari koleksi classes, fallback ke kelasId).
+// kelasNama opsional (nama kelas dari koleksi classes). ID dokumen tidak pernah ditampilkan ke pengguna.
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -16,7 +16,7 @@ type Props = {
 };
 
 export default function SessionCard({ session, onPress, kelasNama }: Props) {
-  const kelas = kelasNama ?? session.kelasId;
+  const kelas = kelasNama || 'Kelas';
   const tanggal = labelTanggal(session.tanggal);
   const waktu = labelWaktu(session);
 

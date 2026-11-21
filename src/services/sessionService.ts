@@ -4,10 +4,12 @@
 //   sessions     : dokumen sesi (Session)
 //   attendances  : dokumen presensi (Attendance)
 //   leaveRequests: pengajuan izin (LeaveRequest)
+//   labBookings  : booking lab per slot (lihat jadwalService)
+// Sesi milik KELAS: semua asisten pengampu kelas (maks. 2) bisa membuka, menutup, dan mengubahnya,
+// dan karena keduanya mendengarkan dokumen yang sama, status sesi selalu sama di kedua perangkat.
 // Bagian "KELOLA JADWAL" di akhir file ditambahkan Hadrian (feat/classsessioncrud, SRS-16).
 import {
   collection,
-  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -15,7 +17,6 @@ import {
   onSnapshot,
   query,
   serverTimestamp,
-  setDoc,
   updateDoc,
   where,
   writeBatch,
@@ -28,12 +29,29 @@ import {
 import { STATUS_IZIN } from "../lib/constants";
 import type { StatusIzin, StatusSesi } from "../lib/constants";
 import { db } from "../lib/firebase";
-import type { Attendance, LeaveRequest, Profile, Session } from "../lib/types";
+import type { Attendance, ClassDoc, LeaveRequest, Profile, Session } from "../lib/types";
 import { dataKodePresensi } from "./attendanceService";
 import { formatTanggal } from "../utils/format";
+import {
+  asistenIdsKelas,
+  isTertunda,
+  labelKelas,
+  subscribeClassesForAsisten,
+  subscribePerKelasAsisten,
+  tungguTulis,
+} from "./classService";
+import {
+  bookingId,
+  cekBentrokSesi,
+  getLab,
+  getSlot,
+  hariIniWib,
+  slotSudahLewat,
+  waktuWib,
+} from "./jadwalService";
 
-/** Batas durasi sesi praktikum: 2 jam. */
-export const BATAS_DURASI_MENIT = 120;
+/** Durasi setiap sesi praktikum: tepat 2 jam (satu slot). */
+export const DURASI_SESI_MENIT = 120;
 
 // ─── helper ───────────────────────────────────────────────────────────────────
 function mapDoc<T>(snap: QueryDocumentSnapshot | DocumentSnapshot): T {
@@ -55,15 +73,32 @@ function subscribeCollectionWhere<T>(
   );
 }
 
+/** Kelas yang diampu asisten ini. Melempar Error jika kelas tidak ada / bukan pengampunya. */
+async function getKelasDiampu(kelasId: string, asistenId: string): Promise<ClassDoc> {
+  const snap = await getDoc(doc(db, "classes", kelasId));
+  if (!snap.exists()) throw new Error("Kelas tidak ditemukan.");
+  const d = (snap.data() ?? {}) as Partial<ClassDoc>;
+  const asistenIds = asistenIdsKelas(d);
+  if (!asistenIds.includes(asistenId)) {
+    throw new Error("Hanya asisten pengampu kelas ini yang dapat mengelola sesinya.");
+  }
+  return {
+    id: kelasId,
+    namaKelas: d.namaKelas ?? "",
+    praktikum: d.praktikum ?? "",
+    asistenId: d.asistenId ?? "",
+    asistenIds,
+    pesertaIds: Array.isArray(d.pesertaIds) ? d.pesertaIds : [],
+  };
+}
+
 async function getOwnedSession(sessionId: string, asistenId: string) {
   const ref = doc(db, "sessions", sessionId);
   const snap = await getDoc(ref);
   if (!snap.exists()) throw new Error("Sesi tidak ditemukan.");
 
-  const sesi = snap.data() as Session;
-  if (sesi.asistenId !== asistenId) {
-    throw new Error("Hanya asisten pengampu yang dapat mengubah sesi ini.");
-  }
+  const sesi = { ...(snap.data() as Session), id: sessionId };
+  await getKelasDiampu(sesi.kelasId, asistenId);
   return { ref, sesi };
 }
 
@@ -72,7 +107,7 @@ async function getOwnedSession(sessionId: string, asistenId: string) {
 /**
  * Real-time listener sesi milik user.
  * - Praktikan : sesi di kelas yang dia ikuti (berdasarkan field kelasId vs kelasIds profil).
- * - Asisten   : sesi yang asistenId-nya cocok dengan uid.
+ * - Asisten   : sesi semua kelas yang dia ampu (sebagai pembuat atau partner).
  * Panggil unsubscribe() saat komponen unmount.
  */
 export function subscribeSessions(
@@ -81,7 +116,12 @@ export function subscribeSessions(
   onError?: (e: Error) => void
 ): () => void {
   if (profile.role === "asisten") {
-    return subscribeCollectionWhere<Session>("sessions", "asistenId", profile.id, onData, onError);
+    return subscribePerKelasAsisten<Session>(
+      profile.id,
+      (kelasId, kirim, gagal) => subscribeCollectionWhere<Session>("sessions", "kelasId", kelasId, kirim, gagal),
+      onData,
+      onError
+    );
   }
 
   const kelasIds = profile.kelasIds ?? [];
@@ -128,9 +168,49 @@ export function subscribeSession(
   );
 }
 
+/** Kelas yang diampu asisten (sekali baca). */
+function getKelasAsisten(asistenId: string): Promise<ClassDoc[]> {
+  return new Promise((resolve, reject) => {
+    let unsub: (() => void) | null = null;
+    let selesai = false;
+    const akhiri = () => {
+      selesai = true;
+      unsub?.();
+    };
+    unsub = subscribeClassesForAsisten(
+      asistenId,
+      (classes) => {
+        akhiri();
+        resolve(classes);
+      },
+      (e) => {
+        akhiri();
+        reject(e);
+      }
+    );
+    if (selesai) unsub();
+  });
+}
+
 /**
- * Buka sesi (belum_dibuka → dibuka). Hanya asisten pengampu, dan hanya jika tidak ada sesi lain
- * miliknya yang sedang dibuka.
+ * Sesi hanya bisa dibuka pada jam yang dibooking: [tanggal jam mulai, tanggal jam selesai) WIB
+ * (evaluasi Sprint 2 poin 11). Aturan yang sama ditegakkan firestore.rules dengan waktu server.
+ * Mengembalikan pesan penolakan, atau null jika sekarang boleh dibuka.
+ */
+export function alasanTidakBisaDibuka(sesi: Pick<Session, "tanggal" | "waktuMulai" | "waktuSelesai">): string | null {
+  const mulai = waktuWib(sesi.tanggal, sesi.waktuMulai);
+  const selesai = waktuWib(sesi.tanggal, sesi.waktuSelesai);
+  if (Number.isNaN(mulai) || Number.isNaN(selesai)) return "Jadwal sesi tidak valid.";
+  const sekarang = Date.now();
+  const jam = `${labelTanggal(sesi.tanggal)} ${labelWaktu(sesi)} WIB`;
+  if (sekarang < mulai) return `Sesi baru bisa dibuka pada jam yang dibooking (${jam}).`;
+  if (sekarang >= selesai) return `Jam sesi sudah lewat (${jam}). Ubah jadwal atau buat sesi baru.`;
+  return null;
+}
+
+/**
+ * Buka sesi (belum_dibuka → dibuka). Hanya asisten pengampu kelas, hanya pada jam yang dibooking,
+ * dan hanya jika tidak ada sesi lain di kelas-kelas yang dia ampu yang sedang dibuka.
  * Throws jika tidak diizinkan atau Firestore gagal.
  */
 export async function openSession(sessionId: string, asistenId: string): Promise<void> {
@@ -139,21 +219,26 @@ export async function openSession(sessionId: string, asistenId: string): Promise
   if (sesi.status === "ditutup") {
     throw new Error("Sesi yang sudah ditutup tidak dapat dibuka kembali.");
   }
+  const alasan = alasanTidakBisaDibuka(sesi);
+  if (alasan) throw new Error(alasan);
 
-  // Satu asisten hanya boleh punya SATU sesi dibuka dalam satu waktu.
-  // Pemeriksaan di sisi aplikasi (rules Firestore tidak bisa melakukan query).
-  const sedangDibuka = await getDocs(
-    query(
-      collection(db, "sessions"),
-      where("asistenId", "==", asistenId),
-      where("status", "==", "dibuka"),
-      limit(2)
-    )
-  );
-  const lain = sedangDibuka.docs.find((d) => d.id !== sessionId);
-  if (lain) {
-    const nama = (lain.data() as Partial<Session>).praktikum ?? "lain";
-    throw new Error(`Sesi "${nama}" masih dibuka. Tutup sesi tersebut sebelum membuka sesi lain.`);
+  // Satu asisten hanya boleh punya SATU sesi dibuka dalam satu waktu (termasuk sesi yang dibuka
+  // partnernya di kelas lain yang juga dia ampu). Pemeriksaan di aplikasi: rules tidak bisa query.
+  for (const kelas of await getKelasAsisten(asistenId)) {
+    const sedangDibuka = await getDocs(
+      query(
+        collection(db, "sessions"),
+        where("kelasId", "==", kelas.id),
+        where("status", "==", "dibuka"),
+        limit(2)
+      )
+    );
+    const lain = sedangDibuka.docs.find((d) => d.id !== sessionId);
+    if (lain) {
+      throw new Error(
+        `Sesi ${labelKelas(kelas)} (${kelas.praktikum}) masih dibuka. Tutup sesi tersebut sebelum membuka sesi lain.`
+      );
+    }
   }
 
   // Sesi dibuka dan kode unik presensinya dibuat dalam satu batch (atomik): sesi yang dibuka
@@ -234,16 +319,16 @@ export function subscribeMyLeaveRequests(
   return subscribeCollectionWhere<LeaveRequest>("leaveRequests", "userId", userId, onData, onError);
 }
 
-/** Real-time listener semua izin di kelas yang diampu asisten. */
+/** Real-time listener semua izin di kelas yang diampu asisten (pembuat maupun partner). */
 export function subscribeLeaveRequestsForAsisten(
   asistenId: string,
   onData: (requests: LeaveRequest[]) => void,
   onError?: (e: Error) => void
 ): () => void {
-  return subscribeCollectionWhere<LeaveRequest>(
-    "leaveRequests",
-    "asistenId",
+  return subscribePerKelasAsisten<LeaveRequest>(
     asistenId,
+    (kelasId, kirim, gagal) =>
+      subscribeCollectionWhere<LeaveRequest>("leaveRequests", "kelasId", kelasId, kirim, gagal),
     onData,
     onError
   );
@@ -265,9 +350,7 @@ export async function updateLeaveStatus(
   if (!snap.exists()) throw new Error("Pengajuan izin tidak ditemukan.");
 
   const request = snap.data() as LeaveRequest;
-  if (request.asistenId !== asistenId) {
-    throw new Error("Hanya asisten pengampu yang dapat meninjau pengajuan ini.");
-  }
+  await getKelasDiampu(request.kelasId, asistenId);
   if (request.status !== STATUS_IZIN.MENUNGGU) {
     throw new Error("Pengajuan izin ini sudah ditinjau.");
   }
@@ -278,32 +361,15 @@ export async function updateLeaveStatus(
   });
 }
 
-// ─── KELOLA JADWAL (Hadrian, SRS-16) ──────────────────────────────────────────
-// Format simpan: tanggal "2026-11-20", waktuMulai/waktuSelesai "08:00" (jam lokal lab).
-// Jadwal hanya bisa diubah atau dihapus selama sesi masih Belum Dibuka.
+// ─── KELOLA JADWAL (Hadrian, SRS-16; disesuaikan evaluasi Sprint 2) ──────────
+// Format simpan: tanggal "2026-11-20", waktuMulai/waktuSelesai "09:00" (jam WIB, dari slot).
+// Sesi wajib memakai lab (koleksi labs) dan slot tetap 2 jam. Setiap sesi memegang satu dokumen
+// labBookings/{lab}_{tanggal}_{slot} yang ditulis dalam batch yang sama: lab tidak bisa dibooking
+// dua sesi pada slot yang sama (ditegakkan server). Jadwal hanya bisa diubah selama Belum Dibuka.
 
-export type SessionInput = Pick<
-  Session,
-  "praktikum" | "kelasId" | "tanggal" | "waktuMulai" | "waktuSelesai" | "ruangan"
->;
+export type SessionInput = { kelasId: string; tanggal: string; labKode: string; slot: number };
 
 const POLA_TANGGAL = /^(\d{4})-(\d{2})-(\d{2})$/;
-const POLA_JAM = /^([01]\d|2[0-3]):[0-5]\d$/;
-
-/** Selisih waktu dalam menit untuk jam berformat "HH:MM". */
-export function durasiMenit(mulai: string, selesai: string): number {
-  const keMenit = (jam: string) => {
-    const [h = "0", m = "0"] = jam.split(":");
-    return Number(h) * 60 + Number(m);
-  };
-  return keMenit(selesai) - keMenit(mulai);
-}
-
-// "8.00" / "8:00" -> "08:00"
-function rapikanJam(jam: string): string {
-  const [h = "", m = ""] = jam.trim().replace(".", ":").split(":");
-  return `${h.padStart(2, "0")}:${m}`;
-}
 
 function tanggalValid(tanggal: string): boolean {
   const cocok = POLA_TANGGAL.exec(tanggal);
@@ -313,40 +379,27 @@ function tanggalValid(tanggal: string): boolean {
   return tgl.getFullYear() === y && tgl.getMonth() === m - 1 && tgl.getDate() === d;
 }
 
-/** Validasi dan rapikan input jadwal. Melempar Error berisi pesan siap tampil. */
+/** Validasi input jadwal. Melempar Error berisi pesan siap tampil. */
 export function validasiSesi(input: SessionInput): SessionInput {
   const data: SessionInput = {
     kelasId: input.kelasId,
-    praktikum: input.praktikum.trim(),
     tanggal: input.tanggal.trim(),
-    waktuMulai: rapikanJam(input.waktuMulai),
-    waktuSelesai: rapikanJam(input.waktuSelesai),
-    ruangan: input.ruangan.trim(),
+    labKode: input.labKode,
+    slot: input.slot,
   };
   if (!data.kelasId) throw new Error("Pilih kelas terlebih dahulu.");
-  if (!data.praktikum) throw new Error("Nama praktikum harus diisi.");
   if (!tanggalValid(data.tanggal)) {
     throw new Error("Tanggal harus berformat TTTT-BB-HH, contoh 2026-11-20.");
   }
-  if (!POLA_JAM.test(data.waktuMulai) || !POLA_JAM.test(data.waktuSelesai)) {
-    throw new Error("Waktu harus berformat JJ:MM, contoh 08:00.");
-  }
-  if (data.waktuMulai >= data.waktuSelesai) {
-    throw new Error("Waktu selesai harus setelah waktu mulai.");
-  }
-  if (durasiMenit(data.waktuMulai, data.waktuSelesai) > BATAS_DURASI_MENIT) {
-    throw new Error(`Durasi sesi praktikum maksimal ${BATAS_DURASI_MENIT / 60} jam.`);
-  }
-  if (!data.ruangan) throw new Error("Ruangan harus diisi.");
+  if (!data.labKode) throw new Error("Pilih ruangan lab.");
+  if (!getSlot(data.slot)) throw new Error("Pilih jam sesi.");
   return data;
 }
 
-async function pastikanKelasMilik(kelasId: string, asistenId: string) {
-  const snap = await getDoc(doc(db, "classes", kelasId));
-  if (!snap.exists()) throw new Error("Kelas tidak ditemukan.");
-  if (snap.data()?.asistenId !== asistenId) {
-    throw new Error("Kamu hanya bisa membuat sesi untuk kelas yang kamu ampu.");
-  }
+function tolakJadwalLewat(tanggal: string, slot: number) {
+  if (tanggal < hariIniWib()) throw new Error("Tanggal sesi tidak boleh sebelum hari ini.");
+  const s = getSlot(slot);
+  if (s && slotSudahLewat(tanggal, s)) throw new Error("Jam sesi tersebut sudah lewat. Pilih jam lain.");
 }
 
 async function getEditableSession(sessionId: string, asistenId: string) {
@@ -357,42 +410,103 @@ async function getEditableSession(sessionId: string, asistenId: string) {
   return owned;
 }
 
+/** Siapkan isi dokumen sesi: cek kelas, lab, bentrok, lalu turunkan praktikum/ruangan/jam. */
+async function siapkanJadwal(asistenId: string, data: SessionInput, kecualiSessionId?: string) {
+  const kelas = await getKelasDiampu(data.kelasId, asistenId);
+  const lab = await getLab(data.labKode);
+  if (!lab) throw new Error(`Lab ${data.labKode} tidak ada di daftar lab.`);
+  const slot = getSlot(data.slot)!;
+  await cekBentrokSesi({
+    kelasId: kelas.id,
+    pesertaIds: kelas.pesertaIds,
+    labKode: lab.kode,
+    tanggal: data.tanggal,
+    slot: slot.slot,
+    kecualiSessionId,
+  });
+  return {
+    jadwal: {
+      kelasId: kelas.id,
+      praktikum: kelas.praktikum,
+      tanggal: data.tanggal,
+      waktuMulai: slot.mulai,
+      waktuSelesai: slot.selesai,
+      labKode: lab.kode,
+      ruangan: lab.nama,
+      slot: slot.slot,
+    },
+    booking: { kelasId: kelas.id, labKode: lab.kode, tanggal: data.tanggal, slot: slot.slot },
+  };
+}
+
+/** Pesan untuk penolakan server saat menyimpan jadwal (biasanya lab baru saja dibooking orang lain). */
+function pesanSimpanJadwal(e: unknown): never {
+  if (isTertunda(e)) throw e;
+  const code = String((e as { code?: unknown } | null)?.code ?? "");
+  if (code.includes("permission-denied")) {
+    throw new Error(
+      "Jadwal ditolak server: lab pada jam tersebut baru saja dibooking sesi lain, atau kamu bukan pengampu kelas ini."
+    );
+  }
+  throw e;
+}
+
 /** Tambah sesi baru (status Belum Dibuka). Mengembalikan id sesi. */
 export async function createSession(asistenId: string, input: SessionInput): Promise<string> {
   const data = validasiSesi(input);
-  const hariIni = new Date();
-  const awalHariIni = new Date(hariIni.getFullYear(), hariIni.getMonth(), hariIni.getDate());
-  const [y, m, d] = data.tanggal.split("-").map(Number);
-  if (new Date(y, m - 1, d) < awalHariIni) {
-    throw new Error("Tanggal sesi tidak boleh sebelum hari ini.");
-  }
-  await pastikanKelasMilik(data.kelasId, asistenId);
+  tolakJadwalLewat(data.tanggal, data.slot);
+  const { jadwal, booking } = await siapkanJadwal(asistenId, data);
 
   const ref = doc(collection(db, "sessions"));
-  const sesi: Omit<Session, "id"> = { ...data, asistenId, status: "belum_dibuka" };
-  await setDoc(ref, sesi);
+  const sesi: Omit<Session, "id"> = { ...jadwal, asistenId, status: "belum_dibuka" };
+  const batch = writeBatch(db);
+  batch.set(ref, sesi);
+  batch.set(doc(db, "labBookings", bookingId(booking.labKode, booking.tanggal, booking.slot)), {
+    ...booking,
+    sessionId: ref.id,
+  });
+  try {
+    await tungguTulis(batch.commit());
+  } catch (e) {
+    pesanSimpanJadwal(e);
+  }
   return ref.id;
 }
 
-/** Ubah jadwal sesi. Hanya asisten pengampu dan hanya saat Belum Dibuka. */
+/** Ubah jadwal sesi (tanggal, lab, jam). Kelas sesi tidak bisa diganti. Hanya saat Belum Dibuka. */
 export async function updateSession(
   sessionId: string,
   asistenId: string,
   input: SessionInput
 ): Promise<void> {
   const data = validasiSesi(input);
-  const { ref } = await getEditableSession(sessionId, asistenId);
-  await pastikanKelasMilik(data.kelasId, asistenId);
-  await updateDoc(ref, data);
+  const { ref, sesi } = await getEditableSession(sessionId, asistenId);
+  if (data.kelasId !== sesi.kelasId) throw new Error("Kelas sesi tidak bisa diganti. Buat sesi baru.");
+  tolakJadwalLewat(data.tanggal, data.slot);
+  const { jadwal, booking } = await siapkanJadwal(asistenId, data, sessionId);
+
+  const idLama = sesi.labKode && sesi.slot ? bookingId(sesi.labKode, sesi.tanggal, sesi.slot) : null;
+  const idBaru = bookingId(booking.labKode, booking.tanggal, booking.slot);
+  const batch = writeBatch(db);
+  batch.update(ref, jadwal);
+  if (idLama !== idBaru) {
+    batch.set(doc(db, "labBookings", idBaru), { ...booking, sessionId });
+    if (idLama) batch.delete(doc(db, "labBookings", idLama));
+  }
+  try {
+    await tungguTulis(batch.commit());
+  } catch (e) {
+    pesanSimpanJadwal(e);
+  }
 }
 
-/** Hapus sesi. Ditolak jika sudah dibuka atau sudah ada pengajuan izin untuknya. */
+/** Hapus sesi beserta booking lab-nya. Ditolak jika sudah dibuka atau sudah ada pengajuan izin. */
 export async function deleteSession(sessionId: string, asistenId: string): Promise<void> {
-  const { ref } = await getEditableSession(sessionId, asistenId);
+  const { ref, sesi } = await getEditableSession(sessionId, asistenId);
   const izin = await getDocs(
     query(
       collection(db, "leaveRequests"),
-      where("asistenId", "==", asistenId),
+      where("kelasId", "==", sesi.kelasId),
       where("sessionId", "==", sessionId),
       limit(1)
     )
@@ -400,7 +514,10 @@ export async function deleteSession(sessionId: string, asistenId: string): Promi
   if (!izin.empty) {
     throw new Error("Sesi ini sudah punya pengajuan izin, jadi tidak bisa dihapus.");
   }
-  await deleteDoc(ref);
+  const batch = writeBatch(db);
+  batch.delete(ref);
+  if (sesi.labKode && sesi.slot) batch.delete(doc(db, "labBookings", bookingId(sesi.labKode, sesi.tanggal, sesi.slot)));
+  await tungguTulis(batch.commit());
 }
 
 /** "2026-11-20" -> "20 Nov 2026". Format lain ditampilkan apa adanya. */

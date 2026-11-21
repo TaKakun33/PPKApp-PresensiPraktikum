@@ -26,7 +26,7 @@ import StatusBadge from '../components/StatusBadge';
 import { colors, font, layout, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { labelKategori } from '../services/aiService';
-import { subscribeClassesByIds } from '../services/classService';
+import { labelKelas, subscribeClassesByIds } from '../services/classService';
 import {
   LEAVE_REASON_MAX,
   LEAVE_REASON_MIN,
@@ -269,7 +269,7 @@ export default function LeaveRequestScreen() {
                   accessibilityState={{ selected: aktif }}
                 >
                   <Text style={[styles.kelasChipText, aktif && styles.kelasChipTextActive]}>
-                    {kelas.namaKelas}
+                    {labelKelas(kelas)}
                   </Text>
                   <Text style={[styles.kelasChipSub, aktif && styles.kelasChipTextActive]} numberOfLines={1}>
                     {kelas.praktikum}
