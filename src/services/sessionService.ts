@@ -362,7 +362,7 @@ export async function updateLeaveStatus(
 }
 
 // ─── KELOLA JADWAL (Hadrian, SRS-16; disesuaikan evaluasi Sprint 2) ──────────
-// Format simpan: tanggal "2026-11-20", waktuMulai/waktuSelesai "09:00" (jam WIB, dari slot).
+// Format simpan: tanggal "2026-11-20", waktuMulai/waktuSelesai "10:10" (jam WIB, dari slot).
 // Sesi wajib memakai lab (koleksi labs) dan slot tetap 2 jam. Setiap sesi memegang satu dokumen
 // labBookings/{lab}_{tanggal}_{slot} yang ditulis dalam batch yang sama: lab tidak bisa dibooking
 // dua sesi pada slot yang sama (ditegakkan server). Jadwal hanya bisa diubah selama Belum Dibuka.

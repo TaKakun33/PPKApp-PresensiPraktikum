@@ -23,10 +23,10 @@ export const MAKS_ASISTEN_KELAS = 2;
 
 // Slot waktu tetap: setiap sesi tepat 2 jam (jam WIB). Sama dengan daftar di firestore.rules.
 export const SLOT_WAKTU = [
-  { slot: 1, mulai: "07:00", selesai: "09:00" },
-  { slot: 2, mulai: "09:00", selesai: "11:00" },
-  { slot: 3, mulai: "11:00", selesai: "13:00" },
-  { slot: 4, mulai: "13:00", selesai: "15:00" },
-  { slot: 5, mulai: "15:00", selesai: "17:00" },
+  { slot: 1, mulai: "08:00", selesai: "10:00" },
+  { slot: 2, mulai: "10:10", selesai: "12:10" },
+  { slot: 3, mulai: "13:00", selesai: "15:00" },
+  { slot: 4, mulai: "15:40", selesai: "17:40" },
+  { slot: 5, mulai: "18:15", selesai: "20:15" },
 ] as const;
 export type SlotWaktu = (typeof SLOT_WAKTU)[number];

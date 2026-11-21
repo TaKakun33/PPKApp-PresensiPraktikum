@@ -50,11 +50,12 @@ service cloud.firestore {
     }
 
     // --- Jadwal: slot tetap 2 jam (WIB) -------------------------------------
-    // Sama dengan SLOT_WAKTU di src/lib/constants.ts. Slot 1 = 07:00–09:00, ..., slot 5 = 15:00–17:00.
+    // Sama dengan SLOT_WAKTU di src/lib/constants.ts: 08:00–10:00, 10:10–12:10, 13:00–15:00,
+    // 15:40–17:40, 18:15–20:15.
     function slotValid(d) {
       return d.slot is int && d.slot >= 1 && d.slot <= 5
-        && d.waktuMulai == ['07:00', '09:00', '11:00', '13:00', '15:00'][d.slot - 1]
-        && d.waktuSelesai == ['09:00', '11:00', '13:00', '15:00', '17:00'][d.slot - 1];
+        && d.waktuMulai == ['08:00', '10:10', '13:00', '15:40', '18:15'][d.slot - 1]
+        && d.waktuSelesai == ['10:00', '12:10', '15:00', '17:40', '20:15'][d.slot - 1];
     }
 
     function bookingIdOf(d) {

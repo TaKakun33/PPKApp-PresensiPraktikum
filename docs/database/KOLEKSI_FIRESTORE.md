@@ -25,7 +25,7 @@ Klien tidak bisa menulis data yang melanggar aturan tersebut.
 | 10 | `leaveRequests` | Pengajuan izin praktikan per sesi |
 
 Jam sesi tidak disimpan sebagai koleksi karena nilainya tetap: lima slot masing-masing tepat
-2 jam (07.00–09.00, 09.00–11.00, 11.00–13.00, 13.00–15.00, 15.00–17.00 WIB). Daftar ini ada di
+2 jam (08.00–10.00, 10.10–12.10, 13.00–15.00, 15.40–17.40, 18.15–20.15 WIB). Daftar ini ada di
 `src/lib/constants.ts` (`SLOT_WAKTU`) dan dicek ulang oleh `firestore.rules`.
 
 ## Penjelasan per koleksi
