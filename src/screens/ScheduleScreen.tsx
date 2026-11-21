@@ -16,7 +16,7 @@ import SessionCard from '../components/SessionCard';
 import type { Session } from '../lib/types';
 import { colors, font, layout, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
-import { pesanFirestore, subscribeClassesForUser } from '../services/classService';
+import { labelKelas, pesanFirestore, subscribeClassesForUser } from '../services/classService';
 import { subscribeSessions, urutkanSesi } from '../services/sessionService';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
@@ -59,7 +59,7 @@ export default function ScheduleScreen() {
     if (!profile) return;
     return subscribeClassesForUser(
       profile,
-      (data) => setKelasNama(Object.fromEntries(data.map((c) => [c.id, c.namaKelas]))),
+      (data) => setKelasNama(Object.fromEntries(data.map((c) => [c.id, labelKelas(c)]))),
       () => setKelasNama({}),
     );
   }, [profile, retryKey]);
