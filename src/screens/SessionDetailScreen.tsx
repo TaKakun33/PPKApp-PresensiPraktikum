@@ -17,7 +17,7 @@ import type { Role } from '../lib/constants';
 import type { ClassDoc, Session } from '../lib/types';
 import { colors, font, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
-import { getNamaPengguna, isTertunda, pesanFirestore, subscribeClass } from '../services/classService';
+import { getNamaPengguna, isTertunda, labelKelas, pesanFirestore, subscribeClass } from '../services/classService';
 import {
   deleteSession,
   labelTanggal,
@@ -150,7 +150,7 @@ export default function SessionDetailScreen() {
   const [muat, setMuat] = useState<Muat>({ status: 'loading' });
   const [retryKey, setRetryKey] = useState(0);
   const [kelas, setKelas] = useState<ClassDoc | null>(null);
-  const [namaAsistenLain, setNamaAsistenLain] = useState<string | null>(null);
+  const [namaPengampu, setNamaPengampu] = useState<string | null>(null);
   const [hadir, setHadir] = useState<Hadir>({ ada: false, waktu: null });
   const [jumlahHadir, setJumlahHadir] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -167,23 +167,29 @@ export default function SessionDetailScreen() {
 
   const session = muat.status === 'ok' ? muat.session : null;
   const kelasId = session?.kelasId;
-  const asistenId = session?.asistenId;
-  const pengampu = role === 'asisten' && !!asistenId && asistenId === uid;
+  // Pengampu = semua asisten kelas sesi ini (pembuat + partner), atau pembuat sesi untuk data lama.
+  const pengampuIds = kelas?.asistenIds?.length ? kelas.asistenIds : session?.asistenId ? [session.asistenId] : [];
+  const pengampuKey = pengampuIds.join('|');
+  const pengampu = role === 'asisten' && !!uid && pengampuIds.includes(uid);
 
   useEffect(() => {
     if (!kelasId) return;
     return subscribeClass(kelasId, setKelas, () => setKelas(null));
   }, [kelasId]);
 
-  // Nama asisten lain dibaca sekali; asisten pengampu memakai nama dari profilnya sendiri.
+  // Nama semua asisten pengampu dibaca sekali (mis. "Budi & Sari").
   useEffect(() => {
-    if (!asistenId || asistenId === uid) return;
+    const ids = pengampuKey ? pengampuKey.split('|') : [];
+    if (ids.length === 0) return;
     let aktif = true;
-    getNamaPengguna(asistenId).then((nama) => aktif && setNamaAsistenLain(nama));
+    Promise.all(ids.map((id) => getNamaPengguna(id))).then((nama) => {
+      const ada = nama.filter((n): n is string => !!n);
+      if (aktif) setNamaPengampu(ada.length ? ada.join(' & ') : null);
+    });
     return () => {
       aktif = false;
     };
-  }, [asistenId, uid]);
+  }, [pengampuKey]);
 
   // Kehadiran: praktikan -> presensinya sendiri, asisten pengampu -> jumlah hadir.
   useEffect(() => {
@@ -243,8 +249,8 @@ export default function SessionDetailScreen() {
   const presence = describePresence(session, profile.role, milikSaya, hadir, jumlahHadir);
   const tone = TONE[presence.tone];
   // ID dokumen tidak ditampilkan; selama nama kelas belum terbaca pakai teks netral.
-  const namaKelas = kelas?.id === session.kelasId && kelas.namaKelas ? kelas.namaKelas : 'Kelas';
-  const namaAsisten = pengampu ? profile.nama : namaAsistenLain;
+  const namaKelas = kelas?.id === session.kelasId && kelas.namaKelas ? labelKelas(kelas) : 'Kelas';
+  const namaAsisten = namaPengampu ?? (pengampu ? profile.nama : null);
   const { openedAt, closedAt } = session as SessionWaktu;
   const dibuka = toDate(openedAt);
   const ditutup = toDate(closedAt);

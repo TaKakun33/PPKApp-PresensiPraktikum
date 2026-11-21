@@ -5,7 +5,12 @@ import { FlatList, StyleSheet, Text, View } from 'react-native';
 
 import { STATUS_SESI } from '../lib/constants';
 import type { Session } from '../lib/types';
-import { closeSession, openSession, subscribeSessions } from '../services/sessionService';
+import {
+  alasanTidakBisaDibuka,
+  closeSession,
+  openSession,
+  subscribeSessions,
+} from '../services/sessionService';
 import ConfirmModal from '../components/ConfirmModal';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';
@@ -260,6 +265,8 @@ export default function ManageSessionScreen() {
                   <Text style={styles.lockHint}>
                     Tutup sesi {sesiDibuka.praktikum} ({labelKelas(sesiDibuka.kelasId)}) terlebih dahulu.
                   </Text>
+                ) : alasanTidakBisaDibuka(session) ? (
+                  <Text style={styles.lockHint}>{alasanTidakBisaDibuka(session)}</Text>
                 ) : null}
               </>
             ) : session.status === STATUS_SESI.DIBUKA ? (
