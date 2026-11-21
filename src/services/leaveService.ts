@@ -148,6 +148,9 @@ export async function submitLeave(
   if (profile.role !== 'praktikan') {
     throw createAppError('app/not-allowed', 'Hanya praktikan yang dapat mengajukan izin.');
   }
+  if (!profile.kelasIds?.includes(session.kelasId)) {
+    throw createAppError('app/invalid-input', 'Pilih kelas terlebih dahulu sebelum mengajukan izin.');
+  }
   const reasonError = validateLeaveReason(alasan);
   if (reasonError) throw createAppError('app/invalid-input', reasonError);
   if (session.status === STATUS_SESI.DITUTUP) {

@@ -34,7 +34,9 @@ import {
   subscribeClassesForAsisten,
 } from '../services/classService';
 import {
+  BATAS_DURASI_MENIT,
   createSession,
+  durasiMenit,
   getSession,
   MAKS_RUANGAN,
   updateSession,
@@ -78,6 +80,15 @@ function labelJam(jam: string): string {
   return jam.replace(':', '.');
 }
 
+/** Jam selesai terakhir yang masih diperbolehkan (maksimal 2 jam setelah jam mulai). */
+function batasJamSelesai(jamMulai: string): string | undefined {
+  if (!/^\d{2}:\d{2}$/.test(jamMulai)) return undefined;
+  const [jam, menit] = jamMulai.split(':').map(Number);
+  const total = jam * 60 + menit + BATAS_DURASI_MENIT;
+  if (total >= 24 * 60) return undefined;
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
 function Field({
   label,
   value,
@@ -119,12 +130,14 @@ function TimeField({
   onChange,
   disabled,
   minJam,
+  maxJam,
 }: {
   label: string;
   value: string;
   onChange: (jam: string) => void;
   disabled: boolean;
   minJam?: string;
+  maxJam?: string;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -162,7 +175,7 @@ function TimeField({
             <ScrollView style={styles.timeList} showsVerticalScrollIndicator={false}>
               {OPSI_JAM.map((jam) => {
                 const aktif = jam === value;
-                const nonaktif = Boolean(minJam && jam <= minJam);
+                const nonaktif = Boolean((minJam && jam <= minJam) || (maxJam && jam > maxJam));
                 return (
                   <Pressable
                     key={jam}
@@ -257,7 +270,12 @@ export default function SessionFormScreen() {
     setForm((f) => ({
       ...f,
       waktuMulai: jam,
-      waktuSelesai: f.waktuSelesai && f.waktuSelesai <= jam ? '' : f.waktuSelesai,
+      waktuSelesai:
+        f.waktuSelesai &&
+        f.waktuSelesai > jam &&
+        durasiMenit(jam, f.waktuSelesai) <= BATAS_DURASI_MENIT
+          ? f.waktuSelesai
+          : '',
     }));
 
   const pilihTanggal = (date: Date) =>
@@ -448,9 +466,11 @@ export default function SessionFormScreen() {
               onChange={set('waktuSelesai')}
               disabled={saving}
               minJam={form.waktuMulai || undefined}
+              maxJam={batasJamSelesai(form.waktuMulai)}
             />
           </View>
         </View>
+        <Text style={styles.hint}>Durasi sesi praktikum maksimal {BATAS_DURASI_MENIT / 60} jam.</Text>
         <Field
           label="Ruangan"
           value={form.ruangan}
@@ -485,6 +505,7 @@ const styles = StyleSheet.create({
   field: { gap: 6 },
   row: { flexDirection: 'row', gap: 12 },
   label: { ...text.bodyStrong, color: colors.textSecondary },
+  hint: { ...text.caption, marginTop: -8 },
   input: {
     borderWidth: 1,
     borderColor: colors.border,

@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 
 import { STATUS_IZIN } from '../lib/constants';
-import type { Session } from '../lib/types';
+import type { ClassDoc, Session } from '../lib/types';
 import Card from '../components/Card';
 import ConfirmModal from '../components/ConfirmModal';
 import ErrorState from '../components/ErrorState';
@@ -26,6 +26,7 @@ import StatusBadge from '../components/StatusBadge';
 import { colors, font, layout, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { labelKategori } from '../services/aiService';
+import { subscribeClassesByIds } from '../services/classService';
 import {
   LEAVE_REASON_MAX,
   LEAVE_REASON_MIN,
@@ -61,12 +62,14 @@ function buildNotice(result: SubmitLeaveResult): Notice {
 export default function LeaveRequestScreen() {
   const { profile } = useAuth();
 
+  const [classes, setClasses] = useState<ClassDoc[] | null>(null);
   const [sessions, setSessions] = useState<Session[] | null>(null);
   const [leaves, setLeaves] = useState<LeaveItem[] | null>(null);
   const [attendedIds, setAttendedIds] = useState<string[] | null>(null);
   const [loadError, setLoadError] = useState('');
   const [retryKey, setRetryKey] = useState(0);
 
+  const [selectedKelasId, setSelectedKelasId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [alasan, setAlasan] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -93,10 +96,12 @@ export default function LeaveRequestScreen() {
     const onError = (e: unknown) =>
       setLoadError(getFriendlyError(e, 'Data izin gagal dimuat. Periksa koneksi internet.'));
 
+    const unsubClasses = subscribeClassesByIds(profile.kelasIds ?? [], setClasses, onError);
     const unsubSessions = subscribeLeaveSessionOptions(profile, setSessions, onError);
     const unsubLeaves = subscribeMyLeaves(profile.id, setLeaves, onError);
     const unsubAttended = subscribeAttendedSessionIds(profile.id, setAttendedIds, onError);
     return () => {
+      unsubClasses();
       unsubSessions();
       unsubLeaves();
       unsubAttended();
@@ -107,6 +112,7 @@ export default function LeaveRequestScreen() {
 
   const handleRetry = () => {
     setLoadError('');
+    setClasses(null);
     setSessions(null);
     setLeaves(null);
     setAttendedIds(null);
@@ -134,7 +140,7 @@ export default function LeaveRequestScreen() {
       </View>
     );
   }
-  if (sessions === null || leaves === null || attendedIds === null) {
+  if (classes === null || sessions === null || leaves === null || attendedIds === null) {
     return (
       <View style={styles.screen}>
         <ScreenHeader title="Izin" />
@@ -147,14 +153,28 @@ export default function LeaveRequestScreen() {
 
   const activeSessionIds = new Set(leaves.filter(isActiveLeave).map((l) => l.sessionId));
   const attendedSessionIds = new Set(attendedIds);
-  const selectedSession = sessions.find((s) => s.id === selectedId) ?? null;
+  const selectedKelas = classes.find((k) => k.id === selectedKelasId) ?? null;
+  const opsiSesi = selectedKelasId ? sessions.filter((s) => s.kelasId === selectedKelasId) : [];
+  const selectedSession = opsiSesi.find((s) => s.id === selectedId) ?? null;
   const trimmedLength = alasan.trim().length;
+
+  const pilihKelas = (kelasId: string) => {
+    setSelectedKelasId(kelasId);
+    setSelectedId(null);
+    setAlasan('');
+    setFormError('');
+    setNotice(null);
+  };
 
   const handleSubmit = async () => {
     if (submitting) return;
     setFormError('');
     setNotice(null);
 
+    if (!selectedKelas) {
+      setFormError('Pilih kelas terlebih dahulu.');
+      return;
+    }
     if (!selectedSession) {
       setFormError('Pilih sesi yang ingin diajukan izin.');
       return;
@@ -175,6 +195,7 @@ export default function LeaveRequestScreen() {
       const result = await submitLeave(profile, selectedSession, alasan);
       setAlasan('');
       setSelectedId(null);
+      setSelectedKelasId(null);
       setNotice(buildNotice(result));
       if (result.queued) {
         // Pengajuan antre bisa saja ditolak server nanti (mis. sesi keburu ditutup): beri tahu hasil akhirnya.
@@ -223,24 +244,58 @@ export default function LeaveRequestScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>Ajukan Izin</Text>
         <Text style={styles.subtitle}>
-          Pilih sesi yang tidak bisa kamu ikuti, lalu tuliskan alasannya. Asisten yang akan memutuskan.
+          Pilih kelas dan sesi yang tidak bisa kamu ikuti, lalu isi catatan izin. Asisten yang akan memutuskan.
         </Text>
       </View>
 
       <Card style={styles.formCard}>
-        <Text style={styles.label}>Pilih sesi</Text>
-        {sessions.length === 0 ? (
+        <Text style={styles.label}>Pilih kelas</Text>
+        {classes.length === 0 ? (
+          <View style={styles.infoBox}>
+            <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
+            <Text style={styles.infoText}>Kamu belum terdaftar di kelas mana pun. Hubungi asisten pengampu.</Text>
+          </View>
+        ) : (
+          <View style={styles.kelasChips}>
+            {classes.map((kelas) => {
+              const aktif = selectedKelasId === kelas.id;
+              return (
+                <Pressable
+                  key={kelas.id}
+                  style={[styles.kelasChip, aktif && styles.kelasChipActive]}
+                  onPress={() => pilihKelas(kelas.id)}
+                  disabled={submitting}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: aktif }}
+                >
+                  <Text style={[styles.kelasChipText, aktif && styles.kelasChipTextActive]}>
+                    {kelas.namaKelas}
+                  </Text>
+                  <Text style={[styles.kelasChipSub, aktif && styles.kelasChipTextActive]} numberOfLines={1}>
+                    {kelas.praktikum}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+
+        <Text style={[styles.label, styles.labelSpaced]}>Pilih sesi</Text>
+        {!selectedKelas ? (
+          <View style={styles.infoBox}>
+            <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
+            <Text style={styles.infoText}>Pilih kelas terlebih dahulu untuk melihat sesinya.</Text>
+          </View>
+        ) : opsiSesi.length === 0 ? (
           <View style={styles.infoBox}>
             <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
             <Text style={styles.infoText}>
-              {profile.kelasIds && profile.kelasIds.length > 0
-                ? 'Belum ada sesi yang bisa diajukan izin. Sesi yang sudah ditutup tidak ditampilkan.'
-                : 'Kamu belum terdaftar di kelas mana pun. Hubungi asisten pengampu.'}
+              Belum ada sesi di kelas ini yang bisa diajukan izin. Sesi yang sudah ditutup tidak ditampilkan.
             </Text>
           </View>
         ) : (
           <View style={styles.optionList}>
-            {sessions.map((s) => {
+            {opsiSesi.map((s) => {
               const attended = attendedSessionIds.has(s.id);
               const taken = activeSessionIds.has(s.id) || attended;
               const selected = selectedId === s.id;
@@ -278,21 +333,29 @@ export default function LeaveRequestScreen() {
           </View>
         )}
 
-        <Text style={[styles.label, styles.labelSpaced]}>Alasan ketidakhadiran</Text>
-        <TextInput
-          style={styles.textArea}
-          placeholder="Contoh: Sakit dan sudah ada surat dokter."
-          placeholderTextColor={colors.placeholder}
-          value={alasan}
-          onChangeText={(t) => {
-            setAlasan(t);
-            setFormError('');
-          }}
-          multiline
-          maxLength={LEAVE_REASON_MAX}
-          textAlignVertical="top"
-          editable={!submitting}
-        />
+        <Text style={[styles.label, styles.labelSpaced]}>Catatan izin</Text>
+        {!selectedKelas ? (
+          <View style={styles.infoBox}>
+            <Ionicons name="lock-closed-outline" size={16} color={colors.primary} />
+            <Text style={styles.infoText}>Pilih kelas dulu sebelum mengisi catatan izin.</Text>
+          </View>
+        ) : (
+          <TextInput
+            style={styles.textArea}
+            placeholder="Contoh: Sakit dan sudah ada surat dokter."
+            placeholderTextColor={colors.placeholder}
+            value={alasan}
+            onChangeText={(t) => {
+              setAlasan(t);
+              setFormError('');
+            }}
+            multiline
+            maxLength={LEAVE_REASON_MAX}
+            textAlignVertical="top"
+            editable={!submitting}
+            accessibilityLabel="Catatan izin"
+          />
+        )}
         <Text style={styles.counter}>
           {trimmedLength}/{LEAVE_REASON_MAX} karakter (minimal {LEAVE_REASON_MIN})
         </Text>
@@ -436,6 +499,20 @@ const styles = StyleSheet.create({
   formCard: { padding: 18, gap: 10 },
   label: { ...text.bodyStrong },
   labelSpaced: { marginTop: 6 },
+  kelasChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  kelasChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    gap: 2,
+    borderRadius: radius.input,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+  },
+  kelasChipActive: { borderColor: colors.primary, backgroundColor: colors.primary },
+  kelasChipText: { fontSize: 14, fontFamily: font.semibold, color: colors.text },
+  kelasChipSub: { fontSize: 11, fontFamily: font.medium, color: colors.textSecondary },
+  kelasChipTextActive: { color: colors.white },
   optionList: { gap: 8 },
   option: {
     flexDirection: 'row',

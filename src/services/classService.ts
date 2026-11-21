@@ -256,6 +256,25 @@ export function subscribePeserta(
   return subscribeByIds('users', pesertaIds, mapProfile, onData, onError);
 }
 
+/** Cari praktikan berdasarkan NIM (string; jika kosong coba juga NIM bertipe angka dari data lama). */
+async function cariPraktikanByNim(nim: string): Promise<Profile | undefined> {
+  const kandidat: (string | number)[] = [nim];
+  if (/^\d+$/.test(nim) && Number.isSafeInteger(Number(nim))) kandidat.push(Number(nim));
+  for (const nilai of kandidat) {
+    const snap = await getDocsFromServer(
+      // Filter role + limit(5) wajib: firestore.rules hanya mengizinkan query users seperti ini.
+      query(collection(db, 'users'), where('nim', '==', nilai), where('role', '==', 'praktikan'), limit(5)),
+    );
+    const hit = snap.docs.map(mapProfile).find((p) => p.role === 'praktikan');
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
+function kodeError(e: unknown): string {
+  return String((e as { code?: unknown } | null)?.code ?? '');
+}
+
 /** Tambah praktikan ke kelas berdasarkan NIM. */
 export async function addPesertaByNim(cls: ClassDoc, nim: string): Promise<Profile> {
   const nimBersih = nim.trim();
@@ -263,22 +282,39 @@ export async function addPesertaByNim(cls: ClassDoc, nim: string): Promise<Profi
   // Sama dengan aturan NIM saat registrasi (firestore.rules): 5-20 digit angka.
   if (!/^[0-9]{5,20}$/.test(nimBersih)) throw new Error('NIM harus berupa 5-20 digit angka.');
 
-  // Langsung dari server: cache offline bisa tidak memuat praktikan yang dicari,
-  // sehingga muncul "tidak ditemukan" padahal sebenarnya sedang offline.
-  // Filter role + limit(5) wajib: firestore.rules hanya mengizinkan query users seperti ini.
-  const snap = await getDocsFromServer(
-    query(collection(db, 'users'), where('nim', '==', nimBersih), where('role', '==', 'praktikan'), limit(5)),
-  );
-  const praktikan = snap.docs.map(mapProfile).find((p) => p.role === 'praktikan');
+  // Langkah 1: cari praktikan. Error dibedakan dari langkah 2 supaya penyebab penolakan jelas.
+  let praktikan: Profile | undefined;
+  try {
+    praktikan = await cariPraktikanByNim(nimBersih);
+  } catch (e) {
+    console.warn('[addPesertaByNim] cari NIM gagal:', kodeError(e), e);
+    if (kodeError(e).includes('permission-denied')) {
+      throw new Error(
+        'Pencarian NIM ditolak server. Pastikan akunmu berperan asisten dan firestore.rules terbaru sudah di-deploy.',
+      );
+    }
+    throw e;
+  }
   if (!praktikan) throw new Error(`Praktikan dengan NIM ${nimBersih} tidak ditemukan.`);
   if (cls.pesertaIds.includes(praktikan.id)) {
     throw new Error(`${praktikan.nama} sudah terdaftar di kelas ini.`);
   }
 
-  const batch = writeBatch(db);
-  batch.update(doc(db, 'classes', cls.id), { pesertaIds: arrayUnion(praktikan.id) });
-  batch.update(doc(db, 'users', praktikan.id), { kelasIds: arrayUnion(cls.id) });
-  await tungguTulis(batch.commit());
+  // Langkah 2: tulis kelas + profil praktikan dalam satu batch.
+  try {
+    const batch = writeBatch(db);
+    batch.update(doc(db, 'classes', cls.id), { pesertaIds: arrayUnion(praktikan.id) });
+    batch.update(doc(db, 'users', praktikan.id), { kelasIds: arrayUnion(cls.id) });
+    await tungguTulis(batch.commit());
+  } catch (e) {
+    console.warn('[addPesertaByNim] simpan gagal:', kodeError(e), e);
+    if (kodeError(e).includes('permission-denied')) {
+      throw new Error(
+        'Penyimpanan peserta ditolak server. Pastikan kelas ini dibuat oleh akunmu dan firestore.rules terbaru sudah di-deploy.',
+      );
+    }
+    throw e;
+  }
   return praktikan;
 }
 

@@ -33,6 +33,9 @@ import { dataKodePresensi } from "./attendanceService";
 import { formatTanggal } from "../utils/format";
 import { MAKS_PRAKTIKUM, tungguTulis } from "./classService";
 
+/** Batas durasi sesi praktikum: 2 jam. */
+export const BATAS_DURASI_MENIT = 120;
+
 // ─── helper ───────────────────────────────────────────────────────────────────
 function mapDoc<T>(snap: QueryDocumentSnapshot | DocumentSnapshot): T {
   return { id: snap.id, ...(snap.data() ?? {}) } as T;
@@ -289,6 +292,15 @@ const POLA_TANGGAL = /^(\d{4})-(\d{2})-(\d{2})$/;
 const POLA_JAM = /^([01]\d|2[0-3]):[0-5]\d$/;
 export const MAKS_RUANGAN = 50;
 
+/** Selisih waktu dalam menit untuk jam berformat "HH:MM". */
+export function durasiMenit(mulai: string, selesai: string): number {
+  const keMenit = (jam: string) => {
+    const [h = "0", m = "0"] = jam.split(":");
+    return Number(h) * 60 + Number(m);
+  };
+  return keMenit(selesai) - keMenit(mulai);
+}
+
 // "8.00" / "8:00" -> "08:00"
 function rapikanJam(jam: string): string {
   const [h = "", m = ""] = jam.trim().replace(".", ":").split(":");
@@ -323,6 +335,9 @@ export function validasiSesi(input: SessionInput): SessionInput {
   }
   if (data.waktuMulai >= data.waktuSelesai) {
     throw new Error("Waktu selesai harus setelah waktu mulai.");
+  }
+  if (durasiMenit(data.waktuMulai, data.waktuSelesai) > BATAS_DURASI_MENIT) {
+    throw new Error(`Durasi sesi praktikum maksimal ${BATAS_DURASI_MENIT / 60} jam.`);
   }
   if (!data.ruangan) throw new Error("Ruangan harus diisi.");
   if (data.praktikum.length > MAKS_PRAKTIKUM) {
