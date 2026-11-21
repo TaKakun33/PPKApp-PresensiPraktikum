@@ -89,7 +89,9 @@ function PesertaPanel({ cls }: { cls: ClassDoc }) {
   const [peserta, setPeserta] = useState<Profile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cari, setCari] = useState('');
-  const [hasilCari, setHasilCari] = useState<{ teks: string; idsKey: string; list: Profile[] } | null>(null);
+  const [hasilCari, setHasilCari] = useState<{ teks: string; list: Profile[] } | null>(null);
+  // Praktikan yang baru ditambahkan langsung disembunyikan dari hasil, tanpa menunggu snapshot kelas.
+  const [sudahDitambah, setSudahDitambah] = useState<Set<string>>(() => new Set());
   const [savingId, setSavingId] = useState<string | null>(null);
   const [info, setInfo] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -108,18 +110,19 @@ function PesertaPanel({ cls }: { cls: ClassDoc }) {
     [idsKey],
   );
 
-  // Cari otomatis 400 ms setelah berhenti mengetik. Hasil disimpan bersama teks & daftar peserta
-  // saat dicari, jadi hasil lama (teks sudah berubah / peserta sudah bertambah) tidak ditampilkan.
+  // Cari otomatis 400 ms setelah berhenti mengetik. Hasil disimpan bersama teksnya, jadi hasil untuk
+  // teks lama tidak ditampilkan. Hasil TETAP tampil setelah menambah peserta (yang sudah masuk kelas
+  // disaring), supaya asisten bisa langsung menambah praktikan berikutnya tanpa mengetik ulang.
   const teksCari = cari.trim();
   useEffect(() => {
     if (teksCari.length < 2) return;
     let aktif = true;
     const t = setTimeout(() => {
       cariPraktikan(cls, teksCari)
-        .then((list) => aktif && setHasilCari({ teks: teksCari, idsKey, list }))
+        .then((list) => aktif && setHasilCari({ teks: teksCari, list }))
         .catch((e) => {
           if (!aktif) return;
-          setHasilCari({ teks: teksCari, idsKey, list: [] });
+          setHasilCari({ teks: teksCari, list: [] });
           setInfo({ ok: false, text: pesanFirestore(e, 'Gagal mencari praktikan.') });
         });
     }, 400);
@@ -127,27 +130,62 @@ function PesertaPanel({ cls }: { cls: ClassDoc }) {
       aktif = false;
       clearTimeout(t);
     };
-    // cls berganti objek di setiap snapshot; yang menentukan hasil hanya teks dan daftar peserta.
+    // cls berganti objek di setiap snapshot; yang menentukan hasil hanya teksnya.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teksCari, idsKey]);
+  }, [teksCari]);
   const hasil =
-    teksCari.length >= 2 && hasilCari?.teks === teksCari && hasilCari.idsKey === idsKey ? hasilCari.list : null;
-  const mencari = teksCari.length >= 2 && hasil === null;
+    teksCari.length >= 2 && hasilCari?.teks === teksCari
+      ? hasilCari.list.filter((p) => !cls.pesertaIds.includes(p.id) && !sudahDitambah.has(p.id))
+      : null;
+  const mencari = teksCari.length >= 2 && hasilCari?.teks !== teksCari;
+
+  const tandaiDitambah = (id: string) => setSudahDitambah((lama) => new Set(lama).add(id));
 
   const tambah = async (p: Profile | null) => {
     setSavingId(p?.id ?? 'nim');
     setInfo(null);
     try {
       const ditambah = p ? await addPeserta(cls, p) : await addPesertaByNim(cls, cari);
+      tandaiDitambah(ditambah.id);
       setInfo({ ok: true, text: `${ditambah.nama} ditambahkan ke ${labelKelas(cls)}.` });
-      setCari('');
+      // NIM lengkap yang diketik manual sudah selesai dipakai; hasil pencarian biasa dibiarkan.
+      if (!p) setCari('');
     } catch (e) {
-      // Tertunda = sudah tersimpan di perangkat; kosongkan pencarian agar tidak dikirim dua kali.
-      if (isTertunda(e)) setCari('');
+      // Tertunda = sudah tersimpan di perangkat; sembunyikan agar tidak dikirim dua kali.
+      if (isTertunda(e) && p) tandaiDitambah(p.id);
       setInfo({ ok: false, text: pesanFirestore(e, 'Gagal menambah peserta.') });
     } finally {
       setSavingId(null);
     }
+  };
+
+  // Tambahkan semua hasil pencarian satu per satu; yang gagal (mis. jadwal bentrok) dilaporkan.
+  const tambahSemua = async (daftar: Profile[]) => {
+    setSavingId('semua');
+    setInfo(null);
+    const gagal: string[] = [];
+    let berhasil = 0;
+    for (const p of daftar) {
+      try {
+        await addPeserta(cls, p);
+        berhasil++;
+        tandaiDitambah(p.id);
+      } catch (e) {
+        if (isTertunda(e)) {
+          berhasil++;
+          tandaiDitambah(p.id);
+        } else {
+          gagal.push(`${p.nama}: ${pesanFirestore(e, 'gagal ditambahkan')}`);
+        }
+      }
+    }
+    setInfo({
+      ok: gagal.length === 0,
+      text:
+        `${berhasil} praktikan ditambahkan ke ${labelKelas(cls)}.` +
+        (gagal.length ? `\n${gagal.length} gagal:\n• ${gagal.join('\n• ')}` : ''),
+    });
+    setSavingId(null);
   };
 
   const keluarkan = (p: Profile) =>
@@ -185,7 +223,10 @@ function PesertaPanel({ cls }: { cls: ClassDoc }) {
         editable={!savingId}
         accessibilityLabel="Cari praktikan berdasarkan NIM atau nama"
       />
-      <Text style={styles.hintText}>Ketik minimal 2 karakter, misalnya awal NIM atau awal nama.</Text>
+      <Text style={styles.hintText}>
+        Ketik minimal 2 karakter, misalnya awal NIM atau awal nama. Hasil tetap tampil setelah menambah,
+        jadi bisa langsung menambah yang lain.
+      </Text>
 
       {mencari ? <ActivityIndicator style={styles.panelLoading} color={colors.primary} /> : null}
       {!mencari && hasil ? (
@@ -195,6 +236,18 @@ function PesertaPanel({ cls }: { cls: ClassDoc }) {
           </Text>
         ) : (
           <View style={styles.hasilList}>
+            {hasil.length > 1 ? (
+              <PrimaryButton
+                label={`Tambah semua (${hasil.length})`}
+                size="sm"
+                variant="secondary"
+                onPress={() => tambahSemua(hasil)}
+                disabled={!!savingId}
+                loading={savingId === 'semua'}
+                accessibilityLabel={`Tambah semua ${hasil.length} praktikan hasil pencarian`}
+                style={styles.tambahSemua}
+              />
+            ) : null}
             {hasil.map((p) => (
               <View key={p.id} style={styles.hasilRow}>
                 <View style={styles.flex}>
@@ -578,7 +631,8 @@ const styles = StyleSheet.create({
   panelLoading: { paddingVertical: 12 },
   addButton: { minWidth: 88 },
   hintText: { ...text.caption },
-  hasilList: { gap: 2, borderRadius: radius.input, backgroundColor: colors.surface, paddingHorizontal: 10 },
+  hasilList: { gap: 2, borderRadius: radius.input, backgroundColor: colors.surface, padding: 10 },
+  tambahSemua: { alignSelf: 'flex-start', marginBottom: 4 },
   hasilRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
   saranRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   saran: {
