@@ -83,6 +83,10 @@ CHECKS = [('text', 'bg'), ('text', 'card'), ('textSecondary', 'bg'), ('textSecon
           ('success', 'successTint'), ('warning', 'warningTint'), ('danger', 'dangerTint')]
 
 THEMES = [
+    ('navyBlue', 'Navy & Blue (Default)', 'Bersih dan akademis; tema bawaan aplikasi.',
+     {'light': dict(base='#F4F5F7', brand='#14234A', accent='#1F5BD8', text='#14234A'),
+      'dark': dict(base='#0E1424', brand='#1B2A4E', accent='#6E9BFF', text='#E6E9F2')},
+     {}),
     ('tealAmber', 'Teal & Amber', 'Tenang dan fokus, satu warna hangat untuk aksi.',
      {'light': dict(base='#F6F4EF', brand='#0F4C5C', accent='#F2A541', text='#1E2A44'),
       'dark': dict(base='#10171F', brand='#1B3A44', accent='#F2A541', text='#E8E6E1')},
@@ -169,8 +173,9 @@ export type ThemeId = keyof typeof THEMES;
 // Tema yang dipakai sekarang. Ganti di sini untuk mencoba tema lain.
 // Dark mode sudah disimpan, tetapi layar belum membaca mode perangkat:
 // style masih statis (StyleSheet.create di level modul).
-export const ACTIVE_THEME: ThemeId = 'graphiteCoral';
-export const ACTIVE_MODE: ThemeMode = 'light';
+export const DEFAULT_THEME: ThemeId = 'navyBlue';
+export const ACTIVE_THEME: ThemeId = DEFAULT_THEME;
+export const ACTIVE_MODE: ThemeMode = 'dark';
 """
 open(sys.argv[1], 'w').write(ts)
 print('ditulis', sys.argv[1])

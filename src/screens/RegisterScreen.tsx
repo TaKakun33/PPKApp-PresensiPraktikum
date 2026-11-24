@@ -19,7 +19,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Role } from '../lib/constants';
-import { colors } from '../constants/theme';
+import { colors, isDark } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { useScrollKeFieldFokus } from '../hooks/useScrollKeFieldFokus';
 import {
@@ -91,7 +91,7 @@ export default function RegisterScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       {/* behavior="padding" di Android DAN iOS: Android edge-to-edge tidak me-resize jendela sendiri. */}
       <KeyboardAvoidingView style={styles.flex} behavior="padding">
         <ScrollView

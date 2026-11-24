@@ -58,6 +58,72 @@ export type ThemeDefinition = {
 };
 
 export const THEMES = {
+  navyBlue: {
+    name: 'Navy & Blue (Default)',
+    mood: 'Bersih dan akademis; tema bawaan aplikasi.',
+    light: {
+      primary: '#1F5BD8',
+      primaryText: '#1F5BD8',
+      primaryTint: '#E9EFFB',
+      onPrimary: '#FFFFFF',
+      secondary: '#14234A',
+      secondaryText: '#14234A',
+      onSecondary: '#FFFFFF',
+      tint: '#E0E2E7',
+      tabInactive: '#959CAE',
+      highlightOnBrand: '#FFFFFF',
+      onHighlight: '#1F5BD8',
+      heading: '#14234A',
+      bg: '#F4F5F7',
+      card: '#FFFFFF',
+      surface: '#F4F5F7',
+      border: '#E2E4E9',
+      dashed: '#C7CBD4',
+      white: '#FFFFFF',
+      text: '#14234A',
+      textSecondary: '#5F6984',
+      placeholder: '#66708A',
+      success: '#17744A',
+      successTint: '#E5F0EB',
+      warning: '#8A5A12',
+      warningTint: '#F2EDE5',
+      danger: '#B42323',
+      dangerTint: '#F7E7E7',
+      dangerBorder: '#EAC1C1',
+      overlay: 'rgba(20, 35, 74, 0.48)',
+    },
+    dark: {
+      primary: '#6E9BFF',
+      primaryText: '#6E9BFF',
+      primaryTint: '#212F50',
+      onPrimary: '#0E1424',
+      secondary: '#1B2A4E',
+      secondaryText: '#7F889C',
+      onSecondary: '#E6E9F2',
+      tint: '#131C33',
+      tabInactive: '#989FAF',
+      highlightOnBrand: '#6E9BFF',
+      onHighlight: '#0E1424',
+      heading: '#E6E9F2',
+      bg: '#0E1424',
+      card: '#1B2130',
+      surface: '#0E1424',
+      border: '#313645',
+      dashed: '#4F5462',
+      white: '#FFFFFF',
+      text: '#E6E9F2',
+      textSecondary: '#8C909C',
+      placeholder: '#838894',
+      success: '#5FD39A',
+      successTint: '#1B3337',
+      warning: '#F2C46B',
+      warningTint: '#32302F',
+      danger: '#FF8A80',
+      dangerTint: '#352733',
+      dangerBorder: '#6E4349',
+      overlay: 'rgba(0, 0, 0, 0.6)',
+    },
+  },
   tealAmber: {
     name: 'Teal & Amber',
     mood: 'Tenang dan fokus, satu warna hangat untuk aksi.',
@@ -395,5 +461,6 @@ export type ThemeId = keyof typeof THEMES;
 // Tema yang dipakai sekarang. Ganti di sini untuk mencoba tema lain.
 // Dark mode sudah disimpan, tetapi layar belum membaca mode perangkat:
 // style masih statis (StyleSheet.create di level modul).
-export const ACTIVE_THEME: ThemeId = 'graphiteCoral';
-export const ACTIVE_MODE: ThemeMode = 'light';
+export const DEFAULT_THEME: ThemeId = 'navyBlue';
+export const ACTIVE_THEME: ThemeId = DEFAULT_THEME;
+export const ACTIVE_MODE: ThemeMode = 'dark';

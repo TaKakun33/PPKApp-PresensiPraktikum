@@ -5,6 +5,7 @@ import { ACTIVE_MODE, ACTIVE_THEME, THEMES, type ThemeColors } from './themes';
 // Warna diambil dari registry tema (src/constants/themes.ts).
 // Untuk mencoba tema/mode lain, ubah ACTIVE_THEME / ACTIVE_MODE di sana.
 export const colors: ThemeColors = THEMES[ACTIVE_THEME][ACTIVE_MODE];
+export const isDark = ACTIVE_MODE === 'dark';
 
 export const radius = {
   pill: 999,
