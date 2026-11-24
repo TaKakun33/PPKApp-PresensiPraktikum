@@ -221,7 +221,7 @@ export default function LoginScreen() {
               accessibilityRole="button"
               accessibilityLabel={busy ? 'Memproses' : 'Masuk'}
             >
-              {busy ? <ActivityIndicator size="small" color={colors.white} /> : null}
+              {busy ? <ActivityIndicator size="small" color={colors.onPrimary} /> : null}
               <Text style={styles.buttonText}>{busy ? 'Memproses...' : 'Masuk'}</Text>
             </Pressable>
 
@@ -364,7 +364,7 @@ const styles = StyleSheet.create({
     fontFamily: 'PlusJakartaSans_700Bold',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
-    color: colors.white,
+    color: colors.onPrimary,
   },
   footer: {
     marginTop: 'auto',

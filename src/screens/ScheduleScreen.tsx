@@ -29,7 +29,7 @@ function HeaderButton({ icon, label, onPress, primary }: { icon: IoniconsName; l
       accessibilityRole="button"
       accessibilityLabel={label}
     >
-      <Ionicons name={icon} size={16} color={primary ? colors.white : colors.text} />
+      <Ionicons name={icon} size={16} color={primary ? colors.onPrimary : colors.text} />
       <Text style={[styles.headerButtonText, primary && styles.headerButtonTextPrimary]}>{label}</Text>
     </Pressable>
   );
@@ -193,7 +193,7 @@ const styles = StyleSheet.create({
   },
   headerButtonPrimary: { borderColor: colors.primary, backgroundColor: colors.primary },
   headerButtonText: { fontSize: 12, fontFamily: font.bold, color: colors.secondary },
-  headerButtonTextPrimary: { color: colors.white },
+  headerButtonTextPrimary: { color: colors.onPrimary },
   pressed: { opacity: 0.8 },
   separator: { height: 12 },
 });

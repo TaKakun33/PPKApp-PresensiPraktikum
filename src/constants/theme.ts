@@ -1,56 +1,55 @@
 import type { TextStyle, ViewStyle } from 'react-native';
 
-// Palet 60-30-10 "Chalk / Moss / Vermilion" + Ink untuk teks.
-//   60% base   : Chalk     -> latar layar dan permukaan
-//   30% brand  : Moss      -> tab bar, header/kartu hero, tab & opsi terpilih, tautan
-//   10% accent : Vermilion -> tombol utama, CTA, tenggat/penanda waktu, status "Dibuka"
-//   text       : Ink       -> teks isi dan ikon
-// Success (teal) dan danger (crimson) sengaja dibedakan dari moss dan vermilion
-// supaya status tidak tertukar dengan warna brand/aksen.
+// Palet 60-30-10 "Mist / Aubergine / Citron" + Ink untuk teks (Ink tidak dihitung).
+//   60% neutral : Mist      -> latar, ruang kosong
+//   30% brand   : Aubergine -> tab bar, header/kartu hero, kartu & opsi aktif, tautan
+//   10% accent  : Citron    -> SATU aksi utama per layar, progres
+//   text        : Ink       -> teks dan ikon
+// Citron sangat terang: hanya dipakai sebagai LATAR dengan teks Ink (onPrimary),
+// tidak pernah sebagai warna teks/garis di atas latar terang (kontras 1.2:1).
 // Semua pasangan teks/latar lolos kontras WCAG AA (>= 4.5:1).
 const palette = {
-  chalk: '#F4F1EA',
-  moss: '#4A5A2B',
-  mossLight: '#D3DBBE',
-  mossTint: '#E6EAD9',
-  vermilion: '#C63A22',
-  vermilionTint: '#FDF1ED',
-  ink: '#22201C',
+  mist: '#F1EFF4',
+  aubergine: '#3E2A47',
+  aubergineLight: '#CDBFD4',
+  aubergineTint: '#E8E1EC',
+  citron: '#D8E84A',
+  ink: '#241B29',
   white: '#FFFFFF',
-  stone200: '#E3DED2',
-  stone300: '#CFC8B8',
-  stone500: '#6E685C',
-  stone600: '#5F5A50',
+  gray200: '#E3DFE8',
+  gray300: '#C9C3D0',
+  gray500: '#6C6472',
+  gray600: '#5E5664',
 } as const;
 
 export const colors = {
-  // 10% - aksen
-  primary: palette.vermilion,
-  primaryTint: palette.vermilionTint,
+  // 10% - aksen (selalu dengan teks onPrimary)
+  primary: palette.citron,
+  onPrimary: palette.ink,
   // 30% - brand
-  secondary: palette.moss,
-  tint: palette.mossTint,
-  tabInactive: palette.mossLight,
-  // 60% - base
-  bg: palette.chalk,
+  secondary: palette.aubergine,
+  tint: palette.aubergineTint,
+  tabInactive: palette.aubergineLight,
+  // 60% - neutral
+  bg: palette.mist,
   card: palette.white,
-  surface: palette.chalk,
-  border: palette.stone200,
-  dashed: palette.stone300,
+  surface: palette.mist,
+  border: palette.gray200,
+  dashed: palette.gray300,
   white: palette.white,
   // Teks & ikon
   text: palette.ink,
-  textSecondary: palette.stone600,
-  placeholder: palette.stone500,
+  textSecondary: palette.gray600,
+  placeholder: palette.gray500,
   // Semantik
-  success: '#1F6B5C',
-  successTint: '#E3F1EC',
+  success: '#17744A',
+  successTint: '#E6F4EC',
   warning: '#8A5A12',
   warningTint: '#FBF1DC',
-  danger: '#9E1B32',
-  dangerTint: '#F9E6EA',
-  dangerBorder: '#F0C4CD',
-  overlay: 'rgba(34, 32, 28, 0.48)',
+  danger: '#B42323',
+  dangerTint: '#FBE9E9',
+  dangerBorder: '#F5C7C7',
+  overlay: 'rgba(36, 27, 41, 0.48)',
 } as const;
 
 export const radius = {
@@ -98,7 +97,7 @@ export const status = {
   danger: { bg: colors.dangerTint, text: colors.danger },
   neutral: { bg: colors.surface, text: colors.textSecondary },
   info: { bg: colors.tint, text: colors.secondary },
-  active: { bg: colors.primaryTint, text: colors.primary },
+  active: { bg: colors.primary, text: colors.onPrimary },
 } as const;
 
 export const shadow: Record<'floating', ViewStyle> = {

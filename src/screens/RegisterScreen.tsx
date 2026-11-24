@@ -288,7 +288,7 @@ export default function RegisterScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={submitting ? 'Mendaftarkan' : submitLabel}
               >
-                {submitting ? <ActivityIndicator size="small" color={colors.white} /> : null}
+                {submitting ? <ActivityIndicator size="small" color={colors.onPrimary} /> : null}
                 <Text style={styles.buttonText}>{submitting ? 'Mendaftarkan...' : submitLabel}</Text>
               </Pressable>
 
@@ -408,7 +408,7 @@ const styles = StyleSheet.create({
     fontFamily: 'PlusJakartaSans_700Bold',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
-    color: colors.white,
+    color: colors.onPrimary,
   },
   noteText: {
     alignSelf: 'center',

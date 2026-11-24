@@ -433,7 +433,7 @@ const styles = StyleSheet.create({
     lineHeight: 44,
     fontFamily: font.extraBold,
     letterSpacing: 10,
-    color: colors.primary,
+    color: colors.secondary,
   },
   kodeHint: { ...text.caption, textAlign: 'center' },
   feedback: { padding: 12, borderWidth: 1, borderRadius: 14, backgroundColor: colors.card },

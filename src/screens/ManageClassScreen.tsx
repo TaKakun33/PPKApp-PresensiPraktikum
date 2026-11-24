@@ -257,6 +257,7 @@ function PesertaPanel({ cls }: { cls: ClassDoc }) {
                 <PrimaryButton
                   label="Tambah"
                   size="sm"
+                  variant="secondary"
                   onPress={() => tambah(p)}
                   disabled={!!savingId}
                   loading={savingId === p.id}
