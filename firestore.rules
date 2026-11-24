@@ -620,6 +620,28 @@ service cloud.firestore {
         && resource.data.status == 'menunggu';
     }
 
+    // --- pushTokens (Zhafran, feat/push-notif, SRS-34) -----------------------
+    // Token push notifikasi per pengguna: pushTokens/{uid} = { token, platform, diperbaruiPada }.
+    // - Tulis (create/update): hanya pemilik uid sendiri, dengan field yang valid.
+    // - Baca : semua asisten yang login (untuk mengambil token saat mengirim notifikasi dari klien).
+    // - Hapus : tidak diizinkan dari klien.
+    match /pushTokens/{uid} {
+      allow create, update: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['token', 'platform', 'diperbaruiPada'])
+        && request.resource.data.keys().hasAll(['token', 'platform', 'diperbaruiPada'])
+        && request.resource.data.token is string
+        && request.resource.data.token.size() > 0
+        && request.resource.data.platform in ['android', 'ios']
+        && request.resource.data.diperbaruiPada == request.time;
+
+      // Asisten yang login boleh membaca token untuk keperluan kirim notifikasi.
+      allow read: if isAsisten();
+
+      // Token tidak bisa dihapus dari klien.
+      allow delete: if false;
+    }
+
     // --- Default: tolak koleksi lain ----------------------------------------
     match /{document=**} {
       allow read, write: if false;

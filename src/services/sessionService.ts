@@ -49,6 +49,8 @@ import {
   slotSudahLewat,
   waktuWib,
 } from "./jadwalService";
+// Zhafran (feat/push-notif, SRS-35): kirim push notification saat sesi dibuka, jadwal diubah, izin diputuskan.
+import { kirimNotifikasi } from "./notificationService";
 
 /** Durasi setiap sesi praktikum: tepat 2 jam (satu slot). */
 export const DURASI_SESI_MENIT = 120;
@@ -247,6 +249,23 @@ export async function openSession(sessionId: string, asistenId: string): Promise
   batch.update(ref, { status: "dibuka" as StatusSesi, openedAt: serverTimestamp() });
   batch.set(doc(db, "sessionCodes", sessionId), dataKodePresensi(sessionId, asistenId));
   await batch.commit();
+
+  // SRS-35: Kirim notifikasi ke seluruh praktikan kelas saat sesi dibuka.
+  // Gagal kirim notif tidak boleh mengganggu alur buka sesi (try-catch terpisah).
+  try {
+    const kelasSnap = await getDoc(doc(db, "classes", sesi.kelasId));
+    const pesertaIds = (kelasSnap.data()?.pesertaIds ?? []) as string[];
+    if (pesertaIds.length > 0) {
+      await kirimNotifikasi(
+        pesertaIds,
+        "Sesi Dibuka! 🔓",
+        `Sesi ${sesi.praktikum} di ${sesi.ruangan} sudah dibuka. Segera presensi!`,
+        { layar: "detail-sesi", id: sessionId },
+      );
+    }
+  } catch (e) {
+    console.error("[openSession] Gagal kirim notifikasi:", e);
+  }
 }
 
 /**
@@ -359,6 +378,20 @@ export async function updateLeaveStatus(
     status,
     catatanAsisten: (catatanAsisten ?? "").trim().slice(0, 500),
   });
+
+  // SRS-35: Kirim notifikasi ke praktikan pengaju saat izin diputuskan.
+  // Gagal kirim notif tidak boleh mengganggu alur keputusan izin (try-catch terpisah).
+  try {
+    const statusLabel = status === STATUS_IZIN.DITERIMA ? "Diterima ✅" : "Ditolak ❌";
+    await kirimNotifikasi(
+      [request.userId],
+      `Izin ${statusLabel}`,
+      `Pengajuan izinmu untuk sesi ${request.praktikum} telah ${status}.`,
+      { layar: "izin", id: leaveId },
+    );
+  } catch (e) {
+    console.error("[updateLeaveStatus] Gagal kirim notifikasi:", e);
+  }
 }
 
 // ─── KELOLA JADWAL (Hadrian, SRS-16; disesuaikan evaluasi Sprint 2) ──────────
@@ -497,6 +530,23 @@ export async function updateSession(
     await tungguTulis(batch.commit());
   } catch (e) {
     pesanSimpanJadwal(e);
+  }
+
+  // SRS-35: Kirim notifikasi ke praktikan kelas saat jadwal sesi diubah.
+  // Gagal kirim notif tidak boleh mengganggu alur ubah jadwal (try-catch terpisah).
+  try {
+    const kelasSnap = await getDoc(doc(db, "classes", sesi.kelasId));
+    const pesertaIds = (kelasSnap.data()?.pesertaIds ?? []) as string[];
+    if (pesertaIds.length > 0) {
+      await kirimNotifikasi(
+        pesertaIds,
+        "Jadwal Sesi Diubah 📅",
+        `Jadwal sesi ${sesi.praktikum} telah diperbarui. Cek jadwal terbaru kamu.`,
+        { layar: "jadwal", id: sessionId },
+      );
+    }
+  } catch (e) {
+    console.error("[updateSession] Gagal kirim notifikasi:", e);
   }
 }
 

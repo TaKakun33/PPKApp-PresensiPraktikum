@@ -12,9 +12,20 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 
 import { colors, font } from '../constants/theme';
-import { AuthProvider } from '../context/AuthContext';
+import { AuthProvider, useAuth } from '../context/AuthContext';
+// Zhafran (feat/push-notif, SRS-34, 36): hook registrasi token & navigasi notifikasi.
+import { useNotifikasi } from '../hooks/useNotifikasi';
 
 SplashScreen.preventAutoHideAsync();
+
+// Komponen terpisah agar hook dapat mengakses AuthContext yang sudah terpasang.
+// Dipasang di dalam <AuthProvider> sehingga useAuth() selalu tersedia.
+// Zhafran (feat/push-notif, SRS-34, 36)
+function NotifikasiSetup() {
+  const { profile } = useAuth();
+  useNotifikasi(profile);
+  return null;
+}
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -35,6 +46,7 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
+      <NotifikasiSetup />
       <Stack
         screenOptions={{
           headerShown: false,
