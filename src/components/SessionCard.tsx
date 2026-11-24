@@ -32,7 +32,7 @@ export default function SessionCard({ session, onPress, kelasNama }: Props) {
         <StatusBadge status={session.status} />
         {onPress ? (
           <View style={styles.chevron}>
-            <Ionicons name="chevron-forward" size={16} color={colors.secondary} />
+            <Ionicons name="chevron-forward" size={16} color={colors.text} />
           </View>
         ) : null}
       </View>

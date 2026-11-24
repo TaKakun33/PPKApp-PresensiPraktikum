@@ -1,54 +1,56 @@
 import type { TextStyle, ViewStyle } from 'react-native';
 
-// Palet 60-30-10 monokromatik lavender (hue ~250deg) + warna semantik.
-//   60% netral    : bg, card, surface, border  -> abu bersemburat lavender
-//   30% sekunder  : indigo-plum gelap          -> teks, tab bar, kartu hero, ikon
-//   10% primer    : lavender                   -> tombol utama, state aktif/terpilih, tautan
-// Warning (amber) adalah komplementer ungu, jadi tetap menonjol sebagai status.
+// Palet 60-30-10 "Chalk / Moss / Vermilion" + Ink untuk teks.
+//   60% base   : Chalk     -> latar layar dan permukaan
+//   30% brand  : Moss      -> tab bar, header/kartu hero, tab & opsi terpilih, tautan
+//   10% accent : Vermilion -> tombol utama, CTA, tenggat/penanda waktu, status "Dibuka"
+//   text       : Ink       -> teks isi dan ikon
+// Success (teal) dan danger (crimson) sengaja dibedakan dari moss dan vermilion
+// supaya status tidak tertukar dengan warna brand/aksen.
 // Semua pasangan teks/latar lolos kontras WCAG AA (>= 4.5:1).
 const palette = {
-  lavender600: '#6A4FC4', // lavender tua: cukup gelap untuk teks putih (5.9:1)
-  lavender300: '#C9C0F0', // lavender muda: sorotan di atas latar gelap
-  lavender50: '#F0EDFC',
-  plum900: '#241F45',
-  plum100: '#E9E5F8',
-  gray0: '#FFFFFF',
-  gray50: '#F7F6FB',
-  gray200: '#E7E5EF',
-  gray300: '#CBC7D9',
-  gray500: '#6B6880',
-  gray600: '#5E5A72',
+  chalk: '#F4F1EA',
+  moss: '#4A5A2B',
+  mossLight: '#D3DBBE',
+  mossTint: '#E6EAD9',
+  vermilion: '#C63A22',
+  vermilionTint: '#FDF1ED',
+  ink: '#22201C',
+  white: '#FFFFFF',
+  stone200: '#E3DED2',
+  stone300: '#CFC8B8',
+  stone500: '#6E685C',
+  stone600: '#5F5A50',
 } as const;
 
 export const colors = {
   // 10% - aksen
-  primary: palette.lavender600,
-  primarySoft: palette.lavender300,
-  primaryTint: palette.lavender50,
-  // 30% - sekunder
-  secondary: palette.plum900,
-  tint: palette.plum100,
-  tabInactive: palette.lavender300,
-  // 60% - netral
-  bg: palette.gray50,
-  card: palette.gray0,
-  surface: palette.gray50,
-  border: palette.gray200,
-  dashed: palette.gray300,
-  white: palette.gray0,
-  // Teks
-  text: palette.plum900,
-  textSecondary: palette.gray600,
-  placeholder: palette.gray500,
+  primary: palette.vermilion,
+  primaryTint: palette.vermilionTint,
+  // 30% - brand
+  secondary: palette.moss,
+  tint: palette.mossTint,
+  tabInactive: palette.mossLight,
+  // 60% - base
+  bg: palette.chalk,
+  card: palette.white,
+  surface: palette.chalk,
+  border: palette.stone200,
+  dashed: palette.stone300,
+  white: palette.white,
+  // Teks & ikon
+  text: palette.ink,
+  textSecondary: palette.stone600,
+  placeholder: palette.stone500,
   // Semantik
-  success: '#17744A',
-  successTint: '#E6F4EC',
+  success: '#1F6B5C',
+  successTint: '#E3F1EC',
   warning: '#8A5A12',
   warningTint: '#FBF1DC',
-  danger: '#B42323',
-  dangerTint: '#FBE9E9',
-  dangerBorder: '#F5C7C7',
-  overlay: 'rgba(36, 31, 69, 0.48)',
+  danger: '#9E1B32',
+  dangerTint: '#F9E6EA',
+  dangerBorder: '#F0C4CD',
+  overlay: 'rgba(34, 32, 28, 0.48)',
 } as const;
 
 export const radius = {

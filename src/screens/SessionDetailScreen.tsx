@@ -131,7 +131,7 @@ function InfoRow({ icon, label, value }: { icon: IoniconsName; label: string; va
   return (
     <View style={styles.row}>
       <View style={styles.rowIcon}>
-        <Ionicons name={icon} size={18} color={colors.secondary} />
+        <Ionicons name={icon} size={18} color={colors.text} />
       </View>
       <View style={styles.rowText}>
         <Text style={styles.rowLabel}>{label}</Text>
@@ -329,7 +329,7 @@ export default function SessionDetailScreen() {
                 onPress={() => router.push({ pathname: '/session-form', params: { id: session.id } })}
                 accessibilityRole="button"
               >
-                <Ionicons name="create-outline" size={16} color={colors.secondary} />
+                <Ionicons name="create-outline" size={16} color={colors.text} />
                 <Text style={styles.manageText}>Ubah Jadwal</Text>
               </Pressable>
               <Pressable

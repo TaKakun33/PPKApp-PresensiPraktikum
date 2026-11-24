@@ -232,7 +232,7 @@ export default function HomeScreen() {
         <View style={styles.summaryMetrics}>
           <View style={styles.metricRow}>
             <View style={styles.metricIcon}>
-              <Ionicons name="calendar-outline" size={17} color={colors.secondary} />
+              <Ionicons name="calendar-outline" size={17} color={colors.text} />
             </View>
             <View style={styles.metricText}>
               <Text style={styles.metricValue}>{upcoming.length}</Text>
@@ -241,7 +241,7 @@ export default function HomeScreen() {
           </View>
           <View style={styles.metricRow}>
             <View style={styles.metricIcon}>
-              <Ionicons name="document-text-outline" size={17} color={colors.secondary} />
+              <Ionicons name="document-text-outline" size={17} color={colors.text} />
             </View>
             <View style={styles.metricText}>
               <Text style={styles.metricValue}>{izinDiproses}</Text>
@@ -266,7 +266,7 @@ export default function HomeScreen() {
       {jadwalTerdekat.length === 0 ? (
         <View style={styles.emptyCard}>
           <View style={styles.emptyIcon}>
-            <Ionicons name="calendar-outline" size={26} color={colors.secondary} />
+            <Ionicons name="calendar-outline" size={26} color={colors.text} />
           </View>
           <Text style={styles.emptyTitle}>Belum ada jadwal terdekat</Text>
           <Text style={styles.emptyText}>
@@ -309,7 +309,7 @@ export default function HomeScreen() {
                   </Text>
                 </View>
                 <View style={styles.chevron}>
-                  <Ionicons name="chevron-forward" size={16} color={colors.secondary} />
+                  <Ionicons name="chevron-forward" size={16} color={colors.text} />
                 </View>
               </Pressable>
             );
@@ -451,7 +451,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   sectionTitle: { ...text.sectionTitle },
-  sectionLink: { fontSize: 12, fontFamily: font.bold, color: colors.primary },
+  sectionLink: { fontSize: 12, fontFamily: font.bold, color: colors.secondary },
   scheduleList: { gap: 10 },
   scheduleCard: {
     flexDirection: 'row',

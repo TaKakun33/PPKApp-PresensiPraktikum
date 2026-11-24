@@ -90,8 +90,8 @@ const styles = StyleSheet.create({
     gap: 3,
     borderRadius: radius.pill,
   },
-  // Tab aktif = pill lavender muda (sorotan 10%) di atas bar plum (bagian 30%).
-  tabActive: { backgroundColor: colors.primarySoft },
+  // Bar = Moss (brand 30%); tab aktif = pill Chalk dengan ikon Moss.
+  tabActive: { backgroundColor: colors.bg },
   tabPressed: { opacity: 0.75 },
   label: { ...text.tab },
   labelFocused: { fontFamily: font.bold },

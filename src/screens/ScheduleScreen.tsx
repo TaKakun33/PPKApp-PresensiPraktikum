@@ -29,7 +29,7 @@ function HeaderButton({ icon, label, onPress, primary }: { icon: IoniconsName; l
       accessibilityRole="button"
       accessibilityLabel={label}
     >
-      <Ionicons name={icon} size={16} color={primary ? colors.white : colors.secondary} />
+      <Ionicons name={icon} size={16} color={primary ? colors.white : colors.text} />
       <Text style={[styles.headerButtonText, primary && styles.headerButtonTextPrimary]}>{label}</Text>
     </Pressable>
   );
@@ -116,7 +116,7 @@ export default function ScheduleScreen() {
         ListHeaderComponent={
           <View style={styles.header}>
             <View style={styles.roleChip}>
-              <Ionicons name="person-circle-outline" size={15} color={colors.secondary} />
+              <Ionicons name="person-circle-outline" size={15} color={colors.text} />
               <Text style={styles.roleText} numberOfLines={1}>
                 {profile.nama} ({isAsisten ? 'Asisten' : 'Praktikan'})
               </Text>

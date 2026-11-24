@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
   roleOption: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 11, borderRadius: 11 },
   roleOptionActive: {
     backgroundColor: colors.white,
-    shadowColor: colors.secondary,
+    shadowColor: colors.text,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 6,
@@ -421,7 +421,7 @@ const styles = StyleSheet.create({
   },
   loginRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6 },
   infoText: { fontSize: 13, fontFamily: 'PlusJakartaSans_400Regular', color: colors.textSecondary },
-  link: { fontSize: 13, fontFamily: 'PlusJakartaSans_700Bold', color: colors.primary },
+  link: { fontSize: 13, fontFamily: 'PlusJakartaSans_700Bold', color: colors.secondary },
   footer: { marginTop: 'auto', paddingTop: 28, alignItems: 'center' },
   copyright: { fontSize: 11, fontFamily: 'PlusJakartaSans_400Regular', color: colors.textSecondary },
 });

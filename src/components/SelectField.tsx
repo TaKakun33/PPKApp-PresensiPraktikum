@@ -58,7 +58,7 @@ export default function SelectField<T extends string | number>({
             </Text>
           ) : null}
         </View>
-        <Ionicons name="chevron-down" size={16} color={colors.secondary} />
+        <Ionicons name="chevron-down" size={16} color={colors.text} />
       </Pressable>
 
       <Modal transparent animationType="fade" visible={open} onRequestClose={() => setOpen(false)}>
@@ -96,7 +96,7 @@ export default function SelectField<T extends string | number>({
                         <Text style={[styles.optionSub, o.disabled && styles.optionDisabled]}>{o.sub}</Text>
                       ) : null}
                     </View>
-                    {aktif ? <Ionicons name="checkmark" size={18} color={colors.primary} /> : null}
+                    {aktif ? <Ionicons name="checkmark" size={18} color={colors.secondary} /> : null}
                   </Pressable>
                 );
               })}
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
   optionActive: { backgroundColor: colors.tint },
   optionPressed: { backgroundColor: colors.surface },
   optionText: { fontSize: 15, fontFamily: font.medium, color: colors.text },
-  optionTextActive: { fontFamily: font.semibold, color: colors.primary },
+  optionTextActive: { fontFamily: font.semibold, color: colors.secondary },
   optionSub: { fontSize: 12, fontFamily: font.medium, color: colors.textSecondary },
   optionDisabled: { color: colors.placeholder, opacity: 0.6 },
 });

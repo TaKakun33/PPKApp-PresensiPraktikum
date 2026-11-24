@@ -292,7 +292,7 @@ export default function SessionFormScreen() {
             <Text style={[styles.selectText, !form.tanggal && styles.selectPlaceholder]}>
               {form.tanggal ? formatTanggal(`${form.tanggal}T00:00:00`) : 'Pilih tanggal'}
             </Text>
-            <Ionicons name="calendar-outline" size={18} color={colors.secondary} />
+            <Ionicons name="calendar-outline" size={18} color={colors.text} />
           </Pressable>
         </View>
         {showDatePicker ? (
@@ -323,7 +323,7 @@ export default function SessionFormScreen() {
                     mode="date"
                     display="compact"
                     minimumDate={batasTanggal}
-                    accentColor={colors.primary}
+                    accentColor={colors.secondary}
                     style={styles.nativePicker}
                     onValueChange={(_, date) => pilihTanggal(date)}
                   />

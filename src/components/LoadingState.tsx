@@ -5,7 +5,7 @@ import { colors, font } from '../constants/theme';
 export default function LoadingState({ message = 'Memuat data...' }: { message?: string }) {
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color={colors.primary} />
+      <ActivityIndicator size="large" color={colors.secondary} />
       <Text style={styles.text}>{message}</Text>
     </View>
   );
