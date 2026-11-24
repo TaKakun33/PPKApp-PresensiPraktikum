@@ -41,7 +41,7 @@ def derive(core, mode, ov):
     t['tint'] = mix(base, brand, 0.35) if dark else mix(brand, WHITE, 0.87)
     t['secondaryText'] = brand if all(cr(brand, s) >= 4.5 for s in surf + [t['tint']]) \
         else toward(brand, WHITE if dark else ink, surf + [t['tint']], 4.5)
-    t['heading'] = t['secondaryText'] if ov.get('headingBrand') else ink
+    t['heading'] = t['secondaryText'] if ov.get('headingBrand') and not dark else ink
     t['tabInactive'] = toward(mix(brand, WHITE, 0.55), WHITE, [brand], 4.5)
     # 10% aksen
     t['primary'] = accent
@@ -109,6 +109,10 @@ THEMES = [
      {'light': dict(base='#F4F4F0', brand='#2E3135', accent='#FF5A7A', text='#1B1C1E'),
       'dark': dict(base='#141517', brand='#25282C', accent='#FF6E8A', text='#EDEDE8')},
      {'primaryText_light': '#C8304F'}),
+    ('burgundyMint', 'Burgundy & Mint', 'Kaya dan akademis seperti lambang kampus, mint menjaga tetap segar.',
+     {'light': dict(base='#F7F1EC', brand='#5A1F2B', accent='#3DDC97', text='#2A1418'),
+      'dark': dict(base='#170D10', brand='#3A141C', accent='#3DDC97', text='#F2EAE5')},
+     {'headingBrand': True, 'primaryText_light': '#17784F'}),
 ]
 
 KEYS = ['primary', 'primaryText', 'primaryTint', 'onPrimary', 'secondary', 'secondaryText',
