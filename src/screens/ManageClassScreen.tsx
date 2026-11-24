@@ -669,7 +669,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     backgroundColor: colors.card,
   },
-  backdrop: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: 'rgba(20, 35, 74, 0.48)' },
+  backdrop: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: colors.overlay },
   modal: { backgroundColor: colors.card, borderRadius: 24, padding: 20, gap: 6 },
   modalTitle: { fontSize: 18, fontFamily: font.extraBold, color: colors.text, marginBottom: 4 },
   modalActions: { flexDirection: 'row', gap: 10, marginTop: 14 },

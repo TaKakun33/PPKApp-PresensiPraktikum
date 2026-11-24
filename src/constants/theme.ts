@@ -1,32 +1,34 @@
 import type { TextStyle, ViewStyle } from 'react-native';
 
-// Palet 60-30-10 dengan 3 warna inti (+ tint/shade dan warna semantik).
-//   60% netral    : bg, card, surface, border  -> latar dan permukaan
-//   30% sekunder  : navy                       -> teks, tab bar, kartu hero, ikon
-//   10% primer    : biru aksen                 -> tombol utama, state aktif/terpilih, tautan
-// Semua pasangan teks/latar di bawah lolos kontras WCAG AA (>= 4.5:1).
+// Palet 60-30-10 monokromatik lavender (hue ~250deg) + warna semantik.
+//   60% netral    : bg, card, surface, border  -> abu bersemburat lavender
+//   30% sekunder  : indigo-plum gelap          -> teks, tab bar, kartu hero, ikon
+//   10% primer    : lavender                   -> tombol utama, state aktif/terpilih, tautan
+// Warning (amber) adalah komplementer ungu, jadi tetap menonjol sebagai status.
+// Semua pasangan teks/latar lolos kontras WCAG AA (>= 4.5:1).
 const palette = {
-  navy900: '#14234A',
-  navy300: '#A9B6D6',
-  navy100: '#E3E8F3',
-  blue600: '#1F5BD8',
-  blue50: '#EAF0FE',
+  lavender600: '#6A4FC4', // lavender tua: cukup gelap untuk teks putih (5.9:1)
+  lavender300: '#C9C0F0', // lavender muda: sorotan di atas latar gelap
+  lavender50: '#F0EDFC',
+  plum900: '#241F45',
+  plum100: '#E9E5F8',
   gray0: '#FFFFFF',
-  gray50: '#F4F5F7',
-  gray200: '#E5E7EB',
-  gray300: '#C5CAD6',
-  gray500: '#666E7B',
-  gray600: '#5B6472',
+  gray50: '#F7F6FB',
+  gray200: '#E7E5EF',
+  gray300: '#CBC7D9',
+  gray500: '#6B6880',
+  gray600: '#5E5A72',
 } as const;
 
 export const colors = {
   // 10% - aksen
-  primary: palette.blue600,
-  primaryTint: palette.blue50,
+  primary: palette.lavender600,
+  primarySoft: palette.lavender300,
+  primaryTint: palette.lavender50,
   // 30% - sekunder
-  secondary: palette.navy900,
-  tint: palette.navy100,
-  tabInactive: palette.navy300,
+  secondary: palette.plum900,
+  tint: palette.plum100,
+  tabInactive: palette.lavender300,
   // 60% - netral
   bg: palette.gray50,
   card: palette.gray0,
@@ -35,7 +37,7 @@ export const colors = {
   dashed: palette.gray300,
   white: palette.gray0,
   // Teks
-  text: palette.navy900,
+  text: palette.plum900,
   textSecondary: palette.gray600,
   placeholder: palette.gray500,
   // Semantik
@@ -46,6 +48,7 @@ export const colors = {
   danger: '#B42323',
   dangerTint: '#FBE9E9',
   dangerBorder: '#F5C7C7',
+  overlay: 'rgba(36, 31, 69, 0.48)',
 } as const;
 
 export const radius = {

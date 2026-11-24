@@ -511,7 +511,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     padding: 24,
-    backgroundColor: 'rgba(20, 35, 74, 0.48)',
+    backgroundColor: colors.overlay,
   },
   pickerBackdropPress: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   pickerCard: {

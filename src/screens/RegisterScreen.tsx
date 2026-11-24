@@ -1,6 +1,6 @@
 // FILE AKMAL (feat/auth-leave-ai) — SRS-11. Layar registrasi: peran, nama, NIM (praktikan), email, password.
 // Peran asisten hanya berhasil jika email-nya terdaftar di `allowedAssistants` (diisi admin di Firebase Console).
-// Tampilan mengikuti LoginScreen (latar putih, foto, judul di tengah, input abu-abu, tombol navy). Profil disimpan oleh authService.registerUser.
+// Tampilan mengikuti LoginScreen (latar putih, foto, judul di tengah, input abu-abu, tombol aksen). Profil disimpan oleh authService.registerUser.
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { Link, Redirect } from 'expo-router';

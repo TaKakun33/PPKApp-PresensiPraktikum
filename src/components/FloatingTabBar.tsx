@@ -19,7 +19,7 @@ export default function FloatingTabBar({
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
           const focused = state.index === index;
-          const color = focused ? colors.white : colors.tabInactive;
+          const color = focused ? colors.secondary : colors.tabInactive;
           const label =
             typeof options.tabBarLabel === 'string'
               ? options.tabBarLabel
@@ -90,8 +90,8 @@ const styles = StyleSheet.create({
     gap: 3,
     borderRadius: radius.pill,
   },
-  // Tab aktif = sorotan aksen (bagian 10%), bar navy = bagian 30%.
-  tabActive: { backgroundColor: colors.primary },
+  // Tab aktif = pill lavender muda (sorotan 10%) di atas bar plum (bagian 30%).
+  tabActive: { backgroundColor: colors.primarySoft },
   tabPressed: { opacity: 0.75 },
   label: { ...text.tab },
   labelFocused: { fontFamily: font.bold },
