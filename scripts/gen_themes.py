@@ -39,15 +39,16 @@ def derive(core, mode, ov):
     t['secondary'] = brand
     t['onSecondary'] = toward(WHITE if not dark else ink, WHITE, [brand], 7.0)
     t['tint'] = mix(base, brand, 0.35) if dark else mix(brand, WHITE, 0.87)
-    t['secondaryText'] = brand if all(cr(brand, s) >= 4.5 for s in surf + [t['tint']]) \
-        else toward(brand, WHITE if dark else ink, surf + [t['tint']], 4.5)
+    t['secondaryText'] = ov.get(f'secondaryText_{mode}') or (
+        brand if all(cr(brand, s) >= 4.5 for s in surf + [t['tint']])
+        else toward(brand, WHITE if dark else ink, surf + [t['tint']], 4.5))
     t['heading'] = t['secondaryText'] if ov.get('headingBrand') and not dark else ink
     t['tabInactive'] = toward(mix(brand, WHITE, 0.55), WHITE, [brand], 4.5)
     # 10% aksen
     t['primary'] = accent
     dark_on = base if dark else ink
     t['onPrimary'] = WHITE if cr(WHITE, accent) >= 4.5 else toward(dark_on, '#000000', [accent], 4.5)
-    t['primaryTint'] = mix(base, accent, 0.20) if dark else mix(accent, WHITE, 0.90)
+    t['primaryTint'] = mix(base, accent, ov.get('primaryTintMix_dark', 0.20)) if dark else mix(accent, WHITE, 0.90)
     pt_targets = surf + [t['primaryTint']]
     if ov.get('accentTextUseBrand') and not dark:
         t['primaryText'] = t['secondaryText']
@@ -113,6 +114,12 @@ THEMES = [
      {'light': dict(base='#F7F1EC', brand='#5A1F2B', accent='#3DDC97', text='#2A1418'),
       'dark': dict(base='#170D10', brand='#3A141C', accent='#3DDC97', text='#F2EAE5')},
      {'headingBrand': True, 'primaryText_light': '#17784F'}),
+    ('indigoSunflower', 'Indigo & Sunflower', 'Energik seperti poster Bauhaus; aksi selalu jelas.',
+     {'light': dict(base='#F5F3EE', brand='#3426B8', accent='#FFC93C', text='#17152B'),
+      'dark': dict(base='#100F1C', brand='#221A6E', accent='#FFC93C', text='#EFEDE8')},
+     # Tautan: indigo di light, #8F8BF5 di dark (dipakai juga untuk brand sebagai teks).
+     {'accentTextUseBrand': True, 'primaryText_dark': '#8F8BF5', 'secondaryText_dark': '#8F8BF5',
+      'primaryTintMix_dark': 0.12}),
 ]
 
 KEYS = ['primary', 'primaryText', 'primaryTint', 'onPrimary', 'secondary', 'secondaryText',
