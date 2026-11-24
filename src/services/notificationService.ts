@@ -2,6 +2,7 @@
 // Registrasi token push notifikasi ke Firestore dan pengiriman push notification.
 // Pola error handling mengikuti serviceUtils.ts (createAppError & withTimeout).
 
+import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
@@ -79,10 +80,9 @@ export async function daftarkanPushToken(uid: string): Promise<string | null> {
   // Dapatkan Expo push token.
   let token: string;
   try {
-    const result = await Notifications.getExpoPushTokenAsync({
-      // projectId dari app.json → extra.eas.projectId
-      projectId: '08a71497-5669-4f0e-9d61-ed4f5e22490a',
-    });
+    const projectId =
+      Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+    const result = await Notifications.getExpoPushTokenAsync({ projectId });
     token = result.data;
   } catch (e) {
     console.error('[Notifikasi] Gagal mendapatkan push token:', e);
