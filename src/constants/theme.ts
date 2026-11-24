@@ -1,55 +1,57 @@
 import type { TextStyle, ViewStyle } from 'react-native';
 
-// Palet 60-30-10 "Mist / Aubergine / Citron" + Ink untuk teks (Ink tidak dihitung).
-//   60% neutral : Mist      -> latar, ruang kosong
-//   30% brand   : Aubergine -> tab bar, header/kartu hero, kartu & opsi aktif, tautan
-//   10% accent  : Citron    -> SATU aksi utama per layar, progres
-//   text        : Ink       -> teks dan ikon
-// Citron sangat terang: hanya dipakai sebagai LATAR dengan teks Ink (onPrimary),
-// tidak pernah sebagai warna teks/garis di atas latar terang (kontras 1.2:1).
+// Palet 60-30-10 "Sand / Rust / Cobalt" + Espresso untuk teks.
+//   60% base   : Sand     -> latar layar
+//   30% brand  : Rust     -> tab bar, header/kartu hero, judul layar & bagian
+//   10% accent : Cobalt   -> tombol utama, tautan, progres, item terpilih
+//   text       : Espresso -> teks isi dan ikon
+// Cobalt di atas Rust hanya 1.5:1, jadi tab aktif memakai pill putih + ikon Cobalt.
+// Warning (emas) dan danger (crimson) digeser menjauh dari Rust agar tidak tertukar.
 // Semua pasangan teks/latar lolos kontras WCAG AA (>= 4.5:1).
 const palette = {
-  mist: '#F1EFF4',
-  aubergine: '#3E2A47',
-  aubergineLight: '#CDBFD4',
-  aubergineTint: '#E8E1EC',
-  citron: '#D8E84A',
-  ink: '#241B29',
+  sand: '#EFE9DF',
+  rust: '#7A3E22',
+  rustLight: '#E2C3B2',
+  rustTint: '#F3E4DA',
+  cobalt: '#2F5BEA',
+  cobaltTint: '#EEF2FD',
+  espresso: '#2A1D16',
   white: '#FFFFFF',
-  gray200: '#E3DFE8',
-  gray300: '#C9C3D0',
-  gray500: '#6C6472',
-  gray600: '#5E5664',
+  stone200: '#E2DACD',
+  stone300: '#CBC1B1',
+  stone500: '#6F6358',
+  stone600: '#63574D',
 } as const;
 
 export const colors = {
-  // 10% - aksen (selalu dengan teks onPrimary)
-  primary: palette.citron,
-  onPrimary: palette.ink,
+  // 10% - aksen
+  primary: palette.cobalt,
+  primaryTint: palette.cobaltTint,
+  onPrimary: palette.white,
   // 30% - brand
-  secondary: palette.aubergine,
-  tint: palette.aubergineTint,
-  tabInactive: palette.aubergineLight,
-  // 60% - neutral
-  bg: palette.mist,
+  secondary: palette.rust,
+  tint: palette.rustTint,
+  tabInactive: palette.rustLight,
+  // 60% - base
+  bg: palette.sand,
   card: palette.white,
-  surface: palette.mist,
-  border: palette.gray200,
-  dashed: palette.gray300,
+  surface: palette.sand,
+  border: palette.stone200,
+  dashed: palette.stone300,
   white: palette.white,
   // Teks & ikon
-  text: palette.ink,
-  textSecondary: palette.gray600,
-  placeholder: palette.gray500,
+  text: palette.espresso,
+  textSecondary: palette.stone600,
+  placeholder: palette.stone500,
   // Semantik
   success: '#17744A',
   successTint: '#E6F4EC',
-  warning: '#8A5A12',
-  warningTint: '#FBF1DC',
-  danger: '#B42323',
-  dangerTint: '#FBE9E9',
-  dangerBorder: '#F5C7C7',
-  overlay: 'rgba(36, 27, 41, 0.48)',
+  warning: '#7D6200',
+  warningTint: '#FAF1CF',
+  danger: '#A51D3A',
+  dangerTint: '#FBE7EC',
+  dangerBorder: '#F2C2CD',
+  overlay: 'rgba(42, 29, 22, 0.48)',
 } as const;
 
 export const radius = {
@@ -76,8 +78,8 @@ export const text: Record<
   'screenTitle' | 'sectionTitle' | 'body' | 'bodyStrong' | 'caption' | 'button' | 'tab',
   TextStyle
 > = {
-  screenTitle: { fontSize: 18, fontFamily: font.extraBold, color: colors.text },
-  sectionTitle: { fontSize: 16, fontFamily: font.bold, color: colors.text },
+  screenTitle: { fontSize: 18, fontFamily: font.extraBold, color: colors.secondary },
+  sectionTitle: { fontSize: 16, fontFamily: font.bold, color: colors.secondary },
   body: { fontSize: 13, lineHeight: 19, fontFamily: font.medium, color: colors.textSecondary },
   bodyStrong: { fontSize: 13, lineHeight: 19, fontFamily: font.semibold, color: colors.text },
   caption: { fontSize: 12, lineHeight: 16, fontFamily: font.medium, color: colors.textSecondary },
@@ -97,7 +99,7 @@ export const status = {
   danger: { bg: colors.dangerTint, text: colors.danger },
   neutral: { bg: colors.surface, text: colors.textSecondary },
   info: { bg: colors.tint, text: colors.secondary },
-  active: { bg: colors.primary, text: colors.onPrimary },
+  active: { bg: colors.primaryTint, text: colors.primary },
 } as const;
 
 export const shadow: Record<'floating', ViewStyle> = {

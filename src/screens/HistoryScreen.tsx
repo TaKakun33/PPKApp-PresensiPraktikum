@@ -350,7 +350,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 14,
   },
-  segmentActive: { backgroundColor: colors.secondary },
+  segmentActive: { backgroundColor: colors.primary },
   segmentText: { fontSize: 13, fontFamily: font.semibold, color: colors.textSecondary },
   segmentTextActive: { color: colors.white, fontFamily: font.bold },
   banner: {

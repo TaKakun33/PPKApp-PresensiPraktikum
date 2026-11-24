@@ -313,7 +313,7 @@ const styles = StyleSheet.create({
   forgotText: {
     fontSize: 13,
     fontFamily: 'PlusJakartaSans_600SemiBold',
-    color: colors.secondary,
+    color: colors.primary,
   },
   infoBox: {
     flexDirection: 'row',
@@ -386,7 +386,7 @@ const styles = StyleSheet.create({
   link: {
     fontSize: 13,
     fontFamily: 'PlusJakartaSans_700Bold',
-    color: colors.secondary,
+    color: colors.primary,
   },
   copyright: {
     fontSize: 11,

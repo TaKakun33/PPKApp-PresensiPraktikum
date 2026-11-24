@@ -218,7 +218,7 @@ export default function HomeScreen() {
             accessibilityLabel={`Lihat detail ${nearest.praktikum}`}
           >
             <Text style={styles.heroButtonText}>Lihat detail jadwal</Text>
-            <Ionicons name="arrow-forward" size={15} color={colors.onPrimary} />
+            <Ionicons name="arrow-forward" size={15} color={colors.primary} />
           </Pressable>
         ) : null}
       </View>
@@ -400,13 +400,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.white,
     borderRadius: radius.pill,
     paddingVertical: 9,
     paddingHorizontal: 14,
     marginTop: 8,
   },
-  heroButtonText: { fontSize: 12, fontFamily: font.bold, color: colors.onPrimary },
+  heroButtonText: { fontSize: 12, fontFamily: font.bold, color: colors.primary },
   pressed: { opacity: 0.82 },
   summaryCard: {
     flexDirection: 'row',
@@ -451,7 +451,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   sectionTitle: { ...text.sectionTitle },
-  sectionLink: { fontSize: 12, fontFamily: font.bold, color: colors.secondary },
+  sectionLink: { fontSize: 12, fontFamily: font.bold, color: colors.primary },
   scheduleList: { gap: 10 },
   scheduleCard: {
     flexDirection: 'row',

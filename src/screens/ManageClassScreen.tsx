@@ -63,7 +63,7 @@ function ActionButton({
   tone?: 'default' | 'danger' | 'primary';
   disabled?: boolean;
 }) {
-  const color = tone === 'primary' ? colors.secondary : colors.text;
+  const color = tone === 'primary' ? colors.primary : colors.text;
   return (
     <Pressable
       style={({ pressed }) => [
@@ -228,7 +228,7 @@ function PesertaPanel({ cls }: { cls: ClassDoc }) {
         jadi bisa langsung menambah yang lain.
       </Text>
 
-      {mencari ? <ActivityIndicator style={styles.panelLoading} color={colors.secondary} /> : null}
+      {mencari ? <ActivityIndicator style={styles.panelLoading} color={colors.primary} /> : null}
       {!mencari && hasil ? (
         hasil.length === 0 ? (
           <Text style={styles.emptyText}>
@@ -278,7 +278,7 @@ function PesertaPanel({ cls }: { cls: ClassDoc }) {
       {error ? (
         <Text style={[styles.info, { color: colors.danger }]}>{error}</Text>
       ) : peserta === null ? (
-        <ActivityIndicator style={styles.panelLoading} color={colors.secondary} />
+        <ActivityIndicator style={styles.panelLoading} color={colors.primary} />
       ) : peserta.length === 0 ? (
         <Text style={styles.emptyText}>Belum ada peserta. Cari praktikan di atas untuk menambahkannya.</Text>
       ) : (

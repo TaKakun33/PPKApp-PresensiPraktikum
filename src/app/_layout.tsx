@@ -39,7 +39,7 @@ export default function RootLayout() {
         screenOptions={{
           headerShown: false,
           headerStyle: { backgroundColor: colors.card },
-          headerTintColor: colors.secondary,
+          headerTintColor: colors.primary,
           headerTitleStyle: { color: colors.text, fontFamily: font.bold, fontSize: 17 },
           headerShadowVisible: false,
           contentStyle: { backgroundColor: colors.bg },

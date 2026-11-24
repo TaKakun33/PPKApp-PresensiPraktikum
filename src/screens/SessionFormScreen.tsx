@@ -323,7 +323,7 @@ export default function SessionFormScreen() {
                     mode="date"
                     display="compact"
                     minimumDate={batasTanggal}
-                    accentColor={colors.secondary}
+                    accentColor={colors.primary}
                     style={styles.nativePicker}
                     onValueChange={(_, date) => pilihTanggal(date)}
                   />
