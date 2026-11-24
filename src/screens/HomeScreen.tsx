@@ -218,7 +218,7 @@ export default function HomeScreen() {
             accessibilityLabel={`Lihat detail ${nearest.praktikum}`}
           >
             <Text style={styles.heroButtonText}>Lihat detail jadwal</Text>
-            <Ionicons name="arrow-forward" size={15} color={colors.onPrimary} />
+            <Ionicons name="arrow-forward" size={15} color={colors.onHighlight} />
           </Pressable>
         ) : null}
       </View>
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.tint,
   },
-  avatarText: { fontSize: 16, fontFamily: font.extraBold, color: colors.secondary },
+  avatarText: { fontSize: 16, fontFamily: font.extraBold, color: colors.secondaryText },
   profileText: { flex: 1, gap: 2 },
   greeting: { ...text.caption, fontFamily: font.medium },
   name: {
@@ -385,7 +385,7 @@ const styles = StyleSheet.create({
     fontSize: 23,
     lineHeight: 29,
     fontFamily: font.extraBold,
-    color: colors.white,
+    color: colors.onSecondary,
     letterSpacing: -0.4,
   },
   heroSubtitle: {
@@ -400,13 +400,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.highlightOnBrand,
     borderRadius: radius.pill,
     paddingVertical: 9,
     paddingHorizontal: 14,
     marginTop: 8,
   },
-  heroButtonText: { fontSize: 12, fontFamily: font.bold, color: colors.onPrimary },
+  heroButtonText: { fontSize: 12, fontFamily: font.bold, color: colors.onHighlight },
   pressed: { opacity: 0.82 },
   summaryCard: {
     flexDirection: 'row',
@@ -428,7 +428,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.card,
   },
-  attendanceValue: { fontSize: 19, fontFamily: font.extraBold, color: colors.secondary },
+  attendanceValue: { fontSize: 19, fontFamily: font.extraBold, color: colors.secondaryText },
   attendanceLabel: { fontSize: 10, fontFamily: font.medium, color: colors.textSecondary },
   summaryDivider: { width: 1, height: 68, backgroundColor: colors.border },
   summaryMetrics: { flex: 1, gap: 12 },
@@ -485,7 +485,7 @@ const styles = StyleSheet.create({
   scheduleBody: { flex: 1, gap: 2 },
   scheduleTitle: { fontSize: 14, fontFamily: font.bold, color: colors.text },
   scheduleMeta: { fontSize: 11, fontFamily: font.medium, color: colors.textSecondary },
-  scheduleAssistant: { fontSize: 11, fontFamily: font.semibold, color: colors.secondary },
+  scheduleAssistant: { fontSize: 11, fontFamily: font.semibold, color: colors.secondaryText },
   chevron: {
     width: 28,
     height: 28,

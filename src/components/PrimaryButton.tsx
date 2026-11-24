@@ -38,7 +38,7 @@ export default function PrimaryButton({
 }: Props) {
   const isPrimary = variant === 'primary';
   const inactive = disabled || loading;
-  const foreground = inactive ? colors.textSecondary : isPrimary ? colors.onPrimary : colors.secondary;
+  const foreground = inactive ? colors.textSecondary : isPrimary ? colors.onPrimary : colors.secondaryText;
 
   return (
     <Pressable

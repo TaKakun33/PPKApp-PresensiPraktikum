@@ -243,11 +243,11 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.white },
+  safe: { flex: 1, backgroundColor: colors.card },
   flex: { flex: 1 },
   scrollContent: {
     flexGrow: 1,
-    backgroundColor: colors.white,
+    backgroundColor: colors.card,
     paddingHorizontal: 24,
     paddingTop: 18,
   },

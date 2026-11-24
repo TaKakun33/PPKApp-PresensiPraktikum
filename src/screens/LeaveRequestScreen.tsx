@@ -552,7 +552,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: colors.tint,
   },
-  aiText: { flex: 1, fontSize: 12, lineHeight: 18, fontFamily: font.medium, color: colors.secondary },
+  aiText: { flex: 1, fontSize: 12, lineHeight: 18, fontFamily: font.medium, color: colors.secondaryText },
   infoBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -637,7 +637,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  cancelText: { fontSize: 12, fontFamily: font.semibold, color: colors.secondary },
+  cancelText: { fontSize: 12, fontFamily: font.semibold, color: colors.secondaryText },
   buttonPressed: { opacity: 0.82 },
   noteBox: { padding: 11, borderRadius: 14, backgroundColor: colors.surface, gap: 2 },
   noteLabel: { fontSize: 11, fontFamily: font.bold, color: colors.textSecondary },

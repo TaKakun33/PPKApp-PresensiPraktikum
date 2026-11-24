@@ -316,11 +316,11 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.white },
+  safe: { flex: 1, backgroundColor: colors.card },
   flex: { flex: 1 },
   scrollContent: {
     flexGrow: 1,
-    backgroundColor: colors.white,
+    backgroundColor: colors.card,
     paddingHorizontal: 24,
     paddingTop: 18,
   },
@@ -344,7 +344,7 @@ const styles = StyleSheet.create({
   },
   roleOption: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 11, borderRadius: 11 },
   roleOptionActive: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.card,
     shadowColor: colors.text,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -352,7 +352,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   roleText: { fontSize: 14, fontFamily: 'PlusJakartaSans_600SemiBold', color: colors.textSecondary },
-  roleTextActive: { color: colors.secondary, fontFamily: 'PlusJakartaSans_700Bold' },
+  roleTextActive: { color: colors.secondaryText, fontFamily: 'PlusJakartaSans_700Bold' },
   form: { marginTop: 18, gap: 14 },
   fieldGroup: { gap: 7 },
   label: { fontSize: 13, fontFamily: 'PlusJakartaSans_600SemiBold', color: colors.text },

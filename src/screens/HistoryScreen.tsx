@@ -217,7 +217,7 @@ export default function HistoryScreen() {
         <View style={styles.banner}>
           <View style={styles.bannerCircle} />
           <View style={styles.bannerIcon}>
-            <Ionicons name="checkmark" size={23} color={colors.white} />
+            <Ionicons name="checkmark" size={23} color={colors.onSecondary} />
           </View>
           <View style={styles.bannerBody}>
             <Text style={styles.bannerValue}>{persentaseHadir}%</Text>
@@ -384,7 +384,7 @@ const styles = StyleSheet.create({
     fontSize: 27,
     lineHeight: 32,
     fontFamily: font.extraBold,
-    color: colors.white,
+    color: colors.onSecondary,
     letterSpacing: -0.6,
   },
   bannerLabel: {
@@ -442,7 +442,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: radius.pill,
   },
-  aiBadgeText: { fontSize: 10, fontFamily: font.semibold, color: colors.secondary },
+  aiBadgeText: { fontSize: 10, fontFamily: font.semibold, color: colors.secondaryText },
   noteBox: {
     padding: 11,
     borderRadius: 14,

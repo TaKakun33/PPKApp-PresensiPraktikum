@@ -33,7 +33,7 @@ type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 // Warna kartu kehadiran, diambil dari warna bersama agar senada dengan StatusBadge.
 const TONE = {
   success: { color: colors.success, bg: colors.successTint },
-  info: { color: colors.secondary, bg: colors.tint },
+  info: { color: colors.secondaryText, bg: colors.tint },
   neutral: { color: colors.textSecondary, bg: colors.surface },
   danger: { color: colors.danger, bg: colors.dangerTint },
 };
@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
     borderWidth: 20,
     borderColor: 'rgba(255,255,255,0.07)',
   },
-  title: { fontSize: 20, lineHeight: 26, fontFamily: font.extraBold, color: colors.white },
+  title: { fontSize: 20, lineHeight: 26, fontFamily: font.extraBold, color: colors.onSecondary },
   subtitle: { fontSize: 13, fontFamily: font.medium, color: 'rgba(255,255,255,0.78)' },
   card: {
     backgroundColor: colors.card,

@@ -570,7 +570,7 @@ const styles = StyleSheet.create({
   statusHadir: { color: colors.success },
   statusIzin: { color: colors.warning },
   statusTidak: { color: colors.danger },
-  countValue: { fontSize: 22, fontFamily: font.extraBold, color: colors.secondary },
+  countValue: { fontSize: 22, fontFamily: font.extraBold, color: colors.secondaryText },
   countLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.textSecondary },
   attendanceRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   attendanceCard: {
@@ -589,7 +589,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.tint,
   },
-  studentInitial: { fontSize: 14, fontFamily: font.extraBold, color: colors.secondary },
+  studentInitial: { fontSize: 14, fontFamily: font.extraBold, color: colors.secondaryText },
   studentInfo: { flex: 1, gap: 4 },
   studentName: { fontSize: 14, lineHeight: 20, fontFamily: font.bold, color: colors.text },
   studentNim: { ...text.caption },
