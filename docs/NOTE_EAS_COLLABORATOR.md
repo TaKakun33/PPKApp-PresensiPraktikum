@@ -57,3 +57,10 @@ Commit perubahan `package-lock.json` agar semua anggota tim dan server EAS memak
 
 ### Android Keystore / Credentials
 Android Keystore dikelola otomatis oleh EAS di cloud, sehingga collaborator **tidak perlu** menyalin file `.keystore` secara manual antar laptop.
+
+### Keamanan File Firebase Admin SDK (`*-firebase-adminsdk-*.json`)
+File kredensial Firebase Admin SDK (contoh: `praktikumppk-app-firebase-adminsdk-*.json`, yang dipakai untuk upload **FCM V1 Service Account Key** di Expo/EAS) **sengaja tidak di-push ke Git** dan sudah diblokir oleh `.gitignore` (`*-firebase-adminsdk-*.json`) karena berisi *private key* rahasia yang akan menyebabkan **credential leak** jika masuk ke repository.
+
+- **Jangan pernah** force-add (`git add -f`) atau commit file tersebut ke Git.
+- Jika teman tim membutuhkan file tersebut (misalnya untuk konfigurasi FCM V1 di dashboard Expo/EAS), kirimkan secara pribadi lewat jalur aman (DM/chat privat), **bukan** lewat GitHub.
+
