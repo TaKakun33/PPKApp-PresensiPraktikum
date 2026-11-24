@@ -314,7 +314,7 @@ export default function LeaveRequestScreen() {
                   <Ionicons
                     name={selected ? 'radio-button-on' : 'radio-button-off'}
                     size={20}
-                    color={selected ? colors.primary : colors.placeholder}
+                    color={selected ? colors.primaryText : colors.placeholder}
                   />
                   <View style={styles.optionBody}>
                     <Text style={styles.optionTitle}>{s.praktikum}</Text>
@@ -512,7 +512,7 @@ const styles = StyleSheet.create({
   kelasChipActive: { borderColor: colors.primary, backgroundColor: colors.primary },
   kelasChipText: { fontSize: 14, fontFamily: font.semibold, color: colors.text },
   kelasChipSub: { fontSize: 11, fontFamily: font.medium, color: colors.textSecondary },
-  kelasChipTextActive: { color: colors.white },
+  kelasChipTextActive: { color: colors.onPrimary },
   optionList: { gap: 8 },
   option: {
     flexDirection: 'row',
@@ -524,7 +524,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  optionSelected: { borderColor: colors.primary, backgroundColor: colors.primaryTint },
+  optionSelected: { borderColor: colors.primaryText, backgroundColor: colors.primaryTint },
   optionDisabled: { opacity: 0.55 },
   optionBody: { flex: 1, gap: 3 },
   optionTitle: { fontSize: 14, lineHeight: 20, fontFamily: font.bold, color: colors.text },

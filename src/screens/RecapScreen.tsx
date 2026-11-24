@@ -354,7 +354,7 @@ export default function RecapScreen() {
                                   {labelKelas(session.kelasId)} · {session.tanggal}
                                 </Text>
                               </View>
-                              {selected ? <Ionicons name="checkmark" size={18} color={colors.primary} /> : null}
+                              {selected ? <Ionicons name="checkmark" size={18} color={colors.primaryText} /> : null}
                             </Pressable>
                           );
                         })}
@@ -505,7 +505,7 @@ const styles = StyleSheet.create({
   dropdownTextWrap: { flex: 1, gap: 3 },
   dropdownCaption: { fontSize: 11, fontFamily: font.semibold, color: colors.textSecondary },
   dropdownValue: { fontSize: 14, fontFamily: font.bold, color: colors.text },
-  sessionOptionTitleSelected: { color: colors.primary },
+  sessionOptionTitleSelected: { color: colors.primaryText },
   sessionOptionDetails: { fontSize: 12, fontFamily: font.medium, color: colors.textSecondary },
   pickerBackdrop: {
     flex: 1,

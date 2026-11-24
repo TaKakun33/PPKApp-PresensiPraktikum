@@ -421,7 +421,7 @@ const styles = StyleSheet.create({
   },
   loginRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6 },
   infoText: { fontSize: 13, fontFamily: 'PlusJakartaSans_400Regular', color: colors.textSecondary },
-  link: { fontSize: 13, fontFamily: 'PlusJakartaSans_700Bold', color: colors.primary },
+  link: { fontSize: 13, fontFamily: 'PlusJakartaSans_700Bold', color: colors.primaryText },
   footer: { marginTop: 'auto', paddingTop: 28, alignItems: 'center' },
   copyright: { fontSize: 11, fontFamily: 'PlusJakartaSans_400Regular', color: colors.textSecondary },
 });

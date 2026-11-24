@@ -96,7 +96,7 @@ export default function SelectField<T extends string | number>({
                         <Text style={[styles.optionSub, o.disabled && styles.optionDisabled]}>{o.sub}</Text>
                       ) : null}
                     </View>
-                    {aktif ? <Ionicons name="checkmark" size={18} color={colors.primary} /> : null}
+                    {aktif ? <Ionicons name="checkmark" size={18} color={colors.primaryText} /> : null}
                   </Pressable>
                 );
               })}
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
   optionActive: { backgroundColor: colors.tint },
   optionPressed: { backgroundColor: colors.surface },
   optionText: { fontSize: 15, fontFamily: font.medium, color: colors.text },
-  optionTextActive: { fontFamily: font.semibold, color: colors.primary },
+  optionTextActive: { fontFamily: font.semibold, color: colors.primaryText },
   optionSub: { fontSize: 12, fontFamily: font.medium, color: colors.textSecondary },
   optionDisabled: { color: colors.placeholder, opacity: 0.6 },
 });

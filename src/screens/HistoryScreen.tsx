@@ -352,7 +352,7 @@ const styles = StyleSheet.create({
   },
   segmentActive: { backgroundColor: colors.primary },
   segmentText: { fontSize: 13, fontFamily: font.semibold, color: colors.textSecondary },
-  segmentTextActive: { color: colors.white, fontFamily: font.bold },
+  segmentTextActive: { color: colors.onPrimary, fontFamily: font.bold },
   banner: {
     overflow: 'hidden',
     flexDirection: 'row',
