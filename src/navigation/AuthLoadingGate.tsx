@@ -5,7 +5,7 @@ import { Alert, Button, View } from 'react-native';
 
 import ErrorState from '../components/ErrorState';
 import LoadingState from '../components/LoadingState';
-import { COLORS } from '../constants/colors';
+import { colors } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 
 export default function AuthLoadingGate({ message = 'Memeriksa sesi login...' }: { message?: string }) {
@@ -25,7 +25,7 @@ export default function AuthLoadingGate({ message = 'Memeriksa sesi login...' }:
     <View style={{ flex: 1 }}>
       <ErrorState message={profileError} onRetry={retryProfile} />
       <View style={{ paddingHorizontal: 24, paddingBottom: 32 }}>
-        <Button title="Keluar dari akun" color={COLORS.danger} onPress={handleSignOut} />
+        <Button title="Keluar dari akun" color={colors.danger} onPress={handleSignOut} />
       </View>
     </View>
   );

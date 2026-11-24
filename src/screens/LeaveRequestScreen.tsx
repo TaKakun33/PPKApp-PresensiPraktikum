@@ -252,7 +252,7 @@ export default function LeaveRequestScreen() {
         <Text style={styles.label}>Pilih kelas</Text>
         {classes.length === 0 ? (
           <View style={styles.infoBox}>
-            <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
+            <Ionicons name="information-circle-outline" size={16} color={colors.secondary} />
             <Text style={styles.infoText}>Kamu belum terdaftar di kelas mana pun. Hubungi asisten pengampu.</Text>
           </View>
         ) : (
@@ -283,12 +283,12 @@ export default function LeaveRequestScreen() {
         <Text style={[styles.label, styles.labelSpaced]}>Pilih sesi</Text>
         {!selectedKelas ? (
           <View style={styles.infoBox}>
-            <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
+            <Ionicons name="information-circle-outline" size={16} color={colors.secondary} />
             <Text style={styles.infoText}>Pilih kelas terlebih dahulu untuk melihat sesinya.</Text>
           </View>
         ) : opsiSesi.length === 0 ? (
           <View style={styles.infoBox}>
-            <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
+            <Ionicons name="information-circle-outline" size={16} color={colors.secondary} />
             <Text style={styles.infoText}>
               Belum ada sesi di kelas ini yang bisa diajukan izin. Sesi yang sudah ditutup tidak ditampilkan.
             </Text>
@@ -336,7 +336,7 @@ export default function LeaveRequestScreen() {
         <Text style={[styles.label, styles.labelSpaced]}>Catatan izin</Text>
         {!selectedKelas ? (
           <View style={styles.infoBox}>
-            <Ionicons name="lock-closed-outline" size={16} color={colors.primary} />
+            <Ionicons name="lock-closed-outline" size={16} color={colors.secondary} />
             <Text style={styles.infoText}>Pilih kelas dulu sebelum mengisi catatan izin.</Text>
           </View>
         ) : (
@@ -361,7 +361,7 @@ export default function LeaveRequestScreen() {
         </Text>
 
         <View style={styles.aiBox}>
-          <Ionicons name="sparkles-outline" size={16} color={colors.primary} />
+          <Ionicons name="sparkles-outline" size={16} color={colors.secondary} />
           <Text style={styles.aiText}>
             Alasanmu dianalisis oleh model AI di perangkatmu (tidak dikirim ke internet) untuk menentukan
             kategori sentimen (positif, netral, atau negatif). AI hanya memberi informasi pendukung dan tidak menentukan izin diterima atau ditolak.
@@ -423,7 +423,7 @@ export default function LeaveRequestScreen() {
           ListEmptyComponent={
             <View style={styles.emptyBox}>
               <View style={styles.emptyIcon}>
-                <Ionicons name="document-text-outline" size={26} color={colors.primary} />
+                <Ionicons name="document-text-outline" size={26} color={colors.secondary} />
               </View>
               <Text style={styles.emptyTitle}>Belum ada pengajuan izin</Text>
               <Text style={styles.emptyText}>Pengajuan yang kamu kirim akan muncul di sini beserta statusnya.</Text>
@@ -473,7 +473,7 @@ function LeaveCard({ item, onCancel }: { item: LeaveItem; onCancel: () => void }
           accessibilityRole="button"
           accessibilityLabel="Batalkan pengajuan izin"
         >
-          <Ionicons name="close-circle-outline" size={15} color={colors.primary} />
+          <Ionicons name="close-circle-outline" size={15} color={colors.secondary} />
           <Text style={styles.cancelText}>Batalkan pengajuan</Text>
         </Pressable>
       ) : null}
@@ -524,7 +524,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  optionSelected: { borderColor: colors.primary, backgroundColor: colors.tint },
+  optionSelected: { borderColor: colors.primary, backgroundColor: colors.primaryTint },
   optionDisabled: { opacity: 0.55 },
   optionBody: { flex: 1, gap: 3 },
   optionTitle: { fontSize: 14, lineHeight: 20, fontFamily: font.bold, color: colors.text },
@@ -552,7 +552,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: colors.tint,
   },
-  aiText: { flex: 1, fontSize: 12, lineHeight: 18, fontFamily: font.medium, color: colors.primary },
+  aiText: { flex: 1, fontSize: 12, lineHeight: 18, fontFamily: font.medium, color: colors.secondary },
   infoBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -637,7 +637,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  cancelText: { fontSize: 12, fontFamily: font.semibold, color: colors.primary },
+  cancelText: { fontSize: 12, fontFamily: font.semibold, color: colors.secondary },
   buttonPressed: { opacity: 0.82 },
   noteBox: { padding: 11, borderRadius: 14, backgroundColor: colors.surface, gap: 2 },
   noteLabel: { fontSize: 11, fontFamily: font.bold, color: colors.textSecondary },

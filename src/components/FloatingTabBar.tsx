@@ -49,7 +49,7 @@ export default function FloatingTabBar({
               accessibilityRole="button"
               accessibilityState={focused ? { selected: true } : {}}
               accessibilityLabel={options.tabBarAccessibilityLabel ?? label}
-              style={({ pressed }) => [styles.tab, pressed && styles.tabPressed]}
+              style={({ pressed }) => [styles.tab, focused && styles.tabActive, pressed && styles.tabPressed]}
             >
               {options.tabBarIcon?.({
                 focused,
@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 6,
     borderRadius: radius.pill,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.secondary,
     ...shadow.floating,
   },
   tab: {
@@ -90,6 +90,8 @@ const styles = StyleSheet.create({
     gap: 3,
     borderRadius: radius.pill,
   },
+  // Tab aktif = sorotan aksen (bagian 10%), bar navy = bagian 30%.
+  tabActive: { backgroundColor: colors.primary },
   tabPressed: { opacity: 0.75 },
   label: { ...text.tab },
   labelFocused: { fontFamily: font.bold },

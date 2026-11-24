@@ -1,24 +1,51 @@
 import type { TextStyle, ViewStyle } from 'react-native';
 
+// Palet 60-30-10 dengan 3 warna inti (+ tint/shade dan warna semantik).
+//   60% netral    : bg, card, surface, border  -> latar dan permukaan
+//   30% sekunder  : navy                       -> teks, tab bar, kartu hero, ikon
+//   10% primer    : biru aksen                 -> tombol utama, state aktif/terpilih, tautan
+// Semua pasangan teks/latar di bawah lolos kontras WCAG AA (>= 4.5:1).
+const palette = {
+  navy900: '#14234A',
+  navy300: '#A9B6D6',
+  navy100: '#E3E8F3',
+  blue600: '#1F5BD8',
+  blue50: '#EAF0FE',
+  gray0: '#FFFFFF',
+  gray50: '#F4F5F7',
+  gray200: '#E5E7EB',
+  gray300: '#C5CAD6',
+  gray500: '#666E7B',
+  gray600: '#5B6472',
+} as const;
+
 export const colors = {
-  primary: '#14234A',
-  bg: '#F4F5F7',
-  card: '#FFFFFF',
-  surface: '#F4F5F7',
-  tint: '#E3E8F3',
-  border: '#E5E7EB',
-  dashed: '#C5CAD6',
-  text: '#14234A',
-  textSecondary: '#6B7280',
-  placeholder: '#9CA3AF',
-  tabInactive: '#8FA0C8',
-  white: '#FFFFFF',
-  success: '#1E8E5A',
+  // 10% - aksen
+  primary: palette.blue600,
+  primaryTint: palette.blue50,
+  // 30% - sekunder
+  secondary: palette.navy900,
+  tint: palette.navy100,
+  tabInactive: palette.navy300,
+  // 60% - netral
+  bg: palette.gray50,
+  card: palette.gray0,
+  surface: palette.gray50,
+  border: palette.gray200,
+  dashed: palette.gray300,
+  white: palette.gray0,
+  // Teks
+  text: palette.navy900,
+  textSecondary: palette.gray600,
+  placeholder: palette.gray500,
+  // Semantik
+  success: '#17744A',
   successTint: '#E6F4EC',
-  warning: '#B7791F',
+  warning: '#8A5A12',
   warningTint: '#FBF1DC',
-  danger: '#C53030',
+  danger: '#B42323',
   dangerTint: '#FBE9E9',
+  dangerBorder: '#F5C7C7',
 } as const;
 
 export const radius = {
@@ -64,12 +91,14 @@ export const status = {
   success: { bg: colors.successTint, text: colors.success },
   warning: { bg: colors.warningTint, text: colors.warning },
   danger: { bg: colors.dangerTint, text: colors.danger },
-  neutral: { bg: colors.tint, text: colors.textSecondary },
+  neutral: { bg: colors.surface, text: colors.textSecondary },
+  info: { bg: colors.tint, text: colors.secondary },
+  active: { bg: colors.primaryTint, text: colors.primary },
 } as const;
 
 export const shadow: Record<'floating', ViewStyle> = {
   floating: {
-    shadowColor: colors.primary,
+    shadowColor: colors.secondary,
     shadowOpacity: 0.18,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },

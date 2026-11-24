@@ -30,7 +30,7 @@ export default function LogoutButton() {
         accessibilityRole="button"
         accessibilityLabel="Keluar dari akun"
       >
-        <Ionicons name="log-out-outline" size={18} color={colors.primary} />
+        <Ionicons name="log-out-outline" size={18} color={colors.secondary} />
       </Pressable>
       <ConfirmModal
         visible={confirmVisible}

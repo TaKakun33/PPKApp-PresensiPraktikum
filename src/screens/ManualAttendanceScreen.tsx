@@ -457,7 +457,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.tint,
   },
-  initial: { fontSize: 14, fontFamily: font.extraBold, color: colors.primary },
+  initial: { fontSize: 14, fontFamily: font.extraBold, color: colors.secondary },
   info: { flex: 1, gap: 4 },
   name: { fontSize: 14, lineHeight: 20, fontFamily: font.bold, color: colors.text },
   statusBox: { alignItems: 'flex-end', gap: 4 },

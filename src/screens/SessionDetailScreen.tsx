@@ -33,7 +33,7 @@ type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 // Warna kartu kehadiran, diambil dari warna bersama agar senada dengan StatusBadge.
 const TONE = {
   success: { color: colors.success, bg: colors.successTint },
-  info: { color: colors.primary, bg: colors.tint },
+  info: { color: colors.secondary, bg: colors.tint },
   neutral: { color: colors.textSecondary, bg: colors.surface },
   danger: { color: colors.danger, bg: colors.dangerTint },
 };
@@ -131,7 +131,7 @@ function InfoRow({ icon, label, value }: { icon: IoniconsName; label: string; va
   return (
     <View style={styles.row}>
       <View style={styles.rowIcon}>
-        <Ionicons name={icon} size={18} color={colors.primary} />
+        <Ionicons name={icon} size={18} color={colors.secondary} />
       </View>
       <View style={styles.rowText}>
         <Text style={styles.rowLabel}>{label}</Text>
@@ -329,7 +329,7 @@ export default function SessionDetailScreen() {
                 onPress={() => router.push({ pathname: '/session-form', params: { id: session.id } })}
                 accessibilityRole="button"
               >
-                <Ionicons name="create-outline" size={16} color={colors.primary} />
+                <Ionicons name="create-outline" size={16} color={colors.secondary} />
                 <Text style={styles.manageText}>Ubah Jadwal</Text>
               </Pressable>
               <Pressable
@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
   content: { padding: 20, paddingTop: 8, paddingBottom: 32, gap: 16 },
   hero: {
     overflow: 'hidden',
-    backgroundColor: colors.primary,
+    backgroundColor: colors.secondary,
     borderRadius: radius.card,
     padding: 20,
     gap: 8,

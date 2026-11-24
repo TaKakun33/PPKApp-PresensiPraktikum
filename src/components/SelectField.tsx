@@ -58,7 +58,7 @@ export default function SelectField<T extends string | number>({
             </Text>
           ) : null}
         </View>
-        <Ionicons name="chevron-down" size={16} color={colors.primary} />
+        <Ionicons name="chevron-down" size={16} color={colors.secondary} />
       </Pressable>
 
       <Modal transparent animationType="fade" visible={open} onRequestClose={() => setOpen(false)}>

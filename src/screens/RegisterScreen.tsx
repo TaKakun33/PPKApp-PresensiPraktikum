@@ -19,7 +19,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Role } from '../lib/constants';
-import { COLORS } from '../constants/colors';
+import { colors } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { useScrollKeFieldFokus } from '../hooks/useScrollKeFieldFokus';
 import {
@@ -30,9 +30,6 @@ import {
   type RegisterField,
 } from '../services/authService';
 
-const NAVY = '#0B2447';
-const INPUT_BG = '#F5F6F8';
-const MUTED_TEXT = '#8A8F98';
 
 export default function RegisterScreen() {
   const { register, state } = useAuth();
@@ -146,11 +143,11 @@ export default function RegisterScreen() {
               <View style={styles.fieldGroup} onLayout={saatLayoutField('nama')}>
                 <Text style={styles.label}>Nama lengkap</Text>
                 <View style={[styles.inputBox, fieldErrors.nama && styles.inputBoxError]}>
-                  <Ionicons name="person-outline" size={18} color={MUTED_TEXT} />
+                  <Ionicons name="person-outline" size={18} color={colors.placeholder} />
                   <TextInput
                     style={styles.input}
                     placeholder="Nama sesuai identitas"
-                    placeholderTextColor={MUTED_TEXT}
+                    placeholderTextColor={colors.placeholder}
                     value={nama}
                     onFocus={() => fokusKe('nama')}
                     onChangeText={(t) => {
@@ -170,12 +167,12 @@ export default function RegisterScreen() {
                 <View style={styles.fieldGroup} onLayout={saatLayoutField('nim')}>
                   <Text style={styles.label}>NIM</Text>
                   <View style={[styles.inputBox, fieldErrors.nim && styles.inputBoxError]}>
-                    <Ionicons name="id-card-outline" size={18} color={MUTED_TEXT} />
+                    <Ionicons name="id-card-outline" size={18} color={colors.placeholder} />
                     <TextInput
                       ref={nimRef}
                       style={styles.input}
                       placeholder="Nomor induk mahasiswa"
-                      placeholderTextColor={MUTED_TEXT}
+                      placeholderTextColor={colors.placeholder}
                       value={nim}
                       onFocus={() => fokusKe('nim')}
                       onChangeText={(t) => {
@@ -195,12 +192,12 @@ export default function RegisterScreen() {
               <View style={styles.fieldGroup} onLayout={saatLayoutField('email')}>
                 <Text style={styles.label}>Email</Text>
                 <View style={[styles.inputBox, fieldErrors.email && styles.inputBoxError]}>
-                  <Ionicons name="mail-outline" size={18} color={MUTED_TEXT} />
+                  <Ionicons name="mail-outline" size={18} color={colors.placeholder} />
                   <TextInput
                     ref={emailRef}
                     style={styles.input}
                     placeholder="email@kampus.ac.id"
-                    placeholderTextColor={MUTED_TEXT}
+                    placeholderTextColor={colors.placeholder}
                     value={email}
                     onFocus={() => fokusKe('email')}
                     onChangeText={(t) => {
@@ -221,12 +218,12 @@ export default function RegisterScreen() {
               <View style={styles.fieldGroup} onLayout={saatLayoutField('password')}>
                 <Text style={styles.label}>Password</Text>
                 <View style={[styles.inputBox, fieldErrors.password && styles.inputBoxError]}>
-                  <Ionicons name="lock-closed-outline" size={18} color={MUTED_TEXT} />
+                  <Ionicons name="lock-closed-outline" size={18} color={colors.placeholder} />
                   <TextInput
                     ref={passwordRef}
                     style={styles.input}
                     placeholder={`Minimal ${PASSWORD_MIN} karakter`}
-                    placeholderTextColor={MUTED_TEXT}
+                    placeholderTextColor={colors.placeholder}
                     value={password}
                     onFocus={() => fokusKe('password')}
                     onChangeText={(t) => {
@@ -245,7 +242,7 @@ export default function RegisterScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={showPass ? 'Sembunyikan password' : 'Tampilkan password'}
                   >
-                    <Ionicons name={showPass ? 'eye-off-outline' : 'eye-outline'} size={19} color={MUTED_TEXT} />
+                    <Ionicons name={showPass ? 'eye-off-outline' : 'eye-outline'} size={19} color={colors.placeholder} />
                   </Pressable>
                 </View>
                 {fieldErrors.password ? <Text style={styles.fieldError}>{fieldErrors.password}</Text> : null}
@@ -255,12 +252,12 @@ export default function RegisterScreen() {
               <View style={styles.fieldGroup} onLayout={saatLayoutField('confirmPassword')}>
                 <Text style={styles.label}>Ulangi password</Text>
                 <View style={[styles.inputBox, fieldErrors.confirmPassword && styles.inputBoxError]}>
-                  <Ionicons name="lock-closed-outline" size={18} color={MUTED_TEXT} />
+                  <Ionicons name="lock-closed-outline" size={18} color={colors.placeholder} />
                   <TextInput
                     ref={confirmRef}
                     style={styles.input}
                     placeholder="Ketik ulang password"
-                    placeholderTextColor={MUTED_TEXT}
+                    placeholderTextColor={colors.placeholder}
                     value={confirmPassword}
                     onFocus={() => fokusKe('confirmPassword')}
                     onChangeText={(t) => {
@@ -279,7 +276,7 @@ export default function RegisterScreen() {
 
               {formError ? (
                 <View style={styles.errorBox}>
-                  <Ionicons name="alert-circle" size={15} color={COLORS.danger} />
+                  <Ionicons name="alert-circle" size={15} color={colors.danger} />
                   <Text style={styles.errorText}>{formError}</Text>
                 </View>
               ) : null}
@@ -291,7 +288,7 @@ export default function RegisterScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={submitting ? 'Mendaftarkan' : submitLabel}
               >
-                {submitting ? <ActivityIndicator size="small" color={COLORS.white} /> : null}
+                {submitting ? <ActivityIndicator size="small" color={colors.white} /> : null}
                 <Text style={styles.buttonText}>{submitting ? 'Mendaftarkan...' : submitLabel}</Text>
               </Pressable>
 
@@ -319,84 +316,84 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.white },
+  safe: { flex: 1, backgroundColor: colors.white },
   flex: { flex: 1 },
   scrollContent: {
     flexGrow: 1,
-    backgroundColor: COLORS.white,
+    backgroundColor: colors.white,
     paddingHorizontal: 24,
     paddingTop: 18,
   },
-  photoFrame: { width: '100%', height: 150, borderRadius: 22, backgroundColor: '#F1F2F4' },
+  photoFrame: { width: '100%', height: 150, borderRadius: 22, backgroundColor: colors.tint },
   brand: { marginTop: 22, alignItems: 'center', gap: 6 },
   heroTitle: {
     fontSize: 27,
     lineHeight: 33,
     fontFamily: 'PlusJakartaSans_800ExtraBold',
-    color: NAVY,
+    color: colors.text,
     letterSpacing: -0.6,
   },
-  heroSubtitle: { fontSize: 13, lineHeight: 19, fontFamily: 'PlusJakartaSans_500Medium', color: MUTED_TEXT },
+  heroSubtitle: { fontSize: 13, lineHeight: 19, fontFamily: 'PlusJakartaSans_500Medium', color: colors.textSecondary },
   roleSwitcher: {
     marginTop: 24,
     flexDirection: 'row',
-    backgroundColor: INPUT_BG,
+    backgroundColor: colors.surface,
     borderRadius: 14,
     padding: 4,
     gap: 4,
   },
   roleOption: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 11, borderRadius: 11 },
   roleOptionActive: {
-    backgroundColor: COLORS.white,
-    shadowColor: '#000000',
+    backgroundColor: colors.white,
+    shadowColor: colors.secondary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 6,
     elevation: 2,
   },
-  roleText: { fontSize: 14, fontFamily: 'PlusJakartaSans_600SemiBold', color: MUTED_TEXT },
-  roleTextActive: { color: NAVY, fontFamily: 'PlusJakartaSans_700Bold' },
+  roleText: { fontSize: 14, fontFamily: 'PlusJakartaSans_600SemiBold', color: colors.textSecondary },
+  roleTextActive: { color: colors.secondary, fontFamily: 'PlusJakartaSans_700Bold' },
   form: { marginTop: 18, gap: 14 },
   fieldGroup: { gap: 7 },
-  label: { fontSize: 13, fontFamily: 'PlusJakartaSans_600SemiBold', color: NAVY },
+  label: { fontSize: 13, fontFamily: 'PlusJakartaSans_600SemiBold', color: colors.text },
   inputBox: {
     minHeight: 54,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: INPUT_BG,
+    backgroundColor: colors.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#F0F1F3',
+    borderColor: colors.border,
     paddingLeft: 16,
     paddingRight: 12,
   },
-  inputBoxError: { borderColor: COLORS.danger },
+  inputBoxError: { borderColor: colors.danger },
   input: {
     flex: 1,
     fontSize: 15,
     fontFamily: 'PlusJakartaSans_400Regular',
-    color: NAVY,
+    color: colors.text,
     paddingVertical: 13,
     paddingHorizontal: 0,
   },
   eyeButton: { minHeight: 32, minWidth: 34, alignItems: 'flex-end', justifyContent: 'center', paddingLeft: 10 },
-  fieldError: { fontSize: 12, fontFamily: 'PlusJakartaSans_500Medium', color: COLORS.danger },
+  fieldError: { fontSize: 12, fontFamily: 'PlusJakartaSans_500Medium', color: colors.danger },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: COLORS.dangerLight,
+    backgroundColor: colors.dangerTint,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.dangerBorder,
+    borderColor: colors.dangerBorder,
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
-  errorText: { flex: 1, fontSize: 13, fontFamily: 'PlusJakartaSans_500Medium', color: COLORS.danger },
+  errorText: { flex: 1, fontSize: 13, fontFamily: 'PlusJakartaSans_500Medium', color: colors.danger },
   button: {
     marginTop: 8,
-    backgroundColor: NAVY,
+    backgroundColor: colors.primary,
     paddingVertical: 16,
     paddingHorizontal: 22,
     borderRadius: 14,
@@ -411,7 +408,7 @@ const styles = StyleSheet.create({
     fontFamily: 'PlusJakartaSans_700Bold',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
-    color: COLORS.white,
+    color: colors.white,
   },
   noteText: {
     alignSelf: 'center',
@@ -420,11 +417,11 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     textAlign: 'center',
     fontFamily: 'PlusJakartaSans_400Regular',
-    color: MUTED_TEXT,
+    color: colors.textSecondary,
   },
   loginRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6 },
-  infoText: { fontSize: 13, fontFamily: 'PlusJakartaSans_400Regular', color: MUTED_TEXT },
-  link: { fontSize: 13, fontFamily: 'PlusJakartaSans_700Bold', color: NAVY },
+  infoText: { fontSize: 13, fontFamily: 'PlusJakartaSans_400Regular', color: colors.textSecondary },
+  link: { fontSize: 13, fontFamily: 'PlusJakartaSans_700Bold', color: colors.primary },
   footer: { marginTop: 'auto', paddingTop: 28, alignItems: 'center' },
-  copyright: { fontSize: 11, fontFamily: 'PlusJakartaSans_400Regular', color: MUTED_TEXT },
+  copyright: { fontSize: 11, fontFamily: 'PlusJakartaSans_400Regular', color: colors.textSecondary },
 });

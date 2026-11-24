@@ -13,7 +13,7 @@ export default function ProfileButton() {
       accessibilityRole="button"
       accessibilityLabel="Buka profil"
     >
-      <Ionicons name="person-outline" size={18} color={colors.primary} />
+      <Ionicons name="person-outline" size={18} color={colors.secondary} />
     </Pressable>
   );
 }

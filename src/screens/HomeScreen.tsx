@@ -232,7 +232,7 @@ export default function HomeScreen() {
         <View style={styles.summaryMetrics}>
           <View style={styles.metricRow}>
             <View style={styles.metricIcon}>
-              <Ionicons name="calendar-outline" size={17} color={colors.primary} />
+              <Ionicons name="calendar-outline" size={17} color={colors.secondary} />
             </View>
             <View style={styles.metricText}>
               <Text style={styles.metricValue}>{upcoming.length}</Text>
@@ -241,7 +241,7 @@ export default function HomeScreen() {
           </View>
           <View style={styles.metricRow}>
             <View style={styles.metricIcon}>
-              <Ionicons name="document-text-outline" size={17} color={colors.primary} />
+              <Ionicons name="document-text-outline" size={17} color={colors.secondary} />
             </View>
             <View style={styles.metricText}>
               <Text style={styles.metricValue}>{izinDiproses}</Text>
@@ -266,7 +266,7 @@ export default function HomeScreen() {
       {jadwalTerdekat.length === 0 ? (
         <View style={styles.emptyCard}>
           <View style={styles.emptyIcon}>
-            <Ionicons name="calendar-outline" size={26} color={colors.primary} />
+            <Ionicons name="calendar-outline" size={26} color={colors.secondary} />
           </View>
           <Text style={styles.emptyTitle}>Belum ada jadwal terdekat</Text>
           <Text style={styles.emptyText}>
@@ -309,7 +309,7 @@ export default function HomeScreen() {
                   </Text>
                 </View>
                 <View style={styles.chevron}>
-                  <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+                  <Ionicons name="chevron-forward" size={16} color={colors.secondary} />
                 </View>
               </Pressable>
             );
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.tint,
   },
-  avatarText: { fontSize: 16, fontFamily: font.extraBold, color: colors.primary },
+  avatarText: { fontSize: 16, fontFamily: font.extraBold, color: colors.secondary },
   profileText: { flex: 1, gap: 2 },
   greeting: { ...text.caption, fontFamily: font.medium },
   name: {
@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
   },
   hero: {
     overflow: 'hidden',
-    backgroundColor: colors.primary,
+    backgroundColor: colors.secondary,
     borderRadius: 26,
     padding: 22,
     paddingTop: 24,
@@ -428,7 +428,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.card,
   },
-  attendanceValue: { fontSize: 19, fontFamily: font.extraBold, color: colors.primary },
+  attendanceValue: { fontSize: 19, fontFamily: font.extraBold, color: colors.secondary },
   attendanceLabel: { fontSize: 10, fontFamily: font.medium, color: colors.textSecondary },
   summaryDivider: { width: 1, height: 68, backgroundColor: colors.border },
   summaryMetrics: { flex: 1, gap: 12 },
@@ -485,7 +485,7 @@ const styles = StyleSheet.create({
   scheduleBody: { flex: 1, gap: 2 },
   scheduleTitle: { fontSize: 14, fontFamily: font.bold, color: colors.text },
   scheduleMeta: { fontSize: 11, fontFamily: font.medium, color: colors.textSecondary },
-  scheduleAssistant: { fontSize: 11, fontFamily: font.semibold, color: colors.primary },
+  scheduleAssistant: { fontSize: 11, fontFamily: font.semibold, color: colors.secondary },
   chevron: {
     width: 28,
     height: 28,

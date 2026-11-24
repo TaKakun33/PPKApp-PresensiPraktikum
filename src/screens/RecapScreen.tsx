@@ -299,7 +299,7 @@ export default function RecapScreen() {
                         : 'Pilih sesi'}
                     </Text>
                   </View>
-                  <Ionicons name="chevron-down" size={18} color={colors.primary} />
+                  <Ionicons name="chevron-down" size={18} color={colors.secondary} />
                 </Pressable>
 
                 <Modal
@@ -570,7 +570,7 @@ const styles = StyleSheet.create({
   statusHadir: { color: colors.success },
   statusIzin: { color: colors.warning },
   statusTidak: { color: colors.danger },
-  countValue: { fontSize: 22, fontFamily: font.extraBold, color: colors.primary },
+  countValue: { fontSize: 22, fontFamily: font.extraBold, color: colors.secondary },
   countLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.textSecondary },
   attendanceRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   attendanceCard: {
@@ -589,7 +589,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.tint,
   },
-  studentInitial: { fontSize: 14, fontFamily: font.extraBold, color: colors.primary },
+  studentInitial: { fontSize: 14, fontFamily: font.extraBold, color: colors.secondary },
   studentInfo: { flex: 1, gap: 4 },
   studentName: { fontSize: 14, lineHeight: 20, fontFamily: font.bold, color: colors.text },
   studentNim: { ...text.caption },

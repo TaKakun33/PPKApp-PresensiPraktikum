@@ -14,6 +14,13 @@ export type StatusSesi = (typeof STATUS_SESI)[keyof typeof STATUS_SESI];
 export type StatusIzin = (typeof STATUS_IZIN)[keyof typeof STATUS_IZIN];
 export type Role = "asisten" | "praktikan";
 
+// Status disimpan sebagai kode; tampilkan ke pengguna lewat STATUS_LABEL.
+export const STATUS_LABEL: Record<StatusSesi, string> = {
+  belum_dibuka: "Belum Dibuka",
+  dibuka: "Dibuka",
+  ditutup: "Ditutup",
+};
+
 // Kelas praktikum yang tersedia (evaluasi Sprint 2: Kelas A–E).
 export const KODE_KELAS = ["A", "B", "C", "D", "E"] as const;
 export type KodeKelas = (typeof KODE_KELAS)[number];

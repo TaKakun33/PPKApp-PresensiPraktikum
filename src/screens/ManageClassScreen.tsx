@@ -296,7 +296,7 @@ function PesertaPanel({ cls }: { cls: ClassDoc }) {
               accessibilityRole="button"
               accessibilityLabel={`Keluarkan ${p.nama}`}
             >
-              <Ionicons name="person-remove-outline" size={18} color={colors.primary} />
+              <Ionicons name="person-remove-outline" size={18} color={colors.secondary} />
             </Pressable>
           </View>
         ))
@@ -642,7 +642,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: colors.tint,
   },
-  saranText: { fontSize: 12, fontFamily: font.semibold, color: colors.primary },
+  saranText: { fontSize: 12, fontFamily: font.semibold, color: colors.secondary },
   info: { fontSize: 12, lineHeight: 18, fontFamily: font.medium },
   emptyText: { ...text.caption, paddingVertical: 6 },
   pesertaRow: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 8 },
@@ -654,7 +654,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.tint,
   },
-  pesertaInitial: { fontSize: 13, fontFamily: font.extraBold, color: colors.primary },
+  pesertaInitial: { fontSize: 13, fontFamily: font.extraBold, color: colors.secondary },
   pesertaNama: { fontSize: 14, fontFamily: font.semibold, color: colors.text },
   pesertaNim: { ...text.caption },
   label: { ...text.bodyStrong, color: colors.textSecondary, marginTop: 8 },

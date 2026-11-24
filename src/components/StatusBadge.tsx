@@ -8,9 +8,11 @@ import { colors, font, radius, status as statusTokens } from '../constants/theme
 type BadgeStatus = StatusSesi | StatusIzin | 'hadir';
 
 const BADGE: Record<BadgeStatus, { label: string; bg: string; text: string }> = {
-  belum_dibuka: { label: 'Belum Dibuka', bg: colors.surface, text: colors.textSecondary },
-  dibuka: { label: 'Dibuka', bg: colors.tint, text: colors.primary },
-  ditutup: { label: 'Ditutup', bg: colors.surface, text: colors.textSecondary },
+  // Tiga status sesi dibedakan warna DAN bentuk: belum dibuka bergaris tepi,
+  // dibuka memakai aksen, ditutup abu tanpa titik.
+  belum_dibuka: { label: 'Belum Dibuka', ...statusTokens.info },
+  dibuka: { label: 'Dibuka', ...statusTokens.active },
+  ditutup: { label: 'Ditutup', ...statusTokens.neutral },
   hadir: { label: 'Hadir', ...statusTokens.success },
   menunggu: { label: 'Menunggu', ...statusTokens.warning },
   diterima: { label: 'Diterima', ...statusTokens.success },
@@ -25,10 +27,15 @@ export default function StatusBadge({ status }: Props) {
   const badge = BADGE[status] ?? BADGE.belum_dibuka;
   return (
     <View
-      style={[styles.badge, { backgroundColor: badge.bg }]}
+      style={[
+        styles.badge,
+        { backgroundColor: badge.bg },
+        status === 'belum_dibuka' && styles.outlined,
+        status === 'ditutup' && styles.closed,
+      ]}
       accessibilityLabel={`Status ${badge.label}`}
     >
-      <View style={[styles.dot, { backgroundColor: badge.text }]} />
+      {status === 'ditutup' ? null : <View style={[styles.dot, { backgroundColor: badge.text }]} />}
       <Text style={[styles.text, { color: badge.text }]}>{badge.label}</Text>
     </View>
   );
@@ -44,6 +51,8 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: radius.pill,
   },
+  outlined: { borderWidth: 1, borderColor: colors.dashed },
+  closed: { borderWidth: 1, borderColor: colors.border },
   dot: { width: 6, height: 6, borderRadius: 3 },
   text: { fontSize: 11, fontFamily: font.semibold },
 });
