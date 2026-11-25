@@ -2,14 +2,14 @@
 // Panel info lab yang muncul saat marker/chip lab dipilih: data lab + praktikum yang sedang
 // berlangsung dan berikutnya (dari sesi Firestore, real-time).
 import Ionicons from '@expo/vector-icons/Ionicons';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { colors, font, radius, shadow, text } from '../../constants/theme';
 import type { Session } from '../../lib/types';
 import type { LabPeta } from '../../services/labActivityService';
 import { labelTanggal, labelWaktu } from '../../services/sessionService';
-import type { AktivitasLab } from '../../utils/aktivitasLab';
+import { BERIKUTNYA_RINGKAS, type AktivitasLab } from '../../utils/aktivitasLab';
 import StatusBadge from '../StatusBadge';
 
 type Props = {
@@ -58,8 +58,14 @@ function Bagian({ judul, children }: { judul: string; children: ReactNode }) {
 }
 
 export default function LabInfoSheet({ lab, aktivitas, galatAktivitas, dataMungkinLama = false, namaKelas, onTutup, onCobaLagi }: Props) {
+  // Awal: hanya 1 jadwal "Berikutnya". Ketuk "Lihat detail" untuk melihat semuanya (daftar bisa di-scroll).
+  // Layar peta memberi `key={lab.kode}` sehingga pindah lab otomatis kembali ke ringkas.
+  const [semua, setSemua] = useState(false);
+  const sisa = aktivitas ? Math.max(0, aktivitas.berikutnya.length - BERIKUTNYA_RINGKAS) : 0;
+  const tampil = aktivitas ? (semua ? aktivitas.berikutnya : aktivitas.berikutnya.slice(0, BERIKUTNYA_RINGKAS)) : [];
+
   return (
-    <View style={styles.sheet} accessibilityLabel={`Info ${lab.nama}`}>
+    <View style={[styles.sheet, semua && styles.sheetLuas]} accessibilityLabel={`Info ${lab.nama}`}>
       <View style={styles.kepala}>
         <View style={styles.kepalaTeks}>
           <Text style={styles.judul} numberOfLines={1}>
@@ -107,8 +113,24 @@ export default function LabInfoSheet({ lab, aktivitas, galatAktivitas, dataMungk
               )}
             </Bagian>
             <Bagian judul="Berikutnya">
-              {aktivitas.berikutnya.length > 0 ? (
-                aktivitas.berikutnya.map((s) => <BarisSesi key={s.id} sesi={s} namaKelas={namaKelas} />)
+              {tampil.length > 0 ? (
+                <>
+                  {tampil.map((s) => (
+                    <BarisSesi key={s.id} sesi={s} namaKelas={namaKelas} />
+                  ))}
+                  {sisa > 0 ? (
+                    <Pressable
+                      onPress={() => setSemua((v) => !v)}
+                      accessibilityRole="button"
+                      accessibilityState={{ expanded: semua }}
+                      accessibilityLabel={semua ? 'Sembunyikan jadwal lainnya' : `Lihat detail, ${sisa} jadwal lainnya`}
+                      style={({ pressed }) => [styles.lihat, pressed && styles.ditekan]}
+                    >
+                      <Text style={styles.lihatTeks}>{semua ? 'Sembunyikan' : `Lihat detail (+${sisa} jadwal)`}</Text>
+                      <Ionicons name={semua ? 'chevron-up' : 'chevron-down'} size={14} color={colors.primary} />
+                    </Pressable>
+                  ) : null}
+                </>
               ) : (
                 <Text style={styles.kosong}>Belum ada jadwal praktikum berikutnya dalam 7 hari ke depan.</Text>
               )}
@@ -130,6 +152,7 @@ const styles = StyleSheet.create({
     padding: 16,
     ...shadow.floating,
   },
+  sheetLuas: { maxHeight: 440 },
   kepala: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   kepalaTeks: { flex: 1 },
   judul: { ...text.sectionTitle },
@@ -170,5 +193,7 @@ const styles = StyleSheet.create({
   galat: { gap: 6 },
   galatTeks: { ...text.body, color: colors.danger },
   galatAksi: { fontSize: 12, fontFamily: font.bold, color: colors.primary },
+  lihat: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8 },
+  lihatTeks: { fontSize: 12, fontFamily: font.bold, color: colors.primary },
   ditekan: { opacity: 0.7 },
 });
