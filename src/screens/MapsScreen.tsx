@@ -10,10 +10,12 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import MapView, { Circle, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Circle, PROVIDER_GOOGLE } from 'react-native-maps';
 
 import KondisiBanner from '../components/peta/KondisiBanner';
 import LabInfoSheet from '../components/peta/LabInfoSheet';
+import { PenandaLab, PenandaPengguna } from '../components/peta/PenandaPeta';
+import PosisiInfoSheet, { type JarakKeLab } from '../components/peta/PosisiInfoSheet';
 import ScreenHeader from '../components/ScreenHeader';
 import { colors, font, layout, radius, shadow } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
@@ -28,6 +30,7 @@ import {
 import {
   JENDELA_HARI,
   hitungAktivitasLab,
+  jarakMeter,
   tambahHari,
   tanggalWibDari,
   wilayahDariKoordinat,
@@ -40,11 +43,6 @@ const BATAS_MUAT_MS = 12000;
 /** Seberapa sering "sekarang" dihitung ulang agar status berlangsung/berikutnya ikut berubah sendiri. */
 const DETAK_MS = 30000;
 
-// Warna marker SELALU diberikan eksplisit. Jangan kirim `pinColor={undefined}`: di arsitektur baru (Fabric)
-// react-native-maps menerjemahkannya jadi null dan aplikasi crash (NullPointerException di setPinColor).
-const WARNA_MARKER_LAB = '#D93025';
-const WARNA_MARKER_TERPILIH = colors.primary;
-const WARNA_MARKER_PENGGUNA = '#1A73E8';
 // Warna area radius per lab (urut sesuai daftar lab). Lab Informatika berdekatan, jadi warna berbeda
 // membantu membedakan lingkaran yang saling tumpang tindih. Chip lab memakai warna yang sama.
 const PALET_LAB = ['#1A73E8', '#188038', '#E37400', '#9334E6', '#C5221F', '#00838F'] as const;
@@ -167,6 +165,8 @@ export default function MapsScreen() {
 
   // ─── Pilihan & tampilan peta ────────────────────────────────────────────────
   const [kodeTerpilih, setKodeTerpilih] = useState<string | null>(null);
+  // Panel jarak ke setiap lab (muncul saat ikon posisi pengguna diketuk). Tidak bersamaan dengan info lab.
+  const [infoPengguna, setInfoPengguna] = useState(false);
   const labBerkoordinat = useMemo(() => (labs ?? []).filter((l) => l.koordinat), [labs]);
   const warnaLab = useMemo(
     () => Object.fromEntries((labs ?? []).map((l, i) => [l.kode, PALET_LAB[i % PALET_LAB.length]])) as Record<string, string>,
@@ -197,16 +197,38 @@ export default function MapsScreen() {
   }, [kunciLab, petaSiap]);
 
   const pilihLab = useCallback((lab: LabPeta) => {
+    setInfoPengguna(false);
     setKodeTerpilih(lab.kode);
     if (lab.koordinat) peta.current?.animateToRegion(wilayahSekitar(lab.koordinat), 350);
   }, []);
 
   const tampilkanSemua = () => {
     setKodeTerpilih(null);
+    setInfoPengguna(false);
     if (wilayahSemuaLab) peta.current?.animateToRegion(wilayahSemuaLab, 350);
   };
 
   const posisi = lokasi.jenis === 'siap' ? lokasi.posisi : null;
+
+  // Jarak dari posisi pengguna ke tiap lab berkoordinat, terdekat lebih dulu (ikut berubah saat bergerak).
+  const jarakKeLab = useMemo<JarakKeLab[]>(() => {
+    if (!posisi) return [];
+    return labBerkoordinat
+      .flatMap((lab) => {
+        if (!lab.koordinat) return [];
+        const jarak = jarakMeter(posisi, lab.koordinat);
+        return [
+          {
+            kode: lab.kode,
+            nama: lab.nama,
+            warna: warnaLab[lab.kode],
+            jarak,
+            dalamRadius: lab.radiusMeter ? jarak <= lab.radiusMeter : null,
+          },
+        ];
+      })
+      .sort((a, b) => a.jarak - b.jarak);
+  }, [posisi, labBerkoordinat, warnaLab]);
   const pusatkanKeSaya = () => {
     if (posisi) peta.current?.animateToRegion(wilayahSekitar(posisi), 350);
   };
@@ -300,26 +322,24 @@ export default function MapsScreen() {
           provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
           initialRegion={wilayahSemuaLab ?? WILAYAH_AWAL}
           toolbarEnabled={false}
+          userInterfaceStyle="light"
           rotateEnabled={false}
           onMapReady={() => setPetaSiap(true)}
-          onPress={() => setKodeTerpilih(null)}
+          onPress={() => {
+            setKodeTerpilih(null);
+            setInfoPengguna(false);
+          }}
           accessibilityLabel="Peta lab Informatika"
         >
-          {labBerkoordinat.map((lab) =>
-            lab.koordinat ? (
-              <Marker
-                key={lab.kode}
-                identifier={lab.kode}
-                coordinate={{ latitude: lab.koordinat.lat, longitude: lab.koordinat.lng }}
-                title={lab.nama}
-                pinColor={lab.kode === kodeTerpilih ? WARNA_MARKER_TERPILIH : WARNA_MARKER_LAB}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  pilihLab(lab);
-                }}
-              />
-            ) : null,
-          )}
+          {labBerkoordinat.map((lab) => (
+            <PenandaLab
+              key={lab.kode}
+              lab={lab}
+              warna={warnaLab[lab.kode]}
+              terpilih={lab.kode === kodeTerpilih}
+              onPress={() => pilihLab(lab)}
+            />
+          ))}
           {labUntukLingkaran.map((lab) =>
             lab.koordinat && lab.radiusMeter ? (
               <Circle
@@ -333,11 +353,12 @@ export default function MapsScreen() {
             ) : null,
           )}
           {posisi ? (
-            <Marker
-              coordinate={{ latitude: posisi.lat, longitude: posisi.lng }}
-              title="Posisimu"
-              pinColor={WARNA_MARKER_PENGGUNA}
-              zIndex={10}
+            <PenandaPengguna
+              posisi={posisi}
+              onPress={() => {
+                setKodeTerpilih(null);
+                setInfoPengguna(true);
+              }}
             />
           ) : null}
         </MapView>
@@ -395,8 +416,16 @@ export default function MapsScreen() {
               </Pressable>
             ) : null}
           </View>
+          {infoPengguna && posisi ? (
+            <PosisiInfoSheet
+              akurasiMeter={posisi.akurasiMeter}
+              daftar={jarakKeLab}
+              onTutup={() => setInfoPengguna(false)}
+            />
+          ) : null}
           {terpilih ? (
             <LabInfoSheet
+              key={terpilih.kode}
               lab={terpilih}
               aktivitas={aktivitas}
               galatAktivitas={galatSesi}
