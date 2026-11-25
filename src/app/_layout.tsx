@@ -13,6 +13,8 @@ import { useEffect } from 'react';
 
 import { colors, font } from '../constants/theme';
 import { AuthProvider } from '../context/AuthContext';
+// Zhafran (feat/push-notif, SRS-34, 36): provider kotak masuk & registrasi notifikasi.
+import { NotificationProvider } from '../context/NotificationContext';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -35,23 +37,26 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          headerStyle: { backgroundColor: colors.card },
-          headerTintColor: colors.primary,
-          headerTitleStyle: { color: colors.text, fontFamily: font.bold, fontSize: 17 },
-          headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.bg },
-        }}
-      >
-        <Stack.Screen name="index" />
-        <Stack.Screen name="login" />
-        <Stack.Screen name="praktikan" />
-        <Stack.Screen name="asisten" />
-        <Stack.Screen name="profile" options={{ headerShown: true, title: 'Profil' }} />
-        <Stack.Screen name="session/[id]" options={{ headerShown: true, title: 'Detail Sesi' }} />
-      </Stack>
+      <NotificationProvider>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            headerStyle: { backgroundColor: colors.card },
+            headerTintColor: colors.primary,
+            headerTitleStyle: { color: colors.text, fontFamily: font.bold, fontSize: 17 },
+            headerShadowVisible: false,
+            contentStyle: { backgroundColor: colors.bg },
+          }}
+        >
+          <Stack.Screen name="index" />
+          <Stack.Screen name="login" />
+          <Stack.Screen name="praktikan" />
+          <Stack.Screen name="asisten" />
+          <Stack.Screen name="profile" options={{ headerShown: true, title: 'Profil' }} />
+          <Stack.Screen name="notifications" options={{ headerShown: true, title: 'Notifikasi' }} />
+          <Stack.Screen name="session/[id]" options={{ headerShown: true, title: 'Detail Sesi' }} />
+        </Stack>
+      </NotificationProvider>
     </AuthProvider>
   );
 }
