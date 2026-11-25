@@ -1,54 +1,64 @@
 // FILE MILIK ZHAFRAN (feat/push-notif) — SRS-34, 36
-// Hook yang dipasang di _layout.tsx:
+// Hook yang dipasang di NotificationProvider (_layout.tsx):
 //   - Mendaftarkan push token saat user login (SRS-34).
+//   - Meneruskan notifikasi yang masuk ke kotak masuk in-app.
 //   - Navigasi ke layar yang sesuai saat notifikasi diketuk (SRS-36).
 
 import { useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
-import { router } from 'expo-router';
 
 import type { Profile } from '../lib/types';
-import { daftarkanPushToken, type NotifData } from '../services/notificationService';
+import {
+  daftarkanPushToken,
+  navigasiDariNotif,
+  type NotifData,
+} from '../services/notificationService';
 
-// ─── NAVIGASI DARI NOTIFIKASI (SRS-36) ────────────────────────────────────────
+export type IncomingNotifPayload = {
+  id: string;
+  judul: string;
+  isi: string;
+  data: NotifData;
+  dibaca: boolean;
+  penting: boolean;
+  dibuatPada: Date;
+};
 
-/**
- * Navigasi ke layar yang sesuai berdasarkan data notifikasi.
- * Mengikuti pola routing Expo Router yang sudah ada di project.
- * - detail-sesi : app/session/[id].tsx
- * - izin        : app/asisten/izin.tsx atau app/praktikan/izin.tsx
- * - jadwal      : app/asisten/jadwal.tsx atau app/praktikan/jadwal.tsx
- */
-function navigasiDariNotif(data: NotifData, role: Profile['role']): void {
-  if (!data?.layar) return;
-
-  switch (data.layar) {
-    case 'detail-sesi':
-      if (data.id) router.push(`/session/${data.id}` as never);
-      break;
-    case 'izin':
-      router.push(role === 'asisten' ? '/asisten/izin' : '/praktikan/izin');
-      break;
-    case 'jadwal':
-      router.push(role === 'asisten' ? '/asisten/jadwal' : '/praktikan/jadwal');
-      break;
-    default:
-      break;
-  }
+function ekstrakNotif(
+  notification: Notifications.Notification,
+  dibaca: boolean,
+): IncomingNotifPayload {
+  const content = notification.request.content;
+  const data = (content.data ?? {}) as NotifData;
+  return {
+    id: notification.request.identifier || `local-${Date.now()}`,
+    judul: content.title || 'Notifikasi',
+    isi: content.body || '',
+    data,
+    dibaca,
+    penting: Boolean(data.penting),
+    dibuatPada: notification.date ? new Date(notification.date) : new Date(),
+  };
 }
 
-// ─── HOOK UTAMA ────────────────────────────────────────────────────────────────
-
 /**
- * Pasang di _layout.tsx setelah AuthProvider.
  * Efek berjalan ulang setiap kali profile.id atau profile.role berubah (login/logout).
  *
- * @param profile - Profil pengguna yang sedang login, atau null jika belum login.
+ * @param profile      - Profil pengguna yang sedang login, atau null jika belum login.
+ * @param onNotifMasuk - Callback opsional untuk menyimpan notifikasi masuk ke kotak masuk.
  */
-export function useNotifikasi(profile: Profile | null): void {
+export function useNotifikasi(
+  profile: Profile | null,
+  onNotifMasuk?: (payload: IncomingNotifPayload) => void,
+): void {
   // Ref untuk cleanup listener agar tidak memory leak.
   const listenerForegroundRef = useRef<Notifications.EventSubscription | null>(null);
   const listenerResponseRef = useRef<Notifications.EventSubscription | null>(null);
+  const onNotifMasukRef = useRef(onNotifMasuk);
+
+  useEffect(() => {
+    onNotifMasukRef.current = onNotifMasuk;
+  }, [onNotifMasuk]);
 
   useEffect(() => {
     // Tidak ada user yang login: tidak perlu mendaftar atau memasang listener.
@@ -66,16 +76,17 @@ export function useNotifikasi(profile: Profile | null): void {
     // setNotificationHandler di notificationService.ts sudah mengurus tampilannya.
     listenerForegroundRef.current = Notifications.addNotificationReceivedListener(
       (notification: Notifications.Notification) => {
-        // Hanya log untuk debug; tampilan sudah diatur oleh setNotificationHandler.
         console.log('[useNotifikasi] Notifikasi diterima (foreground):', notification.request.identifier);
+        onNotifMasukRef.current?.(ekstrakNotif(notification, false));
       },
     );
 
     // SRS-36: Tangani ketukan notifikasi → navigasi ke layar yang sesuai.
     listenerResponseRef.current = Notifications.addNotificationResponseReceivedListener(
       (response: Notifications.NotificationResponse) => {
-        const data = response.notification.request.content.data as NotifData;
-        navigasiDariNotif(data, profile.role);
+        const payload = ekstrakNotif(response.notification, true);
+        onNotifMasukRef.current?.(payload);
+        navigasiDariNotif(payload.data, profile.role);
       },
     );
 

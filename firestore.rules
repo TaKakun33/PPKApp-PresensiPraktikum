@@ -642,6 +642,37 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // --- users/{uid}/notifications----------------
+    // Kotak masuk riwayat notifikasi per pengguna agar notifikasi yang masuk bisa dilihat & diklik.
+    // Notifikasi biasa otomatis dihapus setelah 3 hari; notifikasi penting dari asisten tetap disimpan.
+    match /users/{uid}/notifications/{notifId} {
+      // Hanya pemilik akun yang bisa membaca riwayat notifikasinya sendiri.
+      allow read: if signedIn() && request.auth.uid == uid;
+
+      // Asisten (saat kirim notif sesi/jadwal/izin) atau pemilik sendiri boleh menambah notifikasi.
+      allow create: if (isAsisten() || (signedIn() && request.auth.uid == uid))
+        && request.resource.data.keys().hasOnly(['judul', 'isi', 'data', 'dibaca', 'penting', 'dibuatPada'])
+        && request.resource.data.keys().hasAll(['judul', 'isi', 'dibaca', 'dibuatPada'])
+        && request.resource.data.judul is string
+        && request.resource.data.isi is string
+        && request.resource.data.dibaca is bool
+        && (!('penting' in request.resource.data) || request.resource.data.penting is bool)
+        && request.resource.data.dibuatPada == request.time;
+
+      // Pemilik akun hanya boleh mengubah status `dibaca` menjadi true.
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['dibaca'])
+        && request.resource.data.dibaca == true;
+
+      // Penghapusan otomatis hanya diizinkan oleh pemilik untuk notifikasi biasa (>= 3 hari).
+      // Notifikasi penting dari asisten (`penting == true`) dilindungi dari penghapusan.
+      allow delete: if signedIn()
+        && request.auth.uid == uid
+        && resource.data.get('penting', false) == false
+        && request.time >= resource.data.dibuatPada + duration.value(3, 'd');
+    }
+
     // --- Default: tolak koleksi lain ----------------------------------------
     match /{document=**} {
       allow read, write: if false;

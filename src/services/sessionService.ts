@@ -387,7 +387,7 @@ export async function updateLeaveStatus(
       [request.userId],
       `Izin ${statusLabel}`,
       `Pengajuan izinmu untuk sesi ${request.praktikum} telah ${status}.`,
-      { layar: "izin", id: leaveId },
+      { layar: "izin", id: leaveId, penting: true },
     );
   } catch (e) {
     console.error("[updateLeaveStatus] Gagal kirim notifikasi:", e);
@@ -542,7 +542,7 @@ export async function updateSession(
         pesertaIds,
         "Jadwal Sesi Diubah 📅",
         `Jadwal sesi ${sesi.praktikum} telah diperbarui. Cek jadwal terbaru kamu.`,
-        { layar: "jadwal", id: sessionId },
+        { layar: "jadwal", id: sessionId, penting: true },
       );
     }
   } catch (e) {

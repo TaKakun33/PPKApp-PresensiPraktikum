@@ -12,20 +12,11 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 
 import { colors, font } from '../constants/theme';
-import { AuthProvider, useAuth } from '../context/AuthContext';
-// Zhafran (feat/push-notif, SRS-34, 36): hook registrasi token & navigasi notifikasi.
-import { useNotifikasi } from '../hooks/useNotifikasi';
+import { AuthProvider } from '../context/AuthContext';
+// Zhafran (feat/push-notif, SRS-34, 36): provider kotak masuk & registrasi notifikasi.
+import { NotificationProvider } from '../context/NotificationContext';
 
 SplashScreen.preventAutoHideAsync();
-
-// Komponen terpisah agar hook dapat mengakses AuthContext yang sudah terpasang.
-// Dipasang di dalam <AuthProvider> sehingga useAuth() selalu tersedia.
-// Zhafran (feat/push-notif, SRS-34, 36)
-function NotifikasiSetup() {
-  const { profile } = useAuth();
-  useNotifikasi(profile);
-  return null;
-}
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -46,24 +37,26 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <NotifikasiSetup />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          headerStyle: { backgroundColor: colors.card },
-          headerTintColor: colors.primary,
-          headerTitleStyle: { color: colors.text, fontFamily: font.bold, fontSize: 17 },
-          headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.bg },
-        }}
-      >
-        <Stack.Screen name="index" />
-        <Stack.Screen name="login" />
-        <Stack.Screen name="praktikan" />
-        <Stack.Screen name="asisten" />
-        <Stack.Screen name="profile" options={{ headerShown: true, title: 'Profil' }} />
-        <Stack.Screen name="session/[id]" options={{ headerShown: true, title: 'Detail Sesi' }} />
-      </Stack>
+      <NotificationProvider>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            headerStyle: { backgroundColor: colors.card },
+            headerTintColor: colors.primary,
+            headerTitleStyle: { color: colors.text, fontFamily: font.bold, fontSize: 17 },
+            headerShadowVisible: false,
+            contentStyle: { backgroundColor: colors.bg },
+          }}
+        >
+          <Stack.Screen name="index" />
+          <Stack.Screen name="login" />
+          <Stack.Screen name="praktikan" />
+          <Stack.Screen name="asisten" />
+          <Stack.Screen name="profile" options={{ headerShown: true, title: 'Profil' }} />
+          <Stack.Screen name="notifications" options={{ headerShown: true, title: 'Notifikasi' }} />
+          <Stack.Screen name="session/[id]" options={{ headerShown: true, title: 'Detail Sesi' }} />
+        </Stack>
+      </NotificationProvider>
     </AuthProvider>
   );
 }
