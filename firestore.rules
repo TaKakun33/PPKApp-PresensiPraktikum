@@ -359,10 +359,11 @@ service cloud.firestore {
     // asistenId = pembuat sesi (tidak berubah). Jadwal wajib memakai lab + slot 2 jam dan memegang
     // satu dokumen labBookings yang ditulis pada batch yang sama.
     match /sessions/{sessionId} {
-      allow read: if signedIn() && (
-        (isAsisten() && request.auth.uid in asistenIdsOf(classOf(resource.data.kelasId)))
-        || (isPraktikan() && resource.data.kelasId in myProfile().get('kelasIds', []))
-      );
+      // Baca: semua pengguna yang login (Sprint 3, SRS-32). Dipakai tab Peta untuk menampilkan
+      // praktikum yang sedang berlangsung / berikutnya di setiap lab, lintas kelas. Dokumen sesi
+      // hanya berisi data jadwal; kode presensi ada di koleksi terpisah (sessionCodes) dan tetap
+      // tertutup untuk praktikan.
+      allow read: if signedIn();
 
       allow create: if isAsisten()
         && request.resource.data.keys().hasOnly([
