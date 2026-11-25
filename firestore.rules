@@ -219,10 +219,28 @@ service cloud.firestore {
 
     // --- labs ---------------------------------------------------------------
     // Ruangan lab praktikum: labs/{kode} = { kode, nama, kapasitas }, kode A, B, C, D, AP.
-    // Diisi admin lewat Firebase Console; aplikasi hanya membaca (dropdown Ruangan Lab).
+    // Asisten hanya dapat memperbarui koordinat dan radius; dokumen tetap dibuat admin.
     match /labs/{kode} {
       allow read: if signedIn();
-      allow write: if false;
+
+      allow update: if isAsisten()
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['lat', 'lng', 'radiusMeter', 'diperbaruiOleh', 'diperbaruiPada'])
+        && request.resource.data.keys()
+            .hasAll(['lat', 'lng', 'radiusMeter', 'diperbaruiOleh', 'diperbaruiPada'])
+        && request.resource.data.lat is number
+        && request.resource.data.lat >= -90
+        && request.resource.data.lat <= 90
+        && request.resource.data.lng is number
+        && request.resource.data.lng >= -180
+        && request.resource.data.lng <= 180
+        && request.resource.data.radiusMeter is number
+        && request.resource.data.radiusMeter >= 10
+        && request.resource.data.radiusMeter <= 200
+        && request.resource.data.diperbaruiOleh == request.auth.uid
+        && request.resource.data.diperbaruiPada == request.time;
+
+      allow create, delete: if false;
     }
 
     // --- labBookings --------------------------------------------------------
