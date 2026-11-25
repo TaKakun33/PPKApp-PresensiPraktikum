@@ -17,12 +17,12 @@ export type Wilayah = {
 export type AktivitasLab = {
   /** Sesi yang sedang berlangsung di lab ini, atau null jika lab sedang kosong. */
   berlangsung: Session | null;
-  /** Sesi yang akan datang (terdekat lebih dulu), dibatasi `BATAS_BERIKUTNYA`. */
+  /** Semua sesi yang akan datang dalam jendela `JENDELA_HARI` (terdekat lebih dulu). */
   berikutnya: Session[];
 };
 
-/** Jumlah sesi "berikutnya" yang ditampilkan per lab. */
-export const BATAS_BERIKUTNYA = 3;
+/** Jumlah sesi "berikutnya" yang tampil di awal; sisanya muncul saat "Lihat detail" diketuk. */
+export const BERIKUTNYA_RINGKAS = 1;
 /** Jendela waktu (hari ke depan, termasuk hari ini) yang dibaca untuk info aktivitas lab. */
 export const JENDELA_HARI = 7;
 
@@ -45,6 +45,22 @@ export function koordinatValid(lat: unknown, lng: unknown): boolean {
     lng <= 180 &&
     !(lat === 0 && lng === 0)
   );
+}
+
+/** Jarak garis lurus (meter) antara dua titik, rumus haversine. Cukup akurat untuk jarak puluhan meter. */
+export function jarakMeter(a: Koordinat, b: Koordinat): number {
+  const R = 6371000;
+  const rad = (d: number) => (d * Math.PI) / 180;
+  const dLat = rad(b.lat - a.lat);
+  const dLng = rad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/** 42.6 -> "43 m"; 1250 -> "1,3 km". */
+export function labelJarak(meter: number): string {
+  if (meter < 1000) return `${Math.round(meter)} m`;
+  return `${(meter / 1000).toFixed(1).replace('.', ',')} km`;
 }
 
 /** Wilayah peta yang memuat semua titik. Mengembalikan null jika daftar kosong. */
@@ -124,6 +140,6 @@ export function hitungAktivitasLab(
 
   return {
     berlangsung: berlangsung[0]?.sesi ?? null,
-    berikutnya: berikutnya.slice(0, BATAS_BERIKUTNYA).map((x) => x.sesi),
+    berikutnya: berikutnya.map((x) => x.sesi),
   };
 }
