@@ -59,9 +59,14 @@ Jam sesi tidak disimpan sebagai koleksi karena nilainya tetap: lima slot masing-
 - **Fungsi:** daftar ruangan yang boleh dipakai sesi. Form Tambah Sesi menampilkannya sebagai
   dropdown **Ruangan Lab**, jadi ruangan tidak lagi diketik bebas.
 - **ID dokumen:** kode lab, yaitu `A`, `B`, `C`, `D`, `AP`.
-- **Field:** `kode`, `nama` (mis. `Lab A`), `kapasitas`.
-- **Ditulis oleh:** admin lewat Firebase Console (lihat bagian *Setup admin*). Aplikasi hanya
-  membaca.
+- **Field:** `kode`, `nama` (mis. `Lab A`), `kapasitas`, `lat` (angka, -90 sampai 90),
+  `lng` (angka, -180 sampai 180), `radiusMeter` (angka, 10 sampai 200 meter),
+  `diperbaruiOleh` (UID Firebase Authentication), dan `diperbaruiPada` (timestamp server
+  Firestore). Field lokasi dan audit dapat belum ada sebelum lokasi pertama kali disimpan.
+- **Ditulis oleh:** admin membuat dokumen lewat Firebase Console (lihat bagian *Setup admin*).
+  Asisten dapat memperbarui hanya field lokasi dan audit melalui aplikasi; rules menolak praktikan,
+  perubahan `kode`/`nama`/`kapasitas`, pembuatan dokumen, dan penghapusan. Semua pengguna yang
+  login tetap dapat membaca dokumen lab.
 
 ### 5. `classes`: kelas praktikum
 - **Fungsi:** mengelompokkan praktikan ke dalam Kelas A–E untuk sebuah praktikum. Kelas menjadi
