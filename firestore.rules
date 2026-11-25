@@ -1,628 +1,651 @@
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
+    rules_version = '2';
+    service cloud.firestore {
+      match /databases/{database}/documents {
 
-    // --- Helper -------------------------------------------------------------
-    function signedIn() {
-      return request.auth != null;
-    }
+        // --- Helper -------------------------------------------------------------
+        function signedIn() {
+          return request.auth != null;
+        }
 
-    function myProfile() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
+        function myProfile() {
+          return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+        }
 
-    function isAsisten() {
-      return signedIn() && myProfile().get('role', '') == 'asisten';
-    }
+        function isAsisten() {
+          return signedIn() && myProfile().get('role', '') == 'asisten';
+        }
+                                                                                                                                                                            
+        function isPraktikan() {                                                                                                                                            
+          return signedIn() && myProfile().get('role', '') == 'praktikan';                                                                                                  
+        }                                                                                                                                                                   
+                                                                                                                                                                            
+        function profileOf(uid) {                                                                                                                                           
+          return get(/databases/$(database)/documents/users/$(uid)).data;                                                                                                   
+        }                                                                                                                                                                   
+                                                                                                                                                                            
+        function sessionOf(sessionId) {                                                                                                                                     
+          return get(/databases/$(database)/documents/sessions/$(sessionId)).data;                                                                                          
+        }                                                                                                                                                                   
+                                                                                                                                                                            
+        function codeOf(sessionId) {                                                                                                                                        
+          return get(/databases/$(database)/documents/sessionCodes/$(sessionId)).data;                                                                                      
+        }                                                                                                                                                                   
+                                                                                                                                                                            
+        function classOf(kelasId) {                                                                                                                                         
+          return get(/databases/$(database)/documents/classes/$(kelasId)).data;                                                                                             
+        }                                                                                                                                                                   
+                                                                                                                                                                            
+        // Pengampu kelas = asistenIds (maks. 2: pembuat + partner). Kelas lama yang belum punya                                                                            
+        // asistenIds hanya diampu pembuatnya (asistenId).                                                                                                                  
+        function asistenIdsOf(kelas) {                                                                                                                                      
+          return kelas.get('asistenIds', [kelas.get('asistenId', '')]);                                                                                                     
+        }                                                                                                                                                                   
+                                                                                                                                                                            
+        function isPengampuKelas(kelasId) {                                                                                                                                 
+          return isAsisten() && request.auth.uid in asistenIdsOf(classOf(kelasId));                                                                                         
+        }                                                                                                                                                                   
+                                                                                                                                                                            
+        function isPengampuSesi(sessionId) {                                                                                                                                
+          return isPengampuKelas(sessionOf(sessionId).kelasId);                                                                                                             
+        }                                                                                                                                                                   
+                                                                                                                                                                            
+        // --- Jadwal: slot tetap 2 jam (WIB) -------------------------------------                                                                                         
+        // Sama dengan SLOT_WAKTU di src/lib/constants.ts: 08:00-10:00, 10:10-12:10, 13:00-15:00,                                                                           
+        // 15:40-17:40, 18:15-20:15.                                                                                                                                        
+        function slotValid(d) {                                                                                                                                             
+          return d.slot is int && d.slot >= 1 && d.slot <= 5                                                                                                                
+            && d.waktuMulai == ['08:00', '10:10', '13:00', '15:40', '18:15'][d.slot - 1]                                                                                    
+            && d.waktuSelesai == ['10:00', '12:10', '15:00', '17:40', '20:15'][d.slot - 1];                                                                                 
+        }                                                                                                                                                                   
+                                                                                                                                                                            
+        function bookingIdOf(d) {                                                                                                                                           
+          return d.labKode + '_' + d.tanggal + '_' + string(d.slot);                                                                                                        
+        }                                                                                                                                                                   
+                                                                                                                                                                            
+        // Tanggal, lab (harus ada di koleksi labs), dan slot sesi valid.                                                                                                   
+        function jadwalValid(d) {                                                                                                                                           
+          return d.tanggal is string                                                                                                                                        
+            && d.tanggal.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')                                                                                                            
+            && slotValid(d)                                                                                                                                                 
+            && d.labKode is string                                                                                                                                          
+            && exists(/databases/$(database)/documents/labs/$(d.labKode))                                                                                                   
+            && d.ruangan is string                                                                                                                                          
+            && d.praktikum is string;                                                                                                                                       
+        }                                                                                                                                                                   
+                                                                                                                                                                            
+        // Booking lab untuk jadwal ini ditulis pada batch yang sama dan menunjuk sesi ini.                                                                                 
+        function bookingSahUntuk(sessionId, d) {                                                                                                                            
+          let b = getAfter(/databases/$(database)/documents/labBookings/$(bookingIdOf(d))).data;                                                                            
+          return b.sessionId == sessionId && b.kelasId == d.kelasId;                                                                                                        
+        }                                                                                                                                                                   
+                                                                                                                                                                            
+        // "07:00" -> 420 (menit sejak tengah malam).
+        function menitDari(jam) {
+          return int(jam.split(':')[0]) * 60 + int(jam.split(':')[1]);
+        }
 
-    function isPraktikan() {
-      return signedIn() && myProfile().get('role', '') == 'praktikan';
-    }
+        // Sekarang (waktu server) berada di [tanggal jam mulai, tanggal jam selesai) WIB (UTC+7).
+        function dalamJamBooking(d) {
+          let p = d.tanggal.split('-');
+          let awalHari = timestamp.date(int(p[0]), int(p[1]), int(p[2])) - duration.value(7, 'h');
+          return request.time >= awalHari + duration.value(menitDari(d.waktuMulai), 'm')
+            && request.time < awalHari + duration.value(menitDari(d.waktuSelesai), 'm');
+        }
 
-    function profileOf(uid) {
-      return get(/databases/$(database)/documents/users/$(uid)).data;
-    }
+        // --- allowedAssistants --------------------------------------------------
+        // Daftar email yang boleh mendaftar sebagai asisten. ID dokumen = email dengan
+        // HURUF KECIL (contoh: "asisten1@gmail.com"); isi dokumen bebas.
+        // Hanya diisi admin lewat Firebase Console (Console melewati rules).
+        // - Baca : hanya dokumen berisi email milik pengguna yang sedang login (get, bukan list),
+        //          jadi daftar lengkap tidak bisa diintip.
+        // - Tulis: tidak boleh dari klien.
+        match /allowedAssistants/{email} {
+          allow get: if signedIn()
+            && request.auth.token.email != null
+            && request.auth.token.email.lower() == email;
+          allow list, write: if false;
+        }
 
-    function sessionOf(sessionId) {
-      return get(/databases/$(database)/documents/sessions/$(sessionId)).data;
-    }
+        // Email Auth pengguna ada di allowedAssistants (dipakai saat registrasi asisten).
+        function isAllowedAssistantEmail() {
+          return request.auth.token.email != null
+            && exists(/databases/$(database)/documents/allowedAssistants/$(request.auth.token.email.lower()));
+        }
 
-    function codeOf(sessionId) {
-      return get(/databases/$(database)/documents/sessionCodes/$(sessionId)).data;
-    }
+        // --- nimIndex -----------------------------------------------------------
+        // Keunikan NIM ditegakkan SERVER. ID dokumen = NIM, isi { uid }.
+        // Dibuat bersama profil praktikan dalam satu batch (lihat authService.registerUser):
+        // - hanya pemilik uid yang boleh membuatnya, dan profil yang ditulis pada batch yang sama
+        //   harus berperan praktikan dengan NIM yang sama (mencegah orang lain "mengklaim" NIM);
+        // - dokumen yang sudah ada tidak bisa ditimpa (create pada dokumen yang ada = update = ditolak).
+        // Klien tidak bisa membaca/mengubah/menghapusnya.
+        // CATATAN: praktikan yang SUDAH terdaftar sebelum aturan ini perlu dibuatkan dokumennya lewat
+        // Firebase Console (ID = NIM, field uid = UID akunnya) agar NIM lamanya ikut terlindungi.
+        match /nimIndex/{nim} {
+          allow create: if signedIn()
+            && nim.matches('^[0-9]{5,20}$')
+            && request.resource.data.keys().hasOnly(['uid'])
+            && request.resource.data.uid == request.auth.uid
+            && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'praktikan'
+            && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.nim == nim;
+          allow read, update, delete: if false;
+        }
 
-    function classOf(kelasId) {
-      return get(/databases/$(database)/documents/classes/$(kelasId)).data;
-    }
+        // --- users --------------------------------------------------------------
+        // - Baca (get): pemilik dokumen, asisten (daftar peserta), atau praktikan yang
+        //          membutuhkan nama asisten pada dashboard.
+        // - List : hanya asisten (mencari praktikan berdasarkan NIM). Praktikan TIDAK boleh query
+        //          koleksi ini, jadi NIM/email pengguna lain tidak bisa dienumerasi.
+        // - Buat : registrasi dokumen milik uid sendiri. Praktikan: NIM wajib & sudah diklaim di
+        //          nimIndex pada batch yang sama (kelasIds kosong).
+        //          Asisten: hanya jika email Auth-nya ada di allowedAssistants (tanpa NIM/kelasIds).
+        // - Ubah : asisten hanya field kelasIds praktikan (perubahan dibatasi maksimal satu kelas
+        //          per operasi); pengguna hanya namanya sendiri.
+        // - Hapus: tidak boleh.
+        match /users/{uid} {
+          allow get: if signedIn() && (
+            request.auth.uid == uid
+            || isAsisten()
+            || (isPraktikan() && resource.data.role == 'asisten')
+          );
 
-    // Pengampu kelas = asistenIds (maks. 2: pembuat + partner). Kelas lama yang belum punya
-    // asistenIds hanya diampu pembuatnya (asistenId).
-    function asistenIdsOf(kelas) {
-      return kelas.get('asistenIds', [kelas.get('asistenId', '')]);
-    }
+          // List dibatasi: hanya query yang menyaring role == 'praktikan' dan memakai limit <= 10
+          // (dipakai pencarian praktikan berdasarkan awalan NIM / nama di Kelola Kelas). Data asisten
+          // lain tidak ikut terbaca, dan daftar peserta kelas dibaca per dokumen (get), bukan query.
+          allow list: if isAsisten()
+            && request.query.limit <= 10
+            && resource.data.role == 'praktikan';
 
-    function isPengampuKelas(kelasId) {
-      return isAsisten() && request.auth.uid in asistenIdsOf(classOf(kelasId));
-    }
+          allow create: if signedIn()
+            && request.auth.uid == uid
+            && request.resource.data.keys().hasAll(['nama', 'email', 'role'])
+            && request.resource.data.nama is string
+            && request.resource.data.nama.size() >= 3
+            && request.resource.data.nama.size() <= 100
+            && request.resource.data.email is string
+            && request.resource.data.email.lower() == request.auth.token.email.lower()
+            && (
+              // Praktikan
+              (request.resource.data.role == 'praktikan'                                                                                                                    
+                && request.resource.data.keys().hasOnly(['nama', 'email', 'role', 'nim', 'kelasIds', 'createdAt'])                                                          
+                && request.resource.data.keys().hasAll(['nim'])                                                                                                             
+                && request.resource.data.nim is string                                                                                                                      
+                && request.resource.data.nim.matches('^[0-9]{5,20}$')                                                                                                       
+                && getAfter(/databases/$(database)/documents/nimIndex/$(request.resource.data.nim)).data.uid == request.auth.uid                                            
+                && (!('kelasIds' in request.resource.data) || request.resource.data.kelasIds.size() == 0))                                                                  
+              ||                                                                                                                                                            
+              // Asisten (email harus terdaftar di allowedAssistants)                                                                                                       
+              (request.resource.data.role == 'asisten'                                                                                                                      
+                && request.resource.data.keys().hasOnly(['nama', 'email', 'role', 'createdAt'])                                                                             
+                && isAllowedAssistantEmail())                                                                                                                               
+            );                                                                                                                                                              
+                                                                                                                                                                            
+          // Kelas yang DITAMBAHKAN ke praktikan wajib diampu asisten yang melakukannya (pembuat atau
+          // partner), mencegah asisten memasukkan praktikan ke kelas asisten lain.
+          // Kelas yang dihapus dari kelasIds tidak dicek kepemilikannya: kelasnya mungkin sudah dihapus.
+          // Ditulis tanpa pemotongan list / perbandingan urutan supaya tidak rapuh:
+          //   (a) tidak ada kelas baru (hanya mengeluarkan satu kelas / tanpa perubahan), atau
+          //   (b) daftar lama masih utuh, ukuran bertambah tepat 1, dan elemen TERAKHIR (yang ditambahkan
+          //       arrayUnion) belum ada di daftar lama serta kelasnya milik asisten ini.
+          allow update: if isAsisten()
+            && resource.data.role == 'praktikan'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['kelasIds'])
+            && request.resource.data.kelasIds is list
+            && (
+              (
+                request.resource.data.kelasIds.toSet().hasOnly(resource.data.get('kelasIds', []))
+                && resource.data.get('kelasIds', []).toSet().difference(request.resource.data.kelasIds.toSet()).size() <= 1
+              )
+              || (
+                request.resource.data.kelasIds.toSet().hasAll(resource.data.get('kelasIds', []))
+                && request.resource.data.kelasIds.size() == resource.data.get('kelasIds', []).size() + 1
+                && !(request.resource.data.kelasIds[request.resource.data.kelasIds.size() - 1]
+                     in resource.data.get('kelasIds', []))
+                && request.auth.uid in asistenIdsOf(                                                                                                                        
+                     classOf(request.resource.data.kelasIds[request.resource.data.kelasIds.size() - 1]))                                                                    
+              )                                                                                                                                                             
+            );                                                                                                                                                              
 
-    function isPengampuSesi(sessionId) {
-      return isPengampuKelas(sessionOf(sessionId).kelasId);
-    }
+          // Pengguna boleh mengubah NAMA miliknya sendiri (email, NIM, peran, kelasIds tidak boleh).
+          allow update: if signedIn()
+            && request.auth.uid == uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nama'])
+            && request.resource.data.nama is string
+            && request.resource.data.nama.size() >= 3
+            && request.resource.data.nama.size() <= 100;
 
-    // --- Jadwal: slot tetap 2 jam (WIB) -------------------------------------
-    // Sama dengan SLOT_WAKTU di src/lib/constants.ts: 08:00–10:00, 10:10–12:10, 13:00–15:00,
-    // 15:40–17:40, 18:15–20:15.
-    function slotValid(d) {
-      return d.slot is int && d.slot >= 1 && d.slot <= 5
-        && d.waktuMulai == ['08:00', '10:10', '13:00', '15:40', '18:15'][d.slot - 1]
-        && d.waktuSelesai == ['10:00', '12:10', '15:00', '17:40', '20:15'][d.slot - 1];
-    }
+          allow delete: if false;
+        }
 
-    function bookingIdOf(d) {
-      return d.labKode + '_' + d.tanggal + '_' + string(d.slot);
-    }
+        // --- labs ---------------------------------------------------------------
+        // Ruangan lab praktikum: labs/{kode} = { kode, nama, kapasitas }, kode A, B, C, D, AP.
+        // Diisi admin lewat Firebase Console; aplikasi hanya membaca (dropdown Ruangan Lab).
+        match /labs/{kode} {
+          allow read: if signedIn();
+          allow write: if false;
+        }
 
-    // Tanggal, lab (harus ada di koleksi labs), dan slot sesi valid.
-    function jadwalValid(d) {
-      return d.tanggal is string
-        && d.tanggal.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
-        && slotValid(d)
-        && d.labKode is string
-        && exists(/databases/$(database)/documents/labs/$(d.labKode))
-        && d.ruangan is string
-        && d.praktikum is string;
-    }
+        // --- labBookings --------------------------------------------------------
+        // Booking lab per slot: labBookings/{labKode}_{tanggal}_{slot} = { sessionId, kelasId, labKode,
+        // tanggal, slot }. ID deterministik + update ditolak => satu lab hanya bisa dipakai SATU sesi
+        // pada tanggal & slot yang sama (lab tidak bisa bentrok, ditegakkan server).
+        // Dibuat/dihapus bersama dokumen sesinya dalam satu batch (lihat rules sessions).
+        // Semua asisten boleh membaca: dipakai untuk menonaktifkan jam yang sudah dibooking dan
+        // memeriksa jadwal bentrok praktikan antarkelas.
+        match /labBookings/{bookingId} {
+          allow read: if isAsisten();
 
-    // Booking lab untuk jadwal ini ditulis pada batch yang sama dan menunjuk sesi ini.
-    function bookingSahUntuk(sessionId, d) {
-      let b = getAfter(/databases/$(database)/documents/labBookings/$(bookingIdOf(d))).data;
-      return b.sessionId == sessionId && b.kelasId == d.kelasId;
-    }
+          allow create: if isAsisten()
+            && request.resource.data.keys().hasOnly(['sessionId', 'kelasId', 'labKode', 'tanggal', 'slot'])
+            && request.resource.data.keys().hasAll(['sessionId', 'kelasId', 'labKode', 'tanggal', 'slot'])
+            && bookingId == bookingIdOf(request.resource.data)
+            && isPengampuKelas(request.resource.data.kelasId)
+            && getAfter(/databases/$(database)/documents/sessions/$(request.resource.data.sessionId)).data.kelasId
+                 == request.resource.data.kelasId
+            && bookingIdOf(getAfter(/databases/$(database)/documents/sessions/$(request.resource.data.sessionId)).data)
+                 == bookingId;                                                                                                                                              
+                                                                                                                                                                            
+          allow update: if false;                                                                                                                                           
+                                                                                                                                                                            
+          // Dihapus hanya bersama sesinya (sesi dihapus, atau jadwal sesi pindah ke lab/slot lain).                                                                        
+          allow delete: if isPengampuKelas(resource.data.kelasId)                                                                                                           
+            && (                                                                                                                                                            
+              !existsAfter(/databases/$(database)/documents/sessions/$(resource.data.sessionId))                                                                            
+              || bookingIdOf(getAfter(/databases/$(database)/documents/sessions/$(resource.data.sessionId)).data)                                                           
+                   != bookingId                                                                                                                                             
+            );                                                                                                                                                              
+        }                                                                                                                                                                   
+                                                                                                                                                                            
+        // --- classes ------------------------------------------------------------
+        // Kelas A-E per praktikum: ID dokumen = `{praktikumId}_{kode}` sehingga satu praktikum hanya
+        // punya satu Kelas A, satu Kelas B, dst. { namaKelas (= kode), kode, praktikum, praktikumId,
+        // asistenId (pembuat), asistenIds (pengampu, maks. 2), pesertaIds }.
+        // Baca : praktikan untuk kelas yang dia ikuti; SEMUA asisten (untuk bergabung sebagai partner,
+        //        saran nama praktikum, dan cek jadwal bentrok peserta antarkelas).
+        // Tulis: pengampu (peserta, hapus); asisten lain hanya bisa bergabung jika pengampu baru 1.
+        match /classes/{classId} {
+          allow get: if signedIn() && (
+            (isPraktikan() && classId in myProfile().get('kelasIds', []))
+            || isAsisten()
+          );
+          allow list: if isAsisten();
 
-    // "07:00" -> 420 (menit sejak tengah malam).
-    function menitDari(jam) {
-      return int(jam.split(':')[0]) * 60 + int(jam.split(':')[1]);
-    }
+          allow create: if isAsisten()
+            && request.resource.data.keys().hasOnly([
+                 'namaKelas', 'kode', 'praktikum', 'praktikumId', 'asistenId', 'asistenIds', 'pesertaIds'
+               ])                                                                                                                                                           
+            && request.resource.data.keys().hasAll([                                                                                                                        
+                 'namaKelas', 'kode', 'praktikum', 'praktikumId', 'asistenId', 'asistenIds', 'pesertaIds'                                                                   
+               ])                                                                                                                                                           
+            && request.resource.data.kode in ['A', 'B', 'C', 'D', 'E']                                                                                                      
+            && request.resource.data.namaKelas == request.resource.data.kode                                                                                                
+            && request.resource.data.praktikum is string                                                                                                                    
+            && request.resource.data.praktikum.size() >= 1
+            && request.resource.data.praktikum.size() <= 100
+            && request.resource.data.praktikumId is string                                                                                                                  
+            && request.resource.data.praktikumId.size() <= 60                                                                                                               
+            && request.resource.data.praktikumId.matches('^[a-z0-9]+(-[a-z0-9]+)*$')                                                                                        
+            && classId == request.resource.data.praktikumId + '_' + request.resource.data.kode                                                                              
+            && request.resource.data.asistenId == request.auth.uid                                                                                                          
+            && request.resource.data.asistenIds == [request.auth.uid]                                                                                                       
+            && request.resource.data.pesertaIds == [];                                                                                                                      
+                                                                                                                                                                            
+          // Pengampu mengubah daftar peserta.                                                                                                                              
+          allow update: if isAsisten()                                                                                                                                      
+            && request.auth.uid in asistenIdsOf(resource.data)                                                                                                              
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pesertaIds'])                                                                             
+            && request.resource.data.pesertaIds is list;                                                                                                                    
 
-    // Sekarang (waktu server) berada di [tanggal jam mulai, tanggal jam selesai) WIB (UTC+7).
-    function dalamJamBooking(d) {
-      let p = d.tanggal.split('-');
-      let awalHari = timestamp.date(int(p[0]), int(p[1]), int(p[2])) - duration.value(7, 'h');
-      return request.time >= awalHari + duration.value(menitDari(d.waktuMulai), 'm')
-        && request.time < awalHari + duration.value(menitDari(d.waktuSelesai), 'm');
-    }
+          // Asisten lain bergabung sebagai partner: hanya jika pengampunya baru satu (maks. 2 asisten).
+          allow update: if isAsisten()
+            && 'asistenIds' in resource.data
+            && resource.data.asistenIds.size() == 1
+            && !(request.auth.uid in resource.data.asistenIds)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['asistenIds'])
+            && request.resource.data.asistenIds == resource.data.asistenIds.concat([request.auth.uid]);
 
-    // --- allowedAssistants --------------------------------------------------
-    // Daftar email yang boleh mendaftar sebagai asisten. ID dokumen = email dengan
-    // HURUF KECIL (contoh: "asisten1@gmail.com"); isi dokumen bebas.
-    // Hanya diisi admin lewat Firebase Console (Console melewati rules).
-    // - Baca : hanya dokumen berisi email milik pengguna yang sedang login (get, bukan list),
-    //          jadi daftar lengkap tidak bisa diintip.
-    // - Tulis: tidak boleh dari klien.
-    match /allowedAssistants/{email} {
-      allow get: if signedIn()
-        && request.auth.token.email != null
-        && request.auth.token.email.lower() == email;
-      allow list, write: if false;
-    }
+          // Partner keluar: hanya jika masih ada satu asisten lain yang mengampu.
+          allow update: if isAsisten()
+            && 'asistenIds' in resource.data
+            && resource.data.asistenIds.size() == 2
+            && request.auth.uid in resource.data.asistenIds
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['asistenIds'])
+            && request.resource.data.asistenIds == resource.data.asistenIds.removeAll([request.auth.uid]);
 
-    // Email Auth pengguna ada di allowedAssistants (dipakai saat registrasi asisten).
-    function isAllowedAssistantEmail() {
-      return request.auth.token.email != null
-        && exists(/databases/$(database)/documents/allowedAssistants/$(request.auth.token.email.lower()));
-    }
+          allow delete: if isAsisten() && request.auth.uid in asistenIdsOf(resource.data);
+                                                                                                                                                                            
+          // Nama praktikan per kelas: classes/{classId}/peserta/{uid} = { nama, nim, ditambahkanPada }.                                                                    
+          // Ditulis bersama pesertaIds dalam satu batch; isi harus sama dengan profil praktikan.                                                                           
+          match /peserta/{uid} {                                                                                                                                            
+            allow read: if isAsisten() && request.auth.uid in asistenIdsOf(classOf(classId));                                                                               
+                                                                                                                                                                            
+            allow create: if isAsisten()                                                                                                                                    
+              && request.auth.uid in asistenIdsOf(classOf(classId))                                                                                                         
+              && request.resource.data.keys().hasOnly(['nama', 'nim', 'ditambahkanPada'])                                                                                   
+              && request.resource.data.keys().hasAll(['nama', 'nim', 'ditambahkanPada'])                                                                                    
+              && profileOf(uid).role == 'praktikan'                                                                                                                         
+              && request.resource.data.nama == profileOf(uid).nama                                                                                                          
+              && request.resource.data.nim == string(profileOf(uid).get('nim', ''))                                                                                         
+              && request.resource.data.ditambahkanPada == request.time                                                                                                      
+              && uid in getAfter(/databases/$(database)/documents/classes/$(classId)).data.pesertaIds;                                                                      
+                                                                                                                                                                            
+            allow update: if false;                                                                                                                                         
+                                                                                                                                                                            
+            allow delete: if isAsisten() && request.auth.uid in asistenIdsOf(classOf(classId));                                                                             
+          }                                                                                                                                                                 
+        }                                                                                                                                                                   
+                                                                                                                                                                            
+        // --- sessions -----------------------------------------------------------                                                                                         
+        // Sesi milik KELAS: semua pengampu kelas (pembuat + partner) bisa membaca, membuka, menutup,
+        // mengubah, dan menghapusnya, sehingga status sesi selalu sama bagi kedua asisten.
+        // asistenId = pembuat sesi (tidak berubah). Jadwal wajib memakai lab + slot 2 jam dan memegang
+        // satu dokumen labBookings yang ditulis pada batch yang sama.
+        match /sessions/{sessionId} {
+          // Baca: semua pengguna yang login (Sprint 3, SRS-32). Dipakai tab Peta untuk menampilkan
+          // praktikum yang sedang berlangsung / berikutnya di setiap lab, lintas kelas. Dokumen sesi
+          // hanya berisi data jadwal; kode presensi ada di koleksi terpisah (sessionCodes) dan tetap
+          // tertutup untuk praktikan.
+          allow read: if signedIn();
 
-    // --- nimIndex -----------------------------------------------------------
-    // Keunikan NIM ditegakkan SERVER. ID dokumen = NIM, isi { uid }.
-    // Dibuat bersama profil praktikan dalam satu batch (lihat authService.registerUser):
-    // - hanya pemilik uid yang boleh membuatnya, dan profil yang ditulis pada batch yang sama
-    //   harus berperan praktikan dengan NIM yang sama (mencegah orang lain "mengklaim" NIM);
-    // - dokumen yang sudah ada tidak bisa ditimpa (create pada dokumen yang ada = update = ditolak).
-    // Klien tidak bisa membaca/mengubah/menghapusnya.
-    // CATATAN: praktikan yang SUDAH terdaftar sebelum aturan ini perlu dibuatkan dokumennya lewat
-    // Firebase Console (ID = NIM, field uid = UID akunnya) agar NIM lamanya ikut terlindungi.
-    match /nimIndex/{nim} {
-      allow create: if signedIn()
-        && nim.matches('^[0-9]{5,20}$')
-        && request.resource.data.keys().hasOnly(['uid'])
-        && request.resource.data.uid == request.auth.uid
-        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'praktikan'
-        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.nim == nim;
-      allow read, update, delete: if false;
-    }
-
-    // --- users --------------------------------------------------------------
-    // - Baca (get): pemilik dokumen, asisten (daftar peserta), atau praktikan yang
-    //          membutuhkan nama asisten pada dashboard.
-    // - List : hanya asisten (mencari praktikan berdasarkan NIM). Praktikan TIDAK boleh query
-    //          koleksi ini, jadi NIM/email pengguna lain tidak bisa dienumerasi.
-    // - Buat : registrasi dokumen milik uid sendiri. Praktikan: NIM wajib & sudah diklaim di
-    //          nimIndex pada batch yang sama (kelasIds kosong).
-    //          Asisten: hanya jika email Auth-nya ada di allowedAssistants (tanpa NIM/kelasIds).
-    // - Ubah : asisten hanya field kelasIds praktikan (perubahan dibatasi maksimal satu kelas
-    //          per operasi); pengguna hanya namanya sendiri.
-    // - Hapus: tidak boleh.
-    match /users/{uid} {
-      allow get: if signedIn() && (
-        request.auth.uid == uid
-        || isAsisten()
-        || (isPraktikan() && resource.data.role == 'asisten')
-      );
-
-      // List dibatasi: hanya query yang menyaring role == 'praktikan' dan memakai limit <= 10
-      // (dipakai pencarian praktikan berdasarkan awalan NIM / nama di Kelola Kelas). Data asisten
-      // lain tidak ikut terbaca, dan daftar peserta kelas dibaca per dokumen (get), bukan query.
-      allow list: if isAsisten()
-        && request.query.limit <= 10
-        && resource.data.role == 'praktikan';
-
-      allow create: if signedIn()
-        && request.auth.uid == uid
-        && request.resource.data.keys().hasAll(['nama', 'email', 'role'])
-        && request.resource.data.nama is string
-        && request.resource.data.nama.size() >= 3
-        && request.resource.data.nama.size() <= 100
-        && request.resource.data.email is string
-        && request.resource.data.email.lower() == request.auth.token.email.lower()
-        && (
-          // Praktikan
-          (request.resource.data.role == 'praktikan'
-            && request.resource.data.keys().hasOnly(['nama', 'email', 'role', 'nim', 'kelasIds', 'createdAt'])
-            && request.resource.data.keys().hasAll(['nim'])
-            && request.resource.data.nim is string
-            && request.resource.data.nim.matches('^[0-9]{5,20}$')
-            && getAfter(/databases/$(database)/documents/nimIndex/$(request.resource.data.nim)).data.uid == request.auth.uid
-            && (!('kelasIds' in request.resource.data) || request.resource.data.kelasIds.size() == 0))
-          ||
-          // Asisten (email harus terdaftar di allowedAssistants)
-          (request.resource.data.role == 'asisten'
-            && request.resource.data.keys().hasOnly(['nama', 'email', 'role', 'createdAt'])
-            && isAllowedAssistantEmail())
-        );
-
-      // Kelas yang DITAMBAHKAN ke praktikan wajib diampu asisten yang melakukannya (pembuat atau
-      // partner), mencegah asisten memasukkan praktikan ke kelas asisten lain.
-      // Kelas yang dihapus dari kelasIds tidak dicek kepemilikannya: kelasnya mungkin sudah dihapus.
-      // Ditulis tanpa pemotongan list / perbandingan urutan supaya tidak rapuh:
-      //   (a) tidak ada kelas baru (hanya mengeluarkan satu kelas / tanpa perubahan), atau
-      //   (b) daftar lama masih utuh, ukuran bertambah tepat 1, dan elemen TERAKHIR (yang ditambahkan
-      //       arrayUnion) belum ada di daftar lama serta kelasnya milik asisten ini.
-      allow update: if isAsisten()
-        && resource.data.role == 'praktikan'
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['kelasIds'])
-        && request.resource.data.kelasIds is list
-        && (
-          (
-            request.resource.data.kelasIds.toSet().hasOnly(resource.data.get('kelasIds', []))
-            && resource.data.get('kelasIds', []).toSet().difference(request.resource.data.kelasIds.toSet()).size() <= 1
-          )
-          || (
-            request.resource.data.kelasIds.toSet().hasAll(resource.data.get('kelasIds', []))
-            && request.resource.data.kelasIds.size() == resource.data.get('kelasIds', []).size() + 1
-            && !(request.resource.data.kelasIds[request.resource.data.kelasIds.size() - 1]
-                 in resource.data.get('kelasIds', []))
-            && request.auth.uid in asistenIdsOf(
-                 classOf(request.resource.data.kelasIds[request.resource.data.kelasIds.size() - 1]))
-          )
-        );
-
-      // Pengguna boleh mengubah NAMA miliknya sendiri (email, NIM, peran, kelasIds tidak boleh).
-      allow update: if signedIn()
-        && request.auth.uid == uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nama'])
-        && request.resource.data.nama is string
-        && request.resource.data.nama.size() >= 3
-        && request.resource.data.nama.size() <= 100;
-
-      allow delete: if false;
-    }
-
-    // --- labs ---------------------------------------------------------------
-    // Ruangan lab praktikum: labs/{kode} = { kode, nama, kapasitas }, kode A, B, C, D, AP.
-    // Diisi admin lewat Firebase Console; aplikasi hanya membaca (dropdown Ruangan Lab).
-    match /labs/{kode} {
-      allow read: if signedIn();
-      allow write: if false;
-    }
-
-    // --- labBookings --------------------------------------------------------
-    // Booking lab per slot: labBookings/{labKode}_{tanggal}_{slot} = { sessionId, kelasId, labKode,
-    // tanggal, slot }. ID deterministik + update ditolak => satu lab hanya bisa dipakai SATU sesi
-    // pada tanggal & slot yang sama (lab tidak bisa bentrok, ditegakkan server).
-    // Dibuat/dihapus bersama dokumen sesinya dalam satu batch (lihat rules sessions).
-    // Semua asisten boleh membaca: dipakai untuk menonaktifkan jam yang sudah dibooking dan
-    // memeriksa jadwal bentrok praktikan antarkelas.
-    match /labBookings/{bookingId} {
-      allow read: if isAsisten();
-
-      allow create: if isAsisten()
-        && request.resource.data.keys().hasOnly(['sessionId', 'kelasId', 'labKode', 'tanggal', 'slot'])
-        && request.resource.data.keys().hasAll(['sessionId', 'kelasId', 'labKode', 'tanggal', 'slot'])
-        && bookingId == bookingIdOf(request.resource.data)
-        && isPengampuKelas(request.resource.data.kelasId)
-        && getAfter(/databases/$(database)/documents/sessions/$(request.resource.data.sessionId)).data.kelasId
-             == request.resource.data.kelasId
-        && bookingIdOf(getAfter(/databases/$(database)/documents/sessions/$(request.resource.data.sessionId)).data)
-             == bookingId;
-
-      allow update: if false;
-
-      // Dihapus hanya bersama sesinya (sesi dihapus, atau jadwal sesi pindah ke lab/slot lain).
-      allow delete: if isPengampuKelas(resource.data.kelasId)
-        && (
-          !existsAfter(/databases/$(database)/documents/sessions/$(resource.data.sessionId))
-          || bookingIdOf(getAfter(/databases/$(database)/documents/sessions/$(resource.data.sessionId)).data)
-               != bookingId
-        );
-    }
-
-    // --- classes ------------------------------------------------------------
-    // Kelas A–E per praktikum: ID dokumen = `{praktikumId}_{kode}` sehingga satu praktikum hanya
-    // punya satu Kelas A, satu Kelas B, dst. { namaKelas (= kode), kode, praktikum, praktikumId,
-    // asistenId (pembuat), asistenIds (pengampu, maks. 2), pesertaIds }.
-    // Baca : praktikan untuk kelas yang dia ikuti; SEMUA asisten (untuk bergabung sebagai partner,
-    //        saran nama praktikum, dan cek jadwal bentrok peserta antarkelas).
-    // Tulis: pengampu (peserta, hapus); asisten lain hanya bisa bergabung jika pengampu baru 1.
-    match /classes/{classId} {
-      allow get: if signedIn() && (
-        (isPraktikan() && classId in myProfile().get('kelasIds', []))
-        || isAsisten()
-      );
-      allow list: if isAsisten();
-
-      allow create: if isAsisten()
-        && request.resource.data.keys().hasOnly([
-             'namaKelas', 'kode', 'praktikum', 'praktikumId', 'asistenId', 'asistenIds', 'pesertaIds'
-           ])
-        && request.resource.data.keys().hasAll([
-             'namaKelas', 'kode', 'praktikum', 'praktikumId', 'asistenId', 'asistenIds', 'pesertaIds'
-           ])
-        && request.resource.data.kode in ['A', 'B', 'C', 'D', 'E']
-        && request.resource.data.namaKelas == request.resource.data.kode
-        && request.resource.data.praktikum is string
-        && request.resource.data.praktikum.size() >= 1
-        && request.resource.data.praktikum.size() <= 100
-        && request.resource.data.praktikumId is string
-        && request.resource.data.praktikumId.size() <= 60
-        && request.resource.data.praktikumId.matches('^[a-z0-9]+(-[a-z0-9]+)*$')
-        && classId == request.resource.data.praktikumId + '_' + request.resource.data.kode
-        && request.resource.data.asistenId == request.auth.uid
-        && request.resource.data.asistenIds == [request.auth.uid]
-        && request.resource.data.pesertaIds == [];
-
-      // Pengampu mengubah daftar peserta.
-      allow update: if isAsisten()
-        && request.auth.uid in asistenIdsOf(resource.data)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pesertaIds'])
-        && request.resource.data.pesertaIds is list;
-
-      // Asisten lain bergabung sebagai partner: hanya jika pengampunya baru satu (maks. 2 asisten).
-      allow update: if isAsisten()
-        && 'asistenIds' in resource.data
-        && resource.data.asistenIds.size() == 1
-        && !(request.auth.uid in resource.data.asistenIds)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['asistenIds'])
-        && request.resource.data.asistenIds == resource.data.asistenIds.concat([request.auth.uid]);
-
-      // Partner keluar: hanya jika masih ada satu asisten lain yang mengampu.
-      allow update: if isAsisten()
-        && 'asistenIds' in resource.data
-        && resource.data.asistenIds.size() == 2
-        && request.auth.uid in resource.data.asistenIds
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['asistenIds'])
-        && request.resource.data.asistenIds == resource.data.asistenIds.removeAll([request.auth.uid]);
-
-      allow delete: if isAsisten() && request.auth.uid in asistenIdsOf(resource.data);
-
-      // Nama praktikan per kelas: classes/{classId}/peserta/{uid} = { nama, nim, ditambahkanPada }.
-      // Ditulis bersama pesertaIds dalam satu batch; isi harus sama dengan profil praktikan.
-      match /peserta/{uid} {
-        allow read: if isAsisten() && request.auth.uid in asistenIdsOf(classOf(classId));
-
-        allow create: if isAsisten()
-          && request.auth.uid in asistenIdsOf(classOf(classId))
-          && request.resource.data.keys().hasOnly(['nama', 'nim', 'ditambahkanPada'])
-          && request.resource.data.keys().hasAll(['nama', 'nim', 'ditambahkanPada'])
-          && profileOf(uid).role == 'praktikan'
-          && request.resource.data.nama == profileOf(uid).nama
-          && request.resource.data.nim == string(profileOf(uid).get('nim', ''))
-          && request.resource.data.ditambahkanPada == request.time
-          && uid in getAfter(/databases/$(database)/documents/classes/$(classId)).data.pesertaIds;
-
-        allow update: if false;
-
-        allow delete: if isAsisten() && request.auth.uid in asistenIdsOf(classOf(classId));
-      }
-    }
-
-    // --- sessions -----------------------------------------------------------
-    // Sesi milik KELAS: semua pengampu kelas (pembuat + partner) bisa membaca, membuka, menutup,
-    // mengubah, dan menghapusnya, sehingga status sesi selalu sama bagi kedua asisten.
-    // asistenId = pembuat sesi (tidak berubah). Jadwal wajib memakai lab + slot 2 jam dan memegang
-    // satu dokumen labBookings yang ditulis pada batch yang sama.
-    match /sessions/{sessionId} {
-      allow read: if signedIn() && (
-        (isAsisten() && request.auth.uid in asistenIdsOf(classOf(resource.data.kelasId)))
-        || (isPraktikan() && resource.data.kelasId in myProfile().get('kelasIds', []))
-      );
-
-      allow create: if isAsisten()
-        && request.resource.data.keys().hasOnly([
-             'praktikum', 'kelasId', 'asistenId', 'tanggal', 'waktuMulai',
-             'waktuSelesai', 'ruangan', 'status', 'labKode', 'slot'
-           ])
-        && request.resource.data.keys().hasAll([
-             'praktikum', 'kelasId', 'asistenId', 'tanggal', 'waktuMulai',
-             'waktuSelesai', 'ruangan', 'status', 'labKode', 'slot'
-           ])
-        && request.resource.data.asistenId == request.auth.uid
-        && request.resource.data.status == 'belum_dibuka'
-        && isPengampuKelas(request.resource.data.kelasId)
-        && jadwalValid(request.resource.data)
-        && bookingSahUntuk(sessionId, request.resource.data);
-
-      allow update: if isAsisten()
-        && isPengampuKelas(resource.data.kelasId)
-        && request.resource.data.asistenId == resource.data.asistenId
-        && request.resource.data.kelasId == resource.data.kelasId
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-             'praktikum', 'tanggal', 'waktuMulai', 'waktuSelesai', 'ruangan',
-             'labKode', 'slot', 'status', 'openedAt', 'closedAt'
-           ])
-        && (
-          request.resource.data.status == resource.data.status
-          || (resource.data.status == 'belum_dibuka' && request.resource.data.status == 'dibuka')
-          || (resource.data.status == 'dibuka' && request.resource.data.status == 'ditutup')
-        )
-        && (
-          resource.data.status != 'ditutup'
-          || request.resource.data.status == resource.data.status
-        )
-        // Ubah jadwal: hanya selama belum dibuka, jadwal baru valid, booking baru menunjuk sesi ini,
-        // dan booking lama (jika pindah lab/tanggal/slot) ikut dihapus pada batch yang sama.
-        && (
-          !request.resource.data.diff(resource.data).affectedKeys()
-             .hasAny(['praktikum', 'tanggal', 'waktuMulai', 'waktuSelesai', 'ruangan', 'labKode', 'slot'])
-          || (
-            resource.data.status == 'belum_dibuka'
+          allow create: if isAsisten()
+            && request.resource.data.keys().hasOnly([
+                 'praktikum', 'kelasId', 'asistenId', 'tanggal', 'waktuMulai',
+                 'waktuSelesai', 'ruangan', 'status', 'labKode', 'slot'
+               ])
+            && request.resource.data.keys().hasAll([
+                 'praktikum', 'kelasId', 'asistenId', 'tanggal', 'waktuMulai',
+                 'waktuSelesai', 'ruangan', 'status', 'labKode', 'slot'
+               ])
+            && request.resource.data.asistenId == request.auth.uid
             && request.resource.data.status == 'belum_dibuka'
+            && isPengampuKelas(request.resource.data.kelasId)
             && jadwalValid(request.resource.data)
-            && bookingSahUntuk(sessionId, request.resource.data)
+            && bookingSahUntuk(sessionId, request.resource.data);                                                                                                           
+                                                                                                                                                                            
+          allow update: if isAsisten()                                                                                                                                      
+            && isPengampuKelas(resource.data.kelasId)                                                                                                                       
+            && request.resource.data.asistenId == resource.data.asistenId                                                                                                   
+            && request.resource.data.kelasId == resource.data.kelasId                                                                                                       
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([                                                                                           
+                 'praktikum', 'tanggal', 'waktuMulai', 'waktuSelesai', 'ruangan',                                                                                           
+                 'labKode', 'slot', 'status', 'openedAt', 'closedAt'                                                                                                        
+               ])                                                                                                                                                           
+            && (                                                                                                                                                            
+              request.resource.data.status == resource.data.status                                                                                                          
+              || (resource.data.status == 'belum_dibuka' && request.resource.data.status == 'dibuka')                                                                       
+              || (resource.data.status == 'dibuka' && request.resource.data.status == 'ditutup')                                                                            
+            )                                                                                                                                                               
+            && (                                                                                                                                                            
+              resource.data.status != 'ditutup'                                                                                                                             
+              || request.resource.data.status == resource.data.status                                                                                                       
+            )                                                                                                                                                               
+            // Ubah jadwal: hanya selama belum dibuka, jadwal baru valid, booking baru menunjuk sesi ini,                                                                   
+            // dan booking lama (jika pindah lab/tanggal/slot) ikut dihapus pada batch yang sama.                                                                           
+            && (                                                                                                                                                            
+              !request.resource.data.diff(resource.data).affectedKeys()                                                                                                     
+                 .hasAny(['praktikum', 'tanggal', 'waktuMulai', 'waktuSelesai', 'ruangan', 'labKode', 'slot'])                                                              
+              || (                                                                                                                                                          
+                resource.data.status == 'belum_dibuka'                                                                                                                      
+                && request.resource.data.status == 'belum_dibuka'                                                                                                           
+                && jadwalValid(request.resource.data)                                                                                                                       
+                && bookingSahUntuk(sessionId, request.resource.data)                                                                                                        
+                && (                                                                                                                                                        
+                  !('labKode' in resource.data) || !('slot' in resource.data)                                                                                               
+                  || bookingIdOf(resource.data) == bookingIdOf(request.resource.data)                                                                                       
+                  || !existsAfter(/databases/$(database)/documents/labBookings/$(bookingIdOf(resource.data)))                                                               
+                )                                                                                                                                                           
+              )                                                                                                                                                             
+            )                                                                                                                                                               
+            // Buka sesi hanya pada jam yang dibooking (waktu server).                                                                                                      
+            && (                                                                                                                                                            
+              !(resource.data.status == 'belum_dibuka' && request.resource.data.status == 'dibuka')                                                                         
+              || dalamJamBooking(resource.data)                                                                                                                             
+            )                                                                                                                                                               
+            // Cap waktu buka/tutup harus waktu server dan hanya muncul pada transisi yang sesuai.
+            && (
+              !request.resource.data.diff(resource.data).affectedKeys().hasAny(['openedAt'])
+              || (resource.data.status == 'belum_dibuka'
+                  && request.resource.data.status == 'dibuka'
+                  && request.resource.data.openedAt == request.time)
+            )
+            && (
+              !request.resource.data.diff(resource.data).affectedKeys().hasAny(['closedAt'])
+              || (resource.data.status == 'dibuka'
+                  && request.resource.data.status == 'ditutup'
+                  && request.resource.data.closedAt == request.time)
+            );
+
+          // Catatan: larangan menghapus sesi yang sudah punya izin dicek di aplikasi (rules tidak bisa query).
+          // Booking lab sesi ini wajib ikut dihapus pada batch yang sama.
+          allow delete: if isAsisten()
+            && isPengampuKelas(resource.data.kelasId)
+            && resource.data.status == 'belum_dibuka'
             && (
               !('labKode' in resource.data) || !('slot' in resource.data)
-              || bookingIdOf(resource.data) == bookingIdOf(request.resource.data)
               || !existsAfter(/databases/$(database)/documents/labBookings/$(bookingIdOf(resource.data)))
-            )
-          )
-        )
-        // Buka sesi hanya pada jam yang dibooking (waktu server).
-        && (
-          !(resource.data.status == 'belum_dibuka' && request.resource.data.status == 'dibuka')
-          || dalamJamBooking(resource.data)
-        )
-        // Cap waktu buka/tutup harus waktu server dan hanya muncul pada transisi yang sesuai.
-        && (
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['openedAt'])
-          || (resource.data.status == 'belum_dibuka'
-              && request.resource.data.status == 'dibuka'
-              && request.resource.data.openedAt == request.time)
-        )
-        && (
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['closedAt'])
-          || (resource.data.status == 'dibuka'
-              && request.resource.data.status == 'ditutup'
-              && request.resource.data.closedAt == request.time)
-        );
+            );
+        }
 
-      // Catatan: larangan menghapus sesi yang sudah punya izin dicek di aplikasi (rules tidak bisa query).
-      // Booking lab sesi ini wajib ikut dihapus pada batch yang sama.
-      allow delete: if isAsisten()
-        && isPengampuKelas(resource.data.kelasId)
-        && resource.data.status == 'belum_dibuka'
-        && (
-          !('labKode' in resource.data) || !('slot' in resource.data)
-          || !existsAfter(/databases/$(database)/documents/labBookings/$(bookingIdOf(resource.data)))
-        );
-    }
+        // --- sessionCodes -------------------------------------------------------
+        // Kode unik presensi per sesi: sessionCodes/{sessionId} = { sessionId, asistenId, kode, createdAt }
+        // `kode` = 5 karakter huruf besar/angka, dibuat saat sesi dibuka (sessionService.openSession).
+        // Dibaca HANYA oleh asisten pengampu kelas sesi (pembuat atau partner); praktikan tidak bisa membacanya. Praktikan mengirim kode
+        // di dokumen presensinya dan rules attendances yang mencocokkannya.
+        // Pakai get (bukan resource.data) supaya aman dibaca saat dokumennya belum ada.
+        // Dibuat bersama perubahan status sesi menjadi `dibuka` dalam satu batch, karena itu status
+        // sesi diperiksa dengan getAfter. Kode tidak bisa diubah atau dihapus (update/delete ditolak).
+        match /sessionCodes/{sessionId} {
+          allow get: if isPengampuSesi(sessionId);
+          allow list: if false;
 
-    // --- sessionCodes -------------------------------------------------------
-    // Kode unik presensi per sesi: sessionCodes/{sessionId} = { sessionId, asistenId, kode, createdAt }
-    // `kode` = 5 karakter huruf besar/angka, dibuat saat sesi dibuka (sessionService.openSession).
-    // Dibaca HANYA oleh asisten pengampu kelas sesi (pembuat atau partner); praktikan tidak bisa membacanya. Praktikan mengirim kode
-    // di dokumen presensinya dan rules attendances yang mencocokkannya.
-    // Pakai get (bukan resource.data) supaya aman dibaca saat dokumennya belum ada.
-    // Dibuat bersama perubahan status sesi menjadi `dibuka` dalam satu batch, karena itu status
-    // sesi diperiksa dengan getAfter. Kode tidak bisa diubah atau dihapus (update/delete ditolak).
-    match /sessionCodes/{sessionId} {
-      allow get: if isPengampuSesi(sessionId);
-      allow list: if false;
+          allow create: if isAsisten()
+            && request.resource.data.keys().hasOnly(['sessionId', 'asistenId', 'kode', 'createdAt'])
+            && request.resource.data.keys().hasAll(['sessionId', 'asistenId', 'kode', 'createdAt'])
+            && request.resource.data.sessionId == sessionId
+            && request.resource.data.asistenId == request.auth.uid
+            && request.resource.data.kode is string
+            && request.resource.data.kode.matches('^[A-Z0-9]{5}$')
+            && request.resource.data.createdAt == request.time
+            && isPengampuSesi(sessionId)
+            && getAfter(/databases/$(database)/documents/sessions/$(sessionId)).data.status == 'dibuka';                                                                    
+                                                                                                                                                                            
+          allow update, delete: if false;                                                                                                                                   
+        }                                                                                                                                                                   
+                                                                                                                                                                            
+        // --- attendances --------------------------------------------------------                                                                                         
+        // SATU format dokumen (attendanceService.checkIn / checkInManual):                                                                                                 
+        //   ID = {sessionId}_{uid}, isi { sessionId, kelasId, userId, nama, nim, waktuHadir }
+        //   (presensi sendiri oleh praktikan menambah { kode } = kode unik sesi, harus cocok dengan
+        //    sessionCodes/{sessionId}.kode; presensi oleh asisten menambah { manual: true, dicatatOleh })
+        // ID deterministik + update/delete ditolak => satu presensi per praktikan per sesi,
+        // ditegakkan server. Status sesi `dibuka` diperiksa saat commit, jadi tidak ada race
+        // dengan penutupan sesi oleh asisten.
+        match /attendances/{attId} {
+          // get: dipakai praktikan untuk mengecek "sudah hadir?" (termasuk saat dokumennya BELUM ada,
+          // sehingga `resource` null) dan di dalam transaksi presensi. Karena itu tidak boleh membaca
+          // resource.data: cukup cek bahwa ID dokumen berakhiran uid sendiri ({sessionId}_{uid}).
+          allow get: if isPraktikan() && attId.matches('^.+_' + request.auth.uid + '$');
 
-      allow create: if isAsisten()
-        && request.resource.data.keys().hasOnly(['sessionId', 'asistenId', 'kode', 'createdAt'])
-        && request.resource.data.keys().hasAll(['sessionId', 'asistenId', 'kode', 'createdAt'])
-        && request.resource.data.sessionId == sessionId
-        && request.resource.data.asistenId == request.auth.uid
-        && request.resource.data.kode is string
-        && request.resource.data.kode.matches('^[A-Z0-9]{5}$')
-        && request.resource.data.createdAt == request.time
-        && isPengampuSesi(sessionId)
-        && getAfter(/databases/$(database)/documents/sessions/$(sessionId)).data.status == 'dibuka';
+          // list: query rekap asisten (where sessionId) dan riwayat praktikan (where userId).
+          allow list: if signedIn() && (
+            (isPraktikan() && resource.data.userId == request.auth.uid)
+            || isPengampuSesi(resource.data.sessionId)
+          );
 
-      allow update, delete: if false;
-    }
+          allow create: if isPraktikan()
+            && request.resource.data.keys().hasOnly(['sessionId', 'kelasId', 'userId', 'nama', 'nim', 'waktuHadir', 'kode'])
+            && request.resource.data.keys().hasAll(['sessionId', 'kelasId', 'userId', 'nama', 'nim', 'waktuHadir', 'kode'])
+            && request.resource.data.sessionId is string
+            && request.resource.data.userId == request.auth.uid                                                                                                             
+            && attId == (request.resource.data.sessionId + '_' + request.auth.uid)                                                                                          
+            && sessionOf(request.resource.data.sessionId).status == 'dibuka'                                                                                                
+            && sessionOf(request.resource.data.sessionId).kelasId == request.resource.data.kelasId
+            && request.resource.data.kelasId in myProfile().get('kelasIds', [])                                                                                             
+            && request.resource.data.nama == myProfile().nama                                                                                                               
+            && request.resource.data.nim == myProfile().get('nim', '')                                                                                                      
+            // Izin sesi ini (ID izin = ID presensi) yang sudah DITERIMA = tidak boleh presensi.
+            // Izin menunggu tidak menghalangi: dihapus bersama presensi (lihat rules leaveRequests).
+            && !(exists(/databases/$(database)/documents/leaveRequests/$(attId))
+                 && get(/databases/$(database)/documents/leaveRequests/$(attId)).data.status == 'diterima')
+            && request.resource.data.kode == codeOf(request.resource.data.sessionId).kode
+            && request.resource.data.waktuHadir == request.time;
 
-    // --- attendances --------------------------------------------------------
-    // SATU format dokumen (attendanceService.checkIn / checkInManual):
-    //   ID = {sessionId}_{uid}, isi { sessionId, kelasId, userId, nama, nim, waktuHadir }
-    //   (presensi sendiri oleh praktikan menambah { kode } = kode unik sesi, harus cocok dengan
-    //    sessionCodes/{sessionId}.kode; presensi oleh asisten menambah { manual: true, dicatatOleh })
-    // ID deterministik + update/delete ditolak => satu presensi per praktikan per sesi,
-    // ditegakkan server. Status sesi `dibuka` diperiksa saat commit, jadi tidak ada race
-    // dengan penutupan sesi oleh asisten.
-    match /attendances/{attId} {
-      // get: dipakai praktikan untuk mengecek "sudah hadir?" (termasuk saat dokumennya BELUM ada,
-      // sehingga `resource` null) dan di dalam transaksi presensi. Karena itu tidak boleh membaca
-      // resource.data: cukup cek bahwa ID dokumen berakhiran uid sendiri ({sessionId}_{uid}).
-      allow get: if isPraktikan() && attId.matches('^.+_' + request.auth.uid + '$');
+          // Presensi oleh asisten pengampu kelas sesi, pembuat maupun partner (attendanceService.checkInManual).
+          // Aturan yang sama seperti presensi sendiri (satu per praktikan per sesi, hanya saat sesi
+          // `dibuka`, waktu = waktu server), ditambah: sesi milik asisten ini, praktikan terdaftar
+          // sebagai peserta kelas sesi tersebut, nama/NIM sama dengan profil praktikan, dan ditandai
+          // `manual: true` + `dicatatOleh` = uid asisten. Praktikan tidak bisa membuat dokumen dengan
+          // field `manual` karena rule presensi sendiri memakai hasOnly tanpa field itu.
+          allow create: if isAsisten()
+            && request.resource.data.keys().hasOnly(['sessionId', 'kelasId', 'userId', 'nama', 'nim', 'waktuHadir', 'manual', 'dicatatOleh'])
+            && request.resource.data.keys().hasAll(['sessionId', 'kelasId', 'userId', 'nama', 'nim', 'waktuHadir', 'manual', 'dicatatOleh'])
+            && request.resource.data.sessionId is string
+            && request.resource.data.userId is string
+            && attId == (request.resource.data.sessionId + '_' + request.resource.data.userId)
+            && isPengampuSesi(request.resource.data.sessionId)
+            && sessionOf(request.resource.data.sessionId).status == 'dibuka'
+            && sessionOf(request.resource.data.sessionId).kelasId == request.resource.data.kelasId
+            && request.resource.data.userId in classOf(request.resource.data.kelasId).get('pesertaIds', [])
+            && request.resource.data.nama == profileOf(request.resource.data.userId).nama
+            && request.resource.data.nim == profileOf(request.resource.data.userId).get('nim', '')
+            && request.resource.data.manual == true
+            && request.resource.data.dicatatOleh == request.auth.uid
+            && request.resource.data.waktuHadir == request.time;
 
-      // list: query rekap asisten (where sessionId) dan riwayat praktikan (where userId).
-      allow list: if signedIn() && (
-        (isPraktikan() && resource.data.userId == request.auth.uid)
-        || isPengampuSesi(resource.data.sessionId)
-      );
+          allow update: if false;
 
-      allow create: if isPraktikan()
-        && request.resource.data.keys().hasOnly(['sessionId', 'kelasId', 'userId', 'nama', 'nim', 'waktuHadir', 'kode'])
-        && request.resource.data.keys().hasAll(['sessionId', 'kelasId', 'userId', 'nama', 'nim', 'waktuHadir', 'kode'])
-        && request.resource.data.sessionId is string
-        && request.resource.data.userId == request.auth.uid
-        && attId == (request.resource.data.sessionId + '_' + request.auth.uid)
-        && sessionOf(request.resource.data.sessionId).status == 'dibuka'
-        && sessionOf(request.resource.data.sessionId).kelasId == request.resource.data.kelasId
-        && request.resource.data.kelasId in myProfile().get('kelasIds', [])
-        && request.resource.data.nama == myProfile().nama
-        && request.resource.data.nim == myProfile().get('nim', '')
-        // Izin sesi ini (ID izin = ID presensi) yang sudah DITERIMA = tidak boleh presensi.
-        // Izin menunggu tidak menghalangi: dihapus bersama presensi (lihat rules leaveRequests).
-        && !(exists(/databases/$(database)/documents/leaveRequests/$(attId))
-             && get(/databases/$(database)/documents/leaveRequests/$(attId)).data.status == 'diterima')
-        && request.resource.data.kode == codeOf(request.resource.data.sessionId).kode
-        && request.resource.data.waktuHadir == request.time;
+          // Asisten pengampu mereset presensi (kembali ke awal) hanya selagi sesi `dibuka`.
+          // Setelah sesi ditutup, rekap bersifat final. Praktikan tidak bisa menghapus presensinya.
+          allow delete: if isPengampuSesi(resource.data.sessionId)
+            && sessionOf(resource.data.sessionId).status == 'dibuka';
+        }
 
-      // Presensi oleh asisten pengampu kelas sesi, pembuat maupun partner (attendanceService.checkInManual).
-      // Aturan yang sama seperti presensi sendiri (satu per praktikan per sesi, hanya saat sesi
-      // `dibuka`, waktu = waktu server), ditambah: sesi milik asisten ini, praktikan terdaftar
-      // sebagai peserta kelas sesi tersebut, nama/NIM sama dengan profil praktikan, dan ditandai
-      // `manual: true` + `dicatatOleh` = uid asisten. Praktikan tidak bisa membuat dokumen dengan
-      // field `manual` karena rule presensi sendiri memakai hasOnly tanpa field itu.
-      allow create: if isAsisten()
-        && request.resource.data.keys().hasOnly(['sessionId', 'kelasId', 'userId', 'nama', 'nim', 'waktuHadir', 'manual', 'dicatatOleh'])
-        && request.resource.data.keys().hasAll(['sessionId', 'kelasId', 'userId', 'nama', 'nim', 'waktuHadir', 'manual', 'dicatatOleh'])
-        && request.resource.data.sessionId is string
-        && request.resource.data.userId is string
-        && attId == (request.resource.data.sessionId + '_' + request.resource.data.userId)
-        && isPengampuSesi(request.resource.data.sessionId)
-        && sessionOf(request.resource.data.sessionId).status == 'dibuka'
-        && sessionOf(request.resource.data.sessionId).kelasId == request.resource.data.kelasId
-        && request.resource.data.userId in classOf(request.resource.data.kelasId).get('pesertaIds', [])
-        && request.resource.data.nama == profileOf(request.resource.data.userId).nama
-        && request.resource.data.nim == profileOf(request.resource.data.userId).get('nim', '')
-        && request.resource.data.manual == true
-        && request.resource.data.dicatatOleh == request.auth.uid
-        && request.resource.data.waktuHadir == request.time;
+        // --- leaveRequests ------------------------------------------------------
+        // ID dokumen WAJIB `{sessionId}_{uid}` - satu pengajuan per praktikan per sesi; keunikan
+        // ditegakkan server (pengajuan ganda dari dua perangkat / saat offline tidak bisa lolos).
+        // Baca   : pemilik atau asisten pengampu kelas (pembuat maupun partner).
+        // asistenId = pembuat sesi (disalin dari sesi), bukan penentu akses asisten.
+        // Buat   : praktikan untuk sesi kelasnya, status menunggu.
+        // Ajukan ulang (update oleh praktikan): hanya jika pengajuan sebelumnya berstatus ditolak,
+        //          dengan isian yang lolos pemeriksaan yang sama seperti saat membuat.
+        // Putuskan (update oleh asisten): asisten pengampu, menunggu -> diterima/ditolak.
+        // Batalkan (hapus): praktikan pemilik, hanya selagi status masih menunggu.
+        match /leaveRequests/{leaveId} {
+          function validLeavePayload(docId) {
+            return request.resource.data.keys().hasOnly([
+                     'sessionId', 'kelasId', 'asistenId', 'praktikum', 'userId',
+                     'nama', 'nim', 'alasan', 'kategoriAI', 'aiStatus', 'status', 'createdAt'
+                   ])
+              && request.resource.data.keys().hasAll([
+                     'sessionId', 'kelasId', 'asistenId', 'userId', 'alasan', 'aiStatus', 'status', 'createdAt'
+                   ])
+              && request.resource.data.userId == request.auth.uid
+              && request.resource.data.status == 'menunggu'
+              && request.resource.data.sessionId is string
+              && docId == request.resource.data.sessionId + '_' + request.auth.uid
+              && request.resource.data.alasan is string
+              && request.resource.data.alasan.size() >= 10
+              && request.resource.data.alasan.size() <= 300
+              && request.resource.data.nama == myProfile().nama
+              && request.resource.data.nim == myProfile().get('nim', '')
+              && request.resource.data.kelasId in myProfile().get('kelasIds', [])
+              && sessionOf(request.resource.data.sessionId).kelasId == request.resource.data.kelasId
+              && sessionOf(request.resource.data.sessionId).asistenId == request.resource.data.asistenId
+              && sessionOf(request.resource.data.sessionId).status != 'ditutup'
+              // Sudah presensi di sesi ini (ID presensi = ID izin) = sudah hadir, jadi izin ditolak.
+              && !exists(/databases/$(database)/documents/attendances/$(docId))
+              && request.resource.data.aiStatus in ['berhasil', 'gagal']
+              // Hasil AI hanya informasi pendukung: kategori ada jika dan hanya jika AI berhasil.
+              // (Status izin TIDAK pernah ditentukan AI; selalu `menunggu` saat dibuat.)
+              && (
+                (request.resource.data.aiStatus == 'berhasil'
+                  && request.resource.data.get('kategoriAI', null) in ['positif', 'netral', 'negatif'])
+                || (request.resource.data.aiStatus == 'gagal'
+                  && request.resource.data.get('kategoriAI', null) == null)
+              )
+              && request.resource.data.createdAt == request.time;
+          }
 
-      allow update: if false;
+          allow read: if signedIn() && (
+            resource.data.userId == request.auth.uid
+            || isPengampuKelas(resource.data.kelasId)
+          );
 
-      // Asisten pengampu mereset presensi (kembali ke awal) hanya selagi sesi `dibuka`.
-      // Setelah sesi ditutup, rekap bersifat final. Praktikan tidak bisa menghapus presensinya.
-      allow delete: if isPengampuSesi(resource.data.sessionId)
-        && sessionOf(resource.data.sessionId).status == 'dibuka';
-    }
+          // get dokumen izin sendiri, termasuk saat BELUM ada (resource null): dipakai transaksi
+          // presensi untuk memeriksa izin. Cukup cek ID berakhiran uid sendiri ({sessionId}_{uid}).
+          allow get: if isPraktikan() && leaveId.matches('^.+_' + request.auth.uid + '$');
 
-    // --- leaveRequests ------------------------------------------------------
-    // ID dokumen WAJIB `{sessionId}_{uid}` → satu pengajuan per praktikan per sesi; keunikan
-    // ditegakkan server (pengajuan ganda dari dua perangkat / saat offline tidak bisa lolos).
-    // Baca   : pemilik atau asisten pengampu kelas (pembuat maupun partner).
-    // asistenId = pembuat sesi (disalin dari sesi), bukan penentu akses asisten.
-    // Buat   : praktikan untuk sesi kelasnya, status menunggu.
-    // Ajukan ulang (update oleh praktikan): hanya jika pengajuan sebelumnya berstatus ditolak,
-    //          dengan isian yang lolos pemeriksaan yang sama seperti saat membuat.
-    // Putuskan (update oleh asisten): asisten pengampu, menunggu -> diterima/ditolak.
-    // Batalkan (hapus): praktikan pemilik, hanya selagi status masih menunggu.
-    match /leaveRequests/{leaveId} {
-      function validLeavePayload(docId) {
-        return request.resource.data.keys().hasOnly([
-                 'sessionId', 'kelasId', 'asistenId', 'praktikum', 'userId',
-                 'nama', 'nim', 'alasan', 'kategoriAI', 'aiStatus', 'status', 'createdAt'
-               ])
-          && request.resource.data.keys().hasAll([
-                 'sessionId', 'kelasId', 'asistenId', 'userId', 'alasan', 'aiStatus', 'status', 'createdAt'
-               ])
-          && request.resource.data.userId == request.auth.uid
-          && request.resource.data.status == 'menunggu'
-          && request.resource.data.sessionId is string
-          && docId == request.resource.data.sessionId + '_' + request.auth.uid
-          && request.resource.data.alasan is string
-          && request.resource.data.alasan.size() >= 10
-          && request.resource.data.alasan.size() <= 300
-          && request.resource.data.nama == myProfile().nama
-          && request.resource.data.nim == myProfile().get('nim', '')
-          && request.resource.data.kelasId in myProfile().get('kelasIds', [])
-          && sessionOf(request.resource.data.sessionId).kelasId == request.resource.data.kelasId
-          && sessionOf(request.resource.data.sessionId).asistenId == request.resource.data.asistenId
-          && sessionOf(request.resource.data.sessionId).status != 'ditutup'
-          // Sudah presensi di sesi ini (ID presensi = ID izin) = sudah hadir, jadi izin ditolak.
-          && !exists(/databases/$(database)/documents/attendances/$(docId))
-          && request.resource.data.aiStatus in ['berhasil', 'gagal']
-          // Hasil AI hanya informasi pendukung: kategori ada jika dan hanya jika AI berhasil.
-          // (Status izin TIDAK pernah ditentukan AI; selalu `menunggu` saat dibuat.)
-          && (
-            (request.resource.data.aiStatus == 'berhasil'
-              && request.resource.data.get('kategoriAI', null) in ['positif', 'netral', 'negatif'])
-            || (request.resource.data.aiStatus == 'gagal'
-              && request.resource.data.get('kategoriAI', null) == null)
-          )
-          && request.resource.data.createdAt == request.time;
+          allow create: if isPraktikan()
+            && validLeavePayload(leaveId);
+
+          // Praktikan mengajukan ulang setelah ditolak (menimpa dokumen yang sama).
+          allow update: if isPraktikan()
+            && resource.data.userId == request.auth.uid
+            && resource.data.status == 'ditolak'
+            && validLeavePayload(leaveId);
+
+          // Asisten pengampu memutuskan pengajuan.
+          allow update: if isPengampuKelas(resource.data.kelasId)
+            && resource.data.status == 'menunggu'
+            && request.resource.data.diff(resource.data)
+                 .affectedKeys().hasOnly(['status', 'catatanAsisten'])
+            && request.resource.data.status in ['diterima', 'ditolak']
+            && (
+              !('catatanAsisten' in request.resource.data)
+              || (
+                request.resource.data.catatanAsisten is string
+                && request.resource.data.catatanAsisten.size() <= 500
+              )
+            );
+
+          // Reset oleh asisten pengampu selagi sesi `dibuka` (hanya status + catatan):
+          //   diterima -> menunggu : izin ajuan praktikan kembali ke antrean tinjauan (tidak dihapus).
+          allow update: if isPengampuKelas(resource.data.kelasId)
+            && sessionOf(resource.data.sessionId).status == 'dibuka'
+            && request.resource.data.diff(resource.data)
+                 .affectedKeys().hasOnly(['status', 'catatanAsisten'])
+            && resource.data.status == 'diterima'
+            && request.resource.data.status == 'menunggu'
+            && (
+              !('catatanAsisten' in request.resource.data)
+              || (
+                request.resource.data.catatanAsisten is string
+                && request.resource.data.catatanAsisten.size() <= 500
+              )
+            );
+
+          // Praktikan membatalkan pengajuannya sendiri selagi masih menunggu. Dipakai juga oleh transaksi
+          // presensi (attendanceService.checkIn): izin menunggu otomatis dibatalkan saat praktikan presensi.
+          allow delete: if isPraktikan()
+            && resource.data.userId == request.auth.uid
+            && resource.data.status == 'menunggu';
+        }
+
+        // --- pushTokens (Zhafran, feat/push-notif, SRS-34) -----------------------
+        // Token push notifikasi per pengguna: pushTokens/{uid} = { token, platform, diperbaruiPada }.
+        // - Tulis (create/update): hanya pemilik uid sendiri, dengan field yang valid.
+        // - Baca : semua asisten yang login (untuk mengambil token saat mengirim notifikasi dari klien).
+        // - Hapus : tidak diizinkan dari klien.
+        match /pushTokens/{uid} {
+          allow create, update: if signedIn()
+            && request.auth.uid == uid
+            && request.resource.data.keys().hasOnly(['token', 'platform', 'diperbaruiPada'])
+            && request.resource.data.keys().hasAll(['token', 'platform', 'diperbaruiPada'])
+            && request.resource.data.token is string
+            && request.resource.data.token.size() > 0
+            && request.resource.data.platform in ['android', 'ios']
+            && request.resource.data.diperbaruiPada == request.time;
+
+          // Asisten yang login boleh membaca token untuk keperluan kirim notifikasi.
+          allow read: if isAsisten();
+
+          // Token tidak bisa dihapus dari klien.
+          allow delete: if false;
+        }
+
+        // --- Default: tolak koleksi lain ----------------------------------------
+        match /{document=**} {
+          allow read, write: if false;
+        }
       }
-
-      allow read: if signedIn() && (
-        resource.data.userId == request.auth.uid
-        || isPengampuKelas(resource.data.kelasId)
-      );
-
-      // get dokumen izin sendiri, termasuk saat BELUM ada (resource null): dipakai transaksi
-      // presensi untuk memeriksa izin. Cukup cek ID berakhiran uid sendiri ({sessionId}_{uid}).
-      allow get: if isPraktikan() && leaveId.matches('^.+_' + request.auth.uid + '$');
-
-      allow create: if isPraktikan()
-        && validLeavePayload(leaveId);
-
-      // Praktikan mengajukan ulang setelah ditolak (menimpa dokumen yang sama).
-      allow update: if isPraktikan()
-        && resource.data.userId == request.auth.uid
-        && resource.data.status == 'ditolak'
-        && validLeavePayload(leaveId);
-
-      // Asisten pengampu memutuskan pengajuan.
-      allow update: if isPengampuKelas(resource.data.kelasId)
-        && resource.data.status == 'menunggu'
-        && request.resource.data.diff(resource.data)
-             .affectedKeys().hasOnly(['status', 'catatanAsisten'])
-        && request.resource.data.status in ['diterima', 'ditolak']
-        && (
-          !('catatanAsisten' in request.resource.data)
-          || (
-            request.resource.data.catatanAsisten is string
-            && request.resource.data.catatanAsisten.size() <= 500
-          )
-        );
-
-      // Reset oleh asisten pengampu selagi sesi `dibuka` (hanya status + catatan):
-      //   diterima -> menunggu : izin ajuan praktikan kembali ke antrean tinjauan (tidak dihapus).
-      allow update: if isPengampuKelas(resource.data.kelasId)
-        && sessionOf(resource.data.sessionId).status == 'dibuka'
-        && request.resource.data.diff(resource.data)
-             .affectedKeys().hasOnly(['status', 'catatanAsisten'])
-        && resource.data.status == 'diterima'
-        && request.resource.data.status == 'menunggu'
-        && (
-          !('catatanAsisten' in request.resource.data)
-          || (
-            request.resource.data.catatanAsisten is string
-            && request.resource.data.catatanAsisten.size() <= 500
-          )
-        );
-
-      // Praktikan membatalkan pengajuannya sendiri selagi masih menunggu. Dipakai juga oleh transaksi
-      // presensi (attendanceService.checkIn): izin menunggu otomatis dibatalkan saat praktikan presensi.
-      allow delete: if isPraktikan()
-        && resource.data.userId == request.auth.uid
-        && resource.data.status == 'menunggu';
     }
-
-    // --- Default: tolak koleksi lain ----------------------------------------
-    match /{document=**} {
-      allow read, write: if false;
-    }
-  }
-}
