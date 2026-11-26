@@ -16,7 +16,7 @@ import LoadingState from '../components/LoadingState';
 import PrimaryButton from '../components/PrimaryButton';
 import { colors, font, layout, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
-import { createAppError, getFriendlyError } from '../services/serviceUtils';
+import { createAppError, getFriendlyError, isTimeoutError, withTimeout } from '../services/serviceUtils';
 import {
   getLabs,
   updateLabLocation,
@@ -25,10 +25,11 @@ import {
 } from '../services/labService';
 
 type LabDraft = { lat: string; lng: string; radiusMeter: string };
-type Feedback = { message: string; ok: boolean };
+type Feedback = { message: string; status: 'success' | 'pending' | 'error' };
 type DraftField = keyof LabDraft;
 
 const EMPTY_DRAFT: LabDraft = { lat: '', lng: '', radiusMeter: '' };
+const GPS_ACQUISITION_TIMEOUT_MS = 30000;
 
 function draftFromLab(lab: LabLocation): LabDraft {
   return {
@@ -60,6 +61,7 @@ export default function LabLocationScreen() {
   const [labs, setLabs] = useState<LabLocation[] | null>(null);
   const [drafts, setDrafts] = useState<Partial<Record<LabCode, LabDraft>>>({});
   const [feedback, setFeedback] = useState<Partial<Record<LabCode, Feedback>>>({});
+  const [gpsAccuracy, setGpsAccuracy] = useState<Partial<Record<LabCode, number | null>>>({});
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [savingCode, setSavingCode] = useState<LabCode | null>(null);
@@ -111,8 +113,8 @@ export default function LabLocationScreen() {
     };
   }, [authLoading, role, setLabData]);
 
-  const setLabFeedback = (kode: LabCode, message: string, ok: boolean) => {
-    setFeedback((current) => ({ ...current, [kode]: { message, ok } }));
+  const setLabFeedback = (kode: LabCode, message: string, status: Feedback['status']) => {
+    setFeedback((current) => ({ ...current, [kode]: { message, status } }));
   };
 
   const updateDraft = (kode: LabCode, field: DraftField, value: string) => {
@@ -120,6 +122,9 @@ export default function LabLocationScreen() {
       ...current,
       [kode]: { ...(current[kode] ?? EMPTY_DRAFT), [field]: value },
     }));
+    if (field === 'lat' || field === 'lng') {
+      setGpsAccuracy((current) => ({ ...current, [kode]: undefined }));
+    }
     setFeedback((current) => ({ ...current, [kode]: undefined }));
   };
 
@@ -133,7 +138,7 @@ export default function LabLocationScreen() {
         setLabFeedback(
           lab.kode,
           'Layanan lokasi/GPS perangkat sedang mati. Aktifkan layanan lokasi, atau isi koordinat secara manual.',
-          false,
+          'error',
         );
         return;
       }
@@ -143,20 +148,33 @@ export default function LabLocationScreen() {
         setLabFeedback(
           lab.kode,
           'Izin lokasi ditolak. Izinkan akses lokasi di pengaturan perangkat, atau isi koordinat secara manual.',
-          false,
+          'error',
         );
         return;
       }
 
-      const position = await Location.getCurrentPositionAsync({});
+      const position = await withTimeout(
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+        GPS_ACQUISITION_TIMEOUT_MS,
+      );
       updateDraft(lab.kode, 'lat', String(position.coords.latitude));
       updateDraft(lab.kode, 'lng', String(position.coords.longitude));
+      setGpsAccuracy((current) => ({ ...current, [lab.kode]: position.coords.accuracy }));
       setLabFeedback(
         lab.kode,
-        'Koordinat saat ini sudah diisi. Tekan Simpan untuk mengirimnya ke Firestore.',
-        true,
+        'Koordinat sudah diisi. Periksa koordinat dan akurasinya sebelum menyimpan.',
+        'success',
       );
     } catch (error) {
+      if (isTimeoutError(error)) {
+        setLabFeedback(
+          lab.kode,
+          'Pencarian GPS melewati batas waktu 30 detik. Coba lagi di area terbuka atau isi koordinat secara manual.',
+          'error',
+        );
+        return;
+      }
+
       const locationModuleMissing =
         error instanceof Error && error.message.includes("Cannot find native module 'ExpoLocation'");
       setLabFeedback(
@@ -164,7 +182,7 @@ export default function LabLocationScreen() {
         locationModuleMissing
           ? 'Fitur GPS tidak tersedia di build aplikasi ini. Minta tim memasukkan Expo Location ke development build terbaru.'
           : 'Lokasi saat ini tidak tersedia. Periksa layanan lokasi/GPS atau isi koordinat secara manual.',
-        false,
+        'error',
       );
     } finally {
       setLocationCode(null);
@@ -174,14 +192,14 @@ export default function LabLocationScreen() {
   const saveLocation = async (lab: LabLocation) => {
     const draft = drafts[lab.kode];
     if (!draft) {
-      setLabFeedback(lab.kode, 'Data koordinat belum siap. Muat ulang data lalu coba lagi.', false);
+      setLabFeedback(lab.kode, 'Data koordinat belum siap. Muat ulang data lalu coba lagi.', 'error');
       return;
     }
     if (!lab.exists) {
       setLabFeedback(
         lab.kode,
         `Dokumen labs/${lab.kode} tidak ditemukan dan tidak dapat dibuat dari layar ini.`,
-        false,
+        'error',
       );
       return;
     }
@@ -198,12 +216,21 @@ export default function LabLocationScreen() {
       setLabs((current) =>
         current?.map((item) => (item.kode === lab.kode ? { ...item, ...location } : item)) ?? null,
       );
-      setLabFeedback(lab.kode, `Lokasi Lab ${lab.kode} berhasil disimpan.`, true);
+      setLabFeedback(lab.kode, `Lokasi Lab ${lab.kode} berhasil disimpan.`, 'success');
     } catch (error) {
+      if (isTimeoutError(error)) {
+        setLabFeedback(
+          lab.kode,
+          'Tersimpan di perangkat; sinkronisasi akan dilanjutkan saat online. Periksa kembali setelah koneksi pulih.',
+          'pending',
+        );
+        return;
+      }
+
       setLabFeedback(
         lab.kode,
         getFriendlyError(error, 'Lokasi gagal disimpan. Periksa koneksi internet lalu coba lagi.'),
-        false,
+        'error',
       );
     } finally {
       setSavingCode(null);
@@ -327,7 +354,16 @@ export default function LabLocationScreen() {
               ) : null}
 
               {message ? (
-                <View style={[styles.feedback, message.ok ? styles.successFeedback : styles.errorFeedback]}>
+                <View
+                  style={[
+                    styles.feedback,
+                    message.status === 'success'
+                      ? styles.successFeedback
+                      : message.status === 'pending'
+                        ? styles.pendingFeedback
+                        : styles.errorFeedback,
+                  ]}
+                >
                   <Text accessibilityLiveRegion="polite" style={styles.feedbackText}>
                     {message.message}
                   </Text>
@@ -350,6 +386,15 @@ export default function LabLocationScreen() {
                   {locationCode === lab.kode ? 'Mengambil lokasi...' : 'Gunakan Lokasi Saat Ini'}
                 </Text>
               </Pressable>
+
+              {gpsAccuracy[lab.kode] !== undefined ? (
+                <Text style={styles.accuracyText}>
+                  Akurasi GPS:{' '}
+                  {gpsAccuracy[lab.kode] === null
+                    ? 'tidak tersedia'
+                    : `±${gpsAccuracy[lab.kode]?.toFixed(1)} m`}
+                </Text>
+              ) : null}
 
               <PrimaryButton
                 label={savingCode === lab.kode ? 'Menyimpan...' : 'Simpan Lokasi'}
@@ -413,8 +458,10 @@ const styles = StyleSheet.create({
   warning: { ...text.caption, color: colors.warning },
   feedback: { padding: 11, borderWidth: 1, borderRadius: radius.input },
   successFeedback: { borderColor: colors.success, backgroundColor: colors.successTint },
+  pendingFeedback: { borderColor: colors.warning, backgroundColor: colors.warningTint },
   errorFeedback: { borderColor: colors.danger, backgroundColor: colors.dangerTint },
   feedbackText: { ...text.bodyStrong },
+  accuracyText: { ...text.caption, color: colors.textSecondary, textAlign: 'center' },
   locationButton: {
     minHeight: 48,
     flexDirection: 'row',
