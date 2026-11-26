@@ -36,6 +36,14 @@
         }
       ],
       [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#208AEF",
+          "sounds": []
+        }
+      ],
+      [
         "./plugins/withFirebaseBom.js",
         {
           "bom": "34.19.0"

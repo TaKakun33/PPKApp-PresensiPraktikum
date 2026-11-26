@@ -1,7 +1,7 @@
 // Pemilik: Hadrian (feat/classsessioncrud), SRS-17.
 // Daftar jadwal sesi real-time dari Firestore. Layar ini dipakai oleh DUA peran:
 //   praktikan -> sesi di kelas yang diikuti (profile.kelasIds)
-//   asisten   -> sesi yang diampu (asistenId), plus tombol Tambah Sesi dan Kelola Kelas
+//   asisten   -> sesi yang diampu (asistenId), plus tombol pengelolaan sesi, kelas, dan lokasi lab
 // Ada state loading, kosong, dan error (dengan tombol coba lagi).
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Redirect, router } from 'expo-router';
@@ -131,6 +131,7 @@ export default function ScheduleScreen() {
               <View style={styles.headerActions}>
                 <HeaderButton icon="add" label="Tambah Sesi" primary onPress={() => router.push('/session-form')} />
                 <HeaderButton icon="people-outline" label="Kelola Kelas" onPress={() => router.push('/kelas')} />
+                <HeaderButton icon="location-outline" label="Kelola Lokasi Lab" onPress={() => router.push('/lab-lokasi')} />
               </View>
             ) : null}
           </View>

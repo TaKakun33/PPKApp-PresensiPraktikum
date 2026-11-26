@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { text } from '../constants/theme';
 import LogoutButton from '../navigation/LogoutButton';
+import NotificationButton from '../navigation/NotificationButton';
 import ProfileButton from '../navigation/ProfileButton';
 
 type Props = {
@@ -21,6 +22,7 @@ export default function ScreenHeader({ title, right }: Props) {
       </Text>
       <View style={styles.actions}>
         {right}
+        <NotificationButton />
         <ProfileButton />
         <LogoutButton />
       </View>
