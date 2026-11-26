@@ -1,31 +1,49 @@
-// Tombol di header: membuka layar Profil (lihat data akun, ubah nama, ubah password).
-import Ionicons from '@expo/vector-icons/Ionicons';
+// Avatar di header: diketuk untuk membuka layar Profil (lihat data akun, ubah nama, ubah password).
+// Menggantikan ikon orang; ikon itu kini dipakai tombol tema (TemaButton).
 import { router } from 'expo-router';
-import { Pressable, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 
-import { colors, radius } from '../constants/theme';
+import { colors, font } from '../constants/theme';
+import { useAuth } from '../context/AuthContext';
 
-export default function ProfileButton() {
+/** Huruf pertama nama (maks. 2 kata) untuk avatar. */
+export function inisialNama(nama: string | null | undefined): string {
+  const huruf = (nama ?? '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((kata) => kata[0]?.toUpperCase() ?? '')
+    .join('');
+  return huruf || '?';
+}
+
+type Props = { size?: number };
+
+export default function ProfileButton({ size = 40 }: Props) {
+  const { profile } = useAuth();
   return (
     <Pressable
       onPress={() => router.push('/profile')}
-      style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]}
+      style={({ pressed }) => [
+        styles.avatar,
+        { width: size, height: size, borderRadius: Math.round(size / 3) },
+        pressed && styles.pressed,
+      ]}
       accessibilityRole="button"
-      accessibilityLabel="Buka profil"
+      accessibilityLabel="Buka profil akun"
     >
-      <Ionicons name="person-outline" size={18} color={colors.text} />
+      <Text style={[styles.teks, { fontSize: Math.round(size * 0.36) }]}>{inisialNama(profile?.nama)}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  btn: {
-    width: 40,
-    height: 40,
+  avatar: {
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.icon,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.tint,
   },
-  btnPressed: { backgroundColor: colors.tint, opacity: 0.9 },
+  pressed: { opacity: 0.75 },
+  teks: { fontFamily: font.extraBold, color: colors.secondaryText },
 });

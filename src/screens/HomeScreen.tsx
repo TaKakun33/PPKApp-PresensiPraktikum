@@ -15,6 +15,7 @@ import { useAuth } from '../context/AuthContext';
 import LogoutButton from '../navigation/LogoutButton';
 import NotificationButton from '../navigation/NotificationButton';
 import ProfileButton from '../navigation/ProfileButton';
+import TemaButton from '../navigation/TemaButton';
 import { getNamaPengguna, subscribeClassesForUser } from '../services/classService';
 import { subscribeAttendanceHistory, subscribeLeaveHistory } from '../services/historyService';
 import { labelWaktu, subscribeSessions, urutkanSesi } from '../services/sessionService';
@@ -48,19 +49,6 @@ function sapaan(): string {
   if (jam < 15) return 'Selamat siang';
   if (jam < 19) return 'Selamat sore';
   return 'Selamat malam';
-}
-
-function inisial(nama: string): string {
-  return (
-    nama
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((kata) => kata[0])
-      .join('')
-      .toUpperCase() || 'P'
-  );
 }
 
 function bagianTanggal(tanggal: string): { hari: string; angka: string; bulan: string } {
@@ -190,9 +178,7 @@ export default function HomeScreen() {
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.profileRow}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{inisial(profile.nama)}</Text>
-        </View>
+        <ProfileButton size={46} />
         <View style={styles.profileText}>
           <Text style={styles.greeting} numberOfLines={1}>
             {sapaan()}
@@ -202,7 +188,7 @@ export default function HomeScreen() {
           </Text>
         </View>
         <NotificationButton />
-        <ProfileButton />
+        <TemaButton />
         <LogoutButton />
       </View>
 
@@ -331,15 +317,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.tint,
-  },
-  avatarText: { fontSize: 16, fontFamily: font.extraBold, color: colors.secondaryText },
   profileText: { flex: 1, gap: 2 },
   greeting: { ...text.caption, fontFamily: font.medium },
   name: {

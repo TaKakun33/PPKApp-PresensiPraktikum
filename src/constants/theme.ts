@@ -1,11 +1,14 @@
 import type { TextStyle, ViewStyle } from 'react-native';
 
-import { ACTIVE_MODE, ACTIVE_THEME, THEMES, type ThemeColors } from './themes';
+import { bacaPilihanTema } from '../lib/temaTersimpan';
+import { THEMES, type ThemeColors } from './themes';
 
-// Warna diambil dari registry tema (src/constants/themes.ts).
-// Untuk mencoba tema/mode lain, ubah ACTIVE_THEME / ACTIVE_MODE di sana.
-export const colors: ThemeColors = THEMES[ACTIVE_THEME][ACTIVE_MODE];
-export const isDark = ACTIVE_MODE === 'dark';
+// Warna diambil dari registry tema (src/constants/themes.ts) sesuai pilihan pengguna yang
+// tersimpan di perangkat. Pilihan dibaca sekali saat aplikasi mulai; mengganti tema memuat
+// ulang aplikasi supaya semua StyleSheet ikut memakai warna baru.
+export const pilihanTema = bacaPilihanTema();
+export const colors: ThemeColors = THEMES[pilihanTema.tema][pilihanTema.mode];
+export const isDark = pilihanTema.mode === 'dark';
 
 export const radius = {
   pill: 999,

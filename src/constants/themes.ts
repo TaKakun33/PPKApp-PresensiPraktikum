@@ -590,9 +590,6 @@ export const THEMES = {
 
 export type ThemeId = keyof typeof THEMES;
 
-// Tema yang dipakai sekarang. Ganti di sini untuk mencoba tema lain.
-// Dark mode sudah disimpan, tetapi layar belum membaca mode perangkat:
-// style masih statis (StyleSheet.create di level modul).
+// Tema bawaan. Tema & mode yang aktif dipilih pengguna lewat tombol tema di header
+// (tersimpan di perangkat, lihat src/lib/temaTersimpan.ts).
 export const DEFAULT_THEME: ThemeId = 'navyBlue';
-export const ACTIVE_THEME: ThemeId = DEFAULT_THEME;
-export const ACTIVE_MODE: ThemeMode = 'dark';
