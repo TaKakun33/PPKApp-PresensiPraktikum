@@ -7,13 +7,14 @@
 // Layar Rekap hanya menampilkan hasilnya (tidak bisa mengubah).
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Modal, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import ConfirmModal from '../components/ConfirmModal';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';
 import PrimaryButton from '../components/PrimaryButton';
+import QrPresensi from '../components/QrPresensi';
 import StatusBadge from '../components/StatusBadge';
 import { colors, font, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
@@ -60,6 +61,7 @@ export default function ManualAttendanceScreen() {
     error: boolean;
   } | null>(null);
   const kodeDibuat = useRef<string | null>(null);
+  const [qrVisible, setQrVisible] = useState(false);
 
   const [aksi, setAksi] = useState<Aksi | null>(null);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -303,8 +305,16 @@ export default function ManualAttendanceScreen() {
                 <Text style={styles.kodeHint}>
                   {kodeError
                     ? 'Kode tidak dapat dimuat. Periksa koneksi internet lalu buka ulang layar ini.'
-                    : 'Bagikan kode ini ke praktikan di kelas. Praktikan memasukkannya saat presensi sendiri.'}
+                    : 'Bagikan kode ini ke praktikan di kelas. Praktikan memasukkannya atau memindai QR saat presensi sendiri.'}
                 </Text>
+                {kodePresensi ? (
+                  <PrimaryButton
+                    label="Tampilkan QR"
+                    icon="qr-code-outline"
+                    onPress={() => setQrVisible(true)}
+                    style={styles.tombolQr}
+                  />
+                ) : null}
               </View>
             ) : null}
 
@@ -397,6 +407,19 @@ export default function ManualAttendanceScreen() {
         onConfirm={konfirmasi}
         onCancel={() => setAksi(null)}
       />
+
+      {/* QR dibuka di Modal agar menutupi seluruh layar dan tidak ikut ter-scroll. */}
+      <Modal
+        visible={qrVisible && dibuka && !!kodePresensi && !!sessionId}
+        animationType="fade"
+        transparent
+        statusBarTranslucent
+        onRequestClose={() => setQrVisible(false)}
+      >
+        {kodePresensi && sessionId ? (
+          <QrPresensi sessionId={sessionId} kode={kodePresensi} onTutup={() => setQrVisible(false)} />
+        ) : null}
+      </Modal>
     </>
   );
 }
@@ -436,6 +459,7 @@ const styles = StyleSheet.create({
     color: colors.secondaryText,
   },
   kodeHint: { ...text.caption, textAlign: 'center' },
+  tombolQr: { alignSelf: 'stretch', marginTop: 8 },
   feedback: { padding: 12, borderWidth: 1, borderRadius: 14, backgroundColor: colors.card },
   errorFeedback: { borderColor: colors.danger, backgroundColor: colors.dangerTint },
   successFeedback: { borderColor: colors.success, backgroundColor: colors.successTint },
