@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { SectionList, StyleSheet, Text, View } from 'react-native';
 
 import { STATUS_SESI } from '../lib/constants';
 import type { Session } from '../lib/types';
@@ -15,13 +15,16 @@ import {
 } from '../services/sessionService';
 import ConfirmModal from '../components/ConfirmModal';
 import EmptyState from '../components/EmptyState';
+import KelompokHeader from '../components/KelompokHeader';
 import LoadingState from '../components/LoadingState';
 import PrimaryButton from '../components/PrimaryButton';
 import ScreenHeader from '../components/ScreenHeader';
 import StatusBadge from '../components/StatusBadge';
 import { colors, font, layout, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
+import { waktuWib } from '../services/jadwalService';
 import { useNamaKelas } from '../hooks/useNamaKelas';
+import { kelompokkanSesi } from '../utils/kelompokSesi';
 
 type SessionAction = 'open' | 'close';
 
@@ -35,11 +38,11 @@ type ActionFeedback = {
   ok: boolean;
 };
 
-const SESSION_PRIORITY: Record<string, number> = {
-  [STATUS_SESI.DIBUKA]: 0,
-  [STATUS_SESI.BELUM]: 1,
-  [STATUS_SESI.DITUTUP]: 2,
-};
+/** Jam selesai sesi (WIB) sudah lewat: sesi tidak mungkin dibuka lagi tanpa mengubah jadwal. */
+function sudahLewat(session: Session): boolean {
+  const selesai = waktuWib(session.tanggal, session.waktuSelesai);
+  return !Number.isNaN(selesai) && Date.now() >= selesai;
+}
 
 export default function ManageSessionScreen() {
   const { profile, role, loading: authLoading } = useAuth();
@@ -63,15 +66,9 @@ export default function ManageSessionScreen() {
     const unsubscribe = subscribeSessions(
       profile,
       (items) => {
-        const sorted = [...items].sort(
-          (a, b) =>
-            (SESSION_PRIORITY[a.status] ?? 99) - (SESSION_PRIORITY[b.status] ?? 99) ||
-            a.tanggal.localeCompare(b.tanggal) ||
-            a.waktuMulai.localeCompare(b.waktuMulai)
-        );
         setSessionState({
           profileId: profile.id,
-          sessions: sorted,
+          sessions: items,
           loading: false,
           error: null,
         });
@@ -109,6 +106,15 @@ export default function ManageSessionScreen() {
     const timer = setInterval(jalankan, 60000);
     return () => clearInterval(timer);
   }, [role, adaSesiLupa, profileId]);
+
+  // Detak per 30 detik: kelompok (Hari ini / Terlewat) dan alasan tombol Buka sesi ikut berubah saat jam berjalan.
+  const [, setDetak] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setDetak((n) => n + 1), 30000);
+    return () => clearInterval(timer);
+  }, []);
+  const kelompok = kelompokkanSesi(sessions);
+
   const isLoading = role === 'asisten' && (!currentSessionState || currentSessionState.loading);
   const loadError = currentSessionState?.error ?? null;
 
@@ -197,14 +203,18 @@ export default function ManageSessionScreen() {
   return (
     <View style={styles.screen}>
       <ScreenHeader title="Kelola Sesi" />
-      <FlatList
-        data={sessions}
+      <SectionList
+        sections={kelompok}
         keyExtractor={(session) => session.id}
         contentContainerStyle={styles.content}
+        stickySectionHeadersEnabled={false}
+        renderSectionHeader={({ section }) => (
+          <KelompokHeader judul={section.judul} keterangan={section.keterangan} jumlah={section.data.length} />
+        )}
         ListHeaderComponent={
           <View style={styles.header}>
             <Text style={styles.subtitle}>
-              Buka atau tutup sesi praktikum yang ditugaskan kepadamu. Presensi tersedia selama sesi dibuka.
+              Buka atau tutup sesi praktikum yang ditugaskan kepadamu, dikelompokkan menurut status. Presensi tersedia selama sesi dibuka.
             </Text>
 
             {loadError ? (
@@ -271,21 +281,34 @@ export default function ManageSessionScreen() {
             </View>
 
             {session.status === STATUS_SESI.BELUM ? (
-              <>
-                <PrimaryButton
-                  label="Buka sesi"
-                  onPress={() => requestAction(session.id, 'open')}
-                  disabled={submitting || sesiDibuka !== null}
-                  accessibilityLabel={`Buka sesi ${session.praktikum}`}
-                />
-                {sesiDibuka ? (
-                  <Text style={styles.lockHint}>
-                    Tutup sesi {sesiDibuka.praktikum} ({labelKelas(sesiDibuka.kelasId)}) terlebih dahulu.
-                  </Text>
-                ) : alasanTidakBisaDibuka(session) ? (
+              alasanTidakBisaDibuka(session) && sudahLewat(session) ? (
+                <>
                   <Text style={styles.lockHint}>{alasanTidakBisaDibuka(session)}</Text>
-                ) : null}
-              </>
+                  <PrimaryButton
+                    label="Ubah jadwal"
+                    onPress={() => router.push({ pathname: '/session-form', params: { id: session.id } })}
+                    disabled={submitting}
+                    accessibilityLabel={`Ubah jadwal sesi ${session.praktikum}`}
+                  />
+                </>
+              ) : (
+                <>
+                  {sesiDibuka ? (
+                    <Text style={styles.lockHint}>
+                      Tutup sesi {sesiDibuka.praktikum} ({labelKelas(sesiDibuka.kelasId)}) terlebih dahulu.
+                    </Text>
+                  ) : alasanTidakBisaDibuka(session) ? (
+                    <Text style={styles.lockHint}>{alasanTidakBisaDibuka(session)}</Text>
+                  ) : null}
+                  {/* Tombol tetap tampil, tetapi nonaktif selama belum waktunya / ada sesi lain yang dibuka. */}
+                  <PrimaryButton
+                    label="Buka sesi"
+                    onPress={() => requestAction(session.id, 'open')}
+                    disabled={submitting || sesiDibuka !== null || alasanTidakBisaDibuka(session) !== null}
+                    accessibilityLabel={`Buka sesi ${session.praktikum}`}
+                  />
+                </>
+              )
             ) : session.status === STATUS_SESI.DIBUKA ? (
               <View style={styles.actionRow}>
                 <PrimaryButton
