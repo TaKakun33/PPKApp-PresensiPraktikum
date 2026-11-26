@@ -1,6 +1,7 @@
 // Helper rekap kehadiran satu sesi, dipakai layar Rekap (hanya lihat) dan Presensi (ubah).
 import { STATUS_IZIN } from '../lib/constants';
 import type { Attendance, LeaveRequest, Profile, Session } from '../lib/types';
+import { waktuWib } from '../services/jadwalService';
 import { formatTanggalJam } from './format';
 
 export function toDateFromValue(value: unknown): Date | null {
@@ -59,14 +60,14 @@ export const REKAP_LABEL: Record<RekapStatus, string> = {
 
 export const REKAP_ORDER: Record<RekapStatus, number> = { hadir: 0, izin: 1, belum: 2, tidak: 3 };
 
-/** Sesi dianggap sudah lewat waktunya jika tanggal + waktuSelesai (jam lokal) sudah terlewati. */
+/** Sesi dianggap sudah lewat waktunya jika tanggal + waktuSelesai (WIB, apa pun zona waktu perangkat) sudah terlewati. */
 export function waktuSesiLewat(session: Session | null, now: number): boolean {
   if (!session) return false;
   const tgl = /^(\d{4})-(\d{2})-(\d{2})$/.exec(session.tanggal ?? '');
   const jam = /^(\d{1,2}):(\d{2})$/.exec((session.waktuSelesai ?? '').replace('.', ':'));
   if (!tgl || !jam) return false;
-  const akhir = new Date(Number(tgl[1]), Number(tgl[2]) - 1, Number(tgl[3]), Number(jam[1]), Number(jam[2]));
-  return now > akhir.getTime();
+  const akhir = waktuWib(session.tanggal, `${jam[1]}:${jam[2]}`);
+  return now > akhir;
 }
 
 /**
