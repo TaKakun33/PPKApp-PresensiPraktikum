@@ -31,6 +31,25 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/sessionCodes/$(sessionId)).data;
     }
 
+    // Validasi lokasi presensi di SERVER (SRS-27): jarak dihitung dari koordinat yang dikirim
+    // perangkat ke koordinat lab sesi, bukan dari angka jarakMeter kiriman aplikasi.
+    // Pendekatan bidang datar (akurat untuk radius <= 200 m): 1 derajat lintang = 111.320 m,
+    // 1 derajat bujur = 110.480 m (cos 7 derajat LS, area Semarang). Dibandingkan dalam kuadrat
+    // supaya tidak perlu akar.
+    function dalamRadiusLab(d) {
+      let lab = get(/databases/$(database)/documents/labs/$(sessionOf(d.sessionId).labKode)).data;
+      let dLat = (d.lokasi.lat - lab.lat) * 111320.0;
+      let dLng = (d.lokasi.lng - lab.lng) * 110480.0;
+      return d.lokasi is map
+        && d.lokasi.keys().hasOnly(['lat', 'lng'])
+        && d.lokasi.lat is number
+        && d.lokasi.lng is number
+        && d.akurasiMeter is number
+        && d.akurasiMeter >= 0
+        && d.jarakMeter is number
+        && dLat * dLat + dLng * dLng <= lab.radiusMeter * lab.radiusMeter;
+    }
+
     function classOf(kelasId) {
       return get(/databases/$(database)/documents/classes/$(kelasId)).data;
     }
@@ -218,7 +237,7 @@ service cloud.firestore {
     }
 
     // --- labs ---------------------------------------------------------------
-    // Ruangan lab praktikum: labs/{kode} = { kode, nama, kapasitas }, kode A, B, C, D, AP.
+    // Ruangan lab praktikum: labs/{kode} = { kode, nama, kapasitas }, kode AP, B, C, D (Lab A tidak ada).
     // Asisten hanya dapat memperbarui koordinat dan radius; dokumen tetap dibuat admin.
     match /labs/{kode} {
       allow read: if signedIn();
@@ -447,12 +466,13 @@ service cloud.firestore {
     // --- sessionCodes -------------------------------------------------------
     // Kode unik presensi per sesi: sessionCodes/{sessionId} = { sessionId, dibuatOleh, kode, expiresAt, createdAt }
     // `kode` = 5 karakter huruf besar/angka, dibuat saat sesi dibuka dan ditampilkan lewat QR.
-    // Dibaca oleh semua user login (get per dokumen, list diblokir). Praktikan mendapatkan kode
-    // dengan memindai QR dari asisten atau lewat kode yang dibagikan asisten.
+    // Dibaca HANYA oleh asisten pengampu kelas sesi. Praktikan tidak bisa membacanya langsung:
+    // kode didapat dengan memindai QR dari asisten (atau kode yang dibagikan asisten), lalu
+    // dicocokkan oleh rules attendances. Pakai get (bukan resource.data) agar aman saat belum ada.
     // Dibuat bersama perubahan status sesi menjadi `dibuka` dalam satu batch. Kode tidak bisa diubah
     // atau dihapus (update/delete ditolak).
     match /sessionCodes/{sessionId} {
-      allow get: if signedIn();
+      allow get: if isPengampuSesi(sessionId);
       allow list: if false;
 
       allow create: if isAsisten()
@@ -506,9 +526,11 @@ service cloud.firestore {
         && !(exists(/databases/$(database)/documents/leaveRequests/$(attId))
              && get(/databases/$(database)/documents/leaveRequests/$(attId)).data.status == 'diterima')
         && request.resource.data.kode == codeOf(request.resource.data.sessionId).kode
+        // Kode/QR hanya berlaku sampai akhir jam sesi (expiresAt).
+        && codeOf(request.resource.data.sessionId).expiresAt > request.time
         && request.resource.data.waktuHadir == request.time
-        // Validasi lokasi (SRS-27): jarakMeter <= radiusMeter lab sesi
-        && request.resource.data.jarakMeter <= get(/databases/$(database)/documents/labs/$(sessionOf(request.resource.data.sessionId).labKode)).data.radiusMeter;
+        // Validasi lokasi (SRS-27): jarak dihitung server dari koordinat perangkat ke lab.
+        && dalamRadiusLab(request.resource.data);
 
       // Presensi oleh asisten pengampu kelas sesi, pembuat maupun partner (attendanceService.checkInManual).
       // Aturan yang sama seperti presensi sendiri (satu per praktikan per sesi, hanya saat sesi

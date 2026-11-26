@@ -215,6 +215,15 @@ export function alasanTidakBisaDibuka(sesi: Pick<Session, "tanggal" | "waktuMula
  * dan hanya jika tidak ada sesi lain di kelas-kelas yang dia ampu yang sedang dibuka.
  * Throws jika tidak diizinkan atau Firestore gagal.
  */
+/**
+ * Kirim notifikasi TANPA ditunggu. Saat sinyal jelek, penulisan kotak masuk dan panggilan Expo Push
+ * bisa menggantung lama; aksi asisten (buka sesi, ubah jadwal, putuskan izin) tidak boleh ikut
+ * tertahan. Gagal kirim cukup dicatat di log.
+ */
+function kirimDiLatar(label: string, kerja: () => Promise<void>): void {
+  kerja().catch((e) => console.error(`[${label}] Gagal kirim notifikasi:`, e));
+}
+
 export async function openSession(sessionId: string, asistenId: string): Promise<void> {
   const { ref, sesi } = await getOwnedSession(sessionId, asistenId);
   if (sesi.status === "dibuka") throw new Error("Sesi sudah dibuka.");
@@ -247,12 +256,12 @@ export async function openSession(sessionId: string, asistenId: string): Promise
   // selalu punya kode. Kode disimpan di koleksi terpisah karena dokumen sesi bisa dibaca praktikan.
   const batch = writeBatch(db);
   batch.update(ref, { status: "dibuka" as StatusSesi, openedAt: serverTimestamp() });
-  batch.set(doc(db, "sessionCodes", sessionId), dataKodePresensi(sessionId, asistenId));
+  batch.set(doc(db, "sessionCodes", sessionId), dataKodePresensi({ ...sesi, id: sessionId }, asistenId));
   await batch.commit();
 
   // SRS-35: Kirim notifikasi ke seluruh praktikan kelas saat sesi dibuka.
-  // Gagal kirim notif tidak boleh mengganggu alur buka sesi (try-catch terpisah).
-  try {
+  // Gagal kirim notif tidak boleh mengganggu alur buka sesi (dikirim di latar, tidak ditunggu).
+  kirimDiLatar("openSession", async () => {
     const kelasSnap = await getDoc(doc(db, "classes", sesi.kelasId));
     const pesertaIds = (kelasSnap.data()?.pesertaIds ?? []) as string[];
     if (pesertaIds.length > 0) {
@@ -263,9 +272,7 @@ export async function openSession(sessionId: string, asistenId: string): Promise
         { layar: "detail-sesi", id: sessionId },
       );
     }
-  } catch (e) {
-    console.error("[openSession] Gagal kirim notifikasi:", e);
-  }
+  });
 }
 
 /**
@@ -380,8 +387,8 @@ export async function updateLeaveStatus(
   });
 
   // SRS-35: Kirim notifikasi ke praktikan pengaju saat izin diputuskan.
-  // Gagal kirim notif tidak boleh mengganggu alur keputusan izin (try-catch terpisah).
-  try {
+  // Gagal kirim notif tidak boleh mengganggu alur keputusan izin (dikirim di latar, tidak ditunggu).
+  kirimDiLatar("updateLeaveStatus", async () => {
     const statusLabel = status === STATUS_IZIN.DITERIMA ? "Diterima ✅" : "Ditolak ❌";
     await kirimNotifikasi(
       [request.userId],
@@ -389,9 +396,7 @@ export async function updateLeaveStatus(
       `Pengajuan izinmu untuk sesi ${request.praktikum} telah ${status}.`,
       { layar: "izin", id: leaveId, penting: true },
     );
-  } catch (e) {
-    console.error("[updateLeaveStatus] Gagal kirim notifikasi:", e);
-  }
+  });
 }
 
 // ─── KELOLA JADWAL (Hadrian, SRS-16; disesuaikan evaluasi Sprint 2) ──────────
@@ -533,8 +538,8 @@ export async function updateSession(
   }
 
   // SRS-35: Kirim notifikasi ke praktikan kelas saat jadwal sesi diubah.
-  // Gagal kirim notif tidak boleh mengganggu alur ubah jadwal (try-catch terpisah).
-  try {
+  // Gagal kirim notif tidak boleh mengganggu alur ubah jadwal (dikirim di latar, tidak ditunggu).
+  kirimDiLatar("updateSession", async () => {
     const kelasSnap = await getDoc(doc(db, "classes", sesi.kelasId));
     const pesertaIds = (kelasSnap.data()?.pesertaIds ?? []) as string[];
     if (pesertaIds.length > 0) {
@@ -545,9 +550,7 @@ export async function updateSession(
         { layar: "jadwal", id: sessionId, penting: true },
       );
     }
-  } catch (e) {
-    console.error("[updateSession] Gagal kirim notifikasi:", e);
-  }
+  });
 }
 
 /** Hapus sesi beserta booking lab-nya. Ditolak jika sudah dibuka atau sudah ada pengajuan izin. */
