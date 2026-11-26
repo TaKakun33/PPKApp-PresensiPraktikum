@@ -33,6 +33,9 @@ import type { Session } from "../lib/types";
 import { buatKodePresensi, kodePresensiValid, normalisasiKode } from "../utils/kodePresensi";
 import { getErrorCode, isTimeoutError, withTimeout } from "./serviceUtils";
 
+// Durasi kadaluarsa kode presensi / QR: 30 menit.
+const QR_EXPIRES_MENIT = 30;
+
 export type CheckInUser = {
   uid?: string;
   id?: string;
@@ -56,11 +59,14 @@ export function attendanceDocId(sessionId: string, uid: string): string {
  * Praktikan presensi sendiri. `kodeInput` = kode unik 5 karakter yang ditampilkan asisten.
  * Kode dikirim di dokumen presensi dan dicocokkan oleh firestore.rules dengan sessionCodes/{sessionId}
  * (praktikan tidak bisa membaca dokumen itu), jadi kode yang salah ditolak server.
+ * Lokasi (opsional) disimpan untuk validasi radius lab.
  */
 export async function checkIn(
   sessionId: string,
   user: CheckInUser,
-  kodeInput: string
+  kodeInput: string,
+  lokasi?: { lat: number; lng: number; akurasiMeter: number },
+  jarakMeter?: number
 ): Promise<CheckInResult> {
   const uid = user?.uid || user?.id;
   const nama = (user?.nama || user?.name || "").trim();
@@ -110,7 +116,7 @@ export async function checkIn(
           transaction.delete(leaveRef);
         }
 
-        transaction.set(attendanceRef, {
+        const dataPresensi: any = {
           sessionId,
           kelasId: sessionData?.kelasId ?? "",
           userId: uid,
@@ -118,7 +124,16 @@ export async function checkIn(
           nim,
           waktuHadir: serverTimestamp(),
           kode,
-        });
+        };
+        if (lokasi) {
+          dataPresensi.lokasi = { lat: lokasi.lat, lng: lokasi.lng };
+          dataPresensi.akurasiMeter = lokasi.akurasiMeter;
+        }
+        if (typeof jarakMeter === 'number') {
+          dataPresensi.jarakMeter = jarakMeter;
+        }
+
+        transaction.set(attendanceRef, dataPresensi);
       }),
       CHECKIN_TIMEOUT_MS
     );
@@ -169,9 +184,18 @@ export async function checkIn(
 // Hanya asisten pengampu kelas (pembuat maupun partner) yang dapat membacanya; praktikan hanya bisa mengirim tebakan lewat
 // dokumen presensi dan rules yang membandingkannya.
 
-/** Isi dokumen sessionCodes untuk sesi ini (dipakai openSession dan pastikanKodePresensi). */
+/** Isi dokumen sessionCodes untuk sesi ini (dipakai openSession dan pastikanKodePresensi).
+ * Skema (SRS-26): { sessionId, dibuatOleh, kode, expiresAt, createdAt }.
+ * kode = 5 karakter, expiresAt = now + 30 menit.
+ */
 export function dataKodePresensi(sessionId: string, asistenId: string) {
-  return { sessionId, asistenId, kode: buatKodePresensi(), createdAt: serverTimestamp() };
+  return {
+    sessionId,
+    dibuatOleh: asistenId,
+    kode: buatKodePresensi(),
+    expiresAt: new Date(Date.now() + QR_EXPIRES_MENIT * 60 * 1000),
+    createdAt: serverTimestamp(),
+  };
 }
 
 /** Real-time kode presensi sebuah sesi. `null` = belum ada. Hanya untuk asisten pengampu. */
