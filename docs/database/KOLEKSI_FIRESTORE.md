@@ -15,7 +15,7 @@ Klien tidak bisa menulis data yang melanggar aturan tersebut.
 | 1 | `users` | Profil setiap akun (praktikan dan asisten) |
 | 2 | `allowedAssistants` | Daftar email yang boleh mendaftar sebagai asisten |
 | 3 | `nimIndex` | Penjamin NIM tidak dipakai dua akun |
-| 4 | `labs` | Ruangan lab praktikum: Lab A, B, C, D, dan AP |
+| 4 | `labs` | Ruangan lab praktikum: Lab B, C, D, dan AP |
 | 5 | `classes` | Kelas A–E per praktikum, asisten pengampu (maks. 2), dan pesertanya |
 | 5a | `classes/{id}/peserta` | Nama dan NIM praktikan, terpisah untuk setiap kelas |
 | 6 | `sessions` | Jadwal sesi praktikum per kelas |
@@ -58,8 +58,8 @@ Jam sesi tidak disimpan sebagai koleksi karena nilainya tetap: lima slot masing-
 ### 4. `labs`: ruangan lab
 - **Fungsi:** daftar ruangan yang boleh dipakai sesi. Form Tambah Sesi menampilkannya sebagai
   dropdown **Ruangan Lab**, jadi ruangan tidak lagi diketik bebas.
-- **ID dokumen:** kode lab, yaitu `A`, `B`, `C`, `D`, `AP`.
-- **Field:** `kode`, `nama` (mis. `Lab A`), `kapasitas`, `lat` (angka, -90 sampai 90),
+- **ID dokumen:** kode lab aktif, yaitu `B`, `C`, `D`, `AP`.
+- **Field:** `kode`, `nama` (mis. `Lab B`), `kapasitas`, `lat` (angka, -90 sampai 90),
   `lng` (angka, -180 sampai 180), `radiusMeter` (angka, 10 sampai 200 meter),
   `diperbaruiOleh` (UID Firebase Authentication), dan `diperbaruiPada` (timestamp server
   Firestore). Field lokasi dan audit dapat belum ada sebelum lokasi pertama kali disimpan.
@@ -176,11 +176,10 @@ Jam sesi tidak disimpan sebagai koleksi karena nilainya tetap: lima slot masing-
    `firebase.json`). Indeks `users (role, nim)` dan `users (role, nama)` dibutuhkan untuk
    pencarian praktikan. Cara lain: tempel isi `firestore.rules` di Console → Firestore → Rules,
    dan buat dua indeks itu di Console → Firestore → Indexes.
-2. **Isi koleksi `labs`** di Console → Firestore → *Start collection* `labs`, dengan lima dokumen:
+2. **Isi koleksi `labs`** di Console → Firestore → *Start collection* `labs`, dengan empat dokumen aktif:
 
    | ID dokumen | `kode` (string) | `nama` (string) | `kapasitas` (number) |
    |---|---|---|---|
-   | `A` | `A` | `Lab A` | 40 |
    | `B` | `B` | `Lab B` | 40 |
    | `C` | `C` | `Lab C` | 40 |
    | `D` | `D` | `Lab D` | 40 |

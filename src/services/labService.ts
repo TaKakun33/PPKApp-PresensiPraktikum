@@ -3,7 +3,7 @@ import { doc, getDoc, serverTimestamp, updateDoc } from '@react-native-firebase/
 import { auth, db } from '../lib/firebase';
 import { createAppError, withTimeout } from './serviceUtils';
 
-export const LAB_CODES = ['A', 'AP', 'B', 'C', 'D'] as const;
+export const LAB_CODES = ['AP', 'B', 'C', 'D'] as const;
 export type LabCode = (typeof LAB_CODES)[number];
 
 export type LabLocation = {
@@ -43,7 +43,7 @@ function validateLocation({ lat, lng, radiusMeter }: LabLocationInput): void {
   }
 }
 
-/** Read the five fixed lab documents without creating missing documents or inventing values. */
+/** Read the four active lab documents without creating missing documents or inventing values. */
 export async function getLabs(): Promise<LabLocation[]> {
   const snapshots = await Promise.all(
     LAB_CODES.map(async (kode) => ({
