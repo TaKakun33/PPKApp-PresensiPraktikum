@@ -9,7 +9,6 @@ import type { Attendance, ClassDoc, LeaveRequest, Session } from '../lib/types';
 import { STATUS_IZIN } from '../lib/constants';
 import ErrorState from '../components/ErrorState';
 import LoadingState from '../components/LoadingState';
-import PrimaryButton from '../components/PrimaryButton';
 import { colors, font, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import LogoutButton from '../navigation/LogoutButton';
@@ -20,6 +19,7 @@ import { getNamaPengguna, subscribeClassesForUser } from '../services/classServi
 import { subscribeAttendanceHistory, subscribeLeaveHistory } from '../services/historyService';
 import { labelWaktu, subscribeSessions, urutkanSesi } from '../services/sessionService';
 import { formatTanggal } from '../utils/format';
+import { kelompokkanSesi, type KelompokSesi } from '../utils/kelompokSesi';
 
 const HARI = ['MINGGU', 'SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU'];
 const BULAN = ['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI', 'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER'];
@@ -74,6 +74,7 @@ export default function HomeScreen() {
   const [namaAsisten, setNamaAsisten] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const [tampilSelesai, setTampilSelesai] = useState(false);
 
   useEffect(() => {
     if (!profile) return;
@@ -155,7 +156,58 @@ export default function HomeScreen() {
     (session) => session.status !== 'ditutup' && session.tanggal >= hariIni,
   );
   const nearest = upcoming[0] ?? null;
-  const jadwalTerdekat = upcoming.slice(0, 3);
+
+  // Jadwal lengkap berkelompok (WIB). Sesi selesai / terlewat dilipat supaya Home tidak panjang.
+  const kelompok = kelompokkanSesi(sessions);
+  const kelompokAktif = kelompok.filter((k) => ['dibuka', 'hariIni', 'akanDatang'].includes(k.key));
+  const kelompokSelesai = kelompok.filter((k) => ['terlewat', 'ditutup'].includes(k.key));
+  const jumlahSelesai = kelompokSelesai.reduce((total, k) => total + k.data.length, 0);
+
+  const renderKartu = (session: Session) => {
+    const tanggal = bagianTanggal(session.tanggal);
+    return (
+      <Pressable
+        key={session.id}
+        style={({ pressed }) => [styles.scheduleCard, pressed && styles.scheduleCardPressed]}
+        onPress={() => router.push(`/session/${session.id}`)}
+        accessibilityRole="button"
+        accessibilityLabel={`${session.praktikum}, ${formatTanggal(`${session.tanggal}T00:00:00`)}`}
+      >
+        <View style={styles.dateColumn}>
+          <Text style={styles.dateDay}>{tanggal.hari}</Text>
+          <Text style={styles.dateNumber}>{tanggal.angka}</Text>
+          <Text style={styles.dateMonth}>{tanggal.bulan}</Text>
+        </View>
+        <View style={styles.scheduleDivider} />
+        <View style={styles.scheduleBody}>
+          <Text style={styles.scheduleTitle} numberOfLines={1}>
+            {session.praktikum}
+          </Text>
+          <Text style={styles.scheduleMeta} numberOfLines={1}>
+            {labelWaktu(session)} • {session.ruangan}
+          </Text>
+          <Text style={styles.scheduleAssistant} numberOfLines={1}>
+            {namaAsisten[session.asistenId] || 'Asisten praktikum'}
+          </Text>
+        </View>
+        <View style={styles.chevron}>
+          <Ionicons name="chevron-forward" size={16} color={colors.text} />
+        </View>
+      </Pressable>
+    );
+  };
+
+  const renderKelompok = (k: KelompokSesi) => (
+    <View key={k.key} style={styles.kelompok}>
+      <View style={styles.kelompokJudulBaris}>
+        <Text style={styles.kelompokJudul}>{k.judul}</Text>
+        <View style={styles.kelompokJumlah}>
+          <Text style={styles.kelompokJumlahTeks}>{k.data.length}</Text>
+        </View>
+      </View>
+      <View style={styles.scheduleList}>{k.data.map(renderKartu)}</View>
+    </View>
+  );
 
   const sesiLampau = sessions.filter(
     (session) => session.status === 'ditutup' || session.tanggal < hariIni,
@@ -240,69 +292,54 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Jadwal terdekat</Text>
-        <Pressable
-          onPress={() => router.push('/praktikan/jadwal')}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Lihat semua jadwal"
-        >
-          <Text style={styles.sectionLink}>Lihat semua</Text>
-        </Pressable>
+        <Text style={styles.sectionTitle}>Jadwal praktikum</Text>
       </View>
 
-      {jadwalTerdekat.length === 0 ? (
+      {kelompok.length === 0 ? (
         <View style={styles.emptyCard}>
           <View style={styles.emptyIcon}>
             <Ionicons name="calendar-outline" size={26} color={colors.text} />
           </View>
-          <Text style={styles.emptyTitle}>Belum ada jadwal terdekat</Text>
+          <Text style={styles.emptyTitle}>Belum ada jadwal</Text>
           <Text style={styles.emptyText}>
-            Jadwal praktikum yang aktif akan muncul di sini.
+            {(profile.kelasIds ?? []).length === 0
+              ? 'Kamu belum terdaftar di kelas mana pun. Hubungi asisten praktikum.'
+              : 'Jadwal praktikum kelasmu akan muncul di sini.'}
           </Text>
-          <PrimaryButton
-            label="Buka Jadwal"
-            size="sm"
-            onPress={() => router.push('/praktikan/jadwal')}
-            style={styles.emptyButton}
-          />
         </View>
       ) : (
-        <View style={styles.scheduleList}>
-          {jadwalTerdekat.map((session) => {
-            const tanggal = bagianTanggal(session.tanggal);
-            return (
+        <>
+          {kelompokAktif.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyTitle}>Tidak ada jadwal aktif</Text>
+              <Text style={styles.emptyText}>Belum ada sesi yang dibuka atau akan datang.</Text>
+            </View>
+          ) : (
+            kelompokAktif.map(renderKelompok)
+          )}
+
+          {jumlahSelesai > 0 ? (
+            <>
               <Pressable
-                key={session.id}
-                style={({ pressed }) => [styles.scheduleCard, pressed && styles.scheduleCardPressed]}
-                onPress={() => router.push(`/session/${session.id}`)}
+                onPress={() => setTampilSelesai((v) => !v)}
+                style={({ pressed }) => [styles.toggleSelesai, pressed && styles.pressed]}
                 accessibilityRole="button"
-                accessibilityLabel={`${session.praktikum}, ${formatTanggal(`${session.tanggal}T00:00:00`)}`}
+                accessibilityState={{ expanded: tampilSelesai }}
+                accessibilityLabel={tampilSelesai ? 'Sembunyikan sesi selesai' : 'Tampilkan sesi selesai'}
               >
-                <View style={styles.dateColumn}>
-                  <Text style={styles.dateDay}>{tanggal.hari}</Text>
-                  <Text style={styles.dateNumber}>{tanggal.angka}</Text>
-                  <Text style={styles.dateMonth}>{tanggal.bulan}</Text>
-                </View>
-                <View style={styles.scheduleDivider} />
-                <View style={styles.scheduleBody}>
-                  <Text style={styles.scheduleTitle} numberOfLines={1}>
-                    {session.praktikum}
-                  </Text>
-                  <Text style={styles.scheduleMeta} numberOfLines={1}>
-                    {labelWaktu(session)} • {session.ruangan}
-                  </Text>
-                  <Text style={styles.scheduleAssistant} numberOfLines={1}>
-                    {namaAsisten[session.asistenId] || 'Asisten praktikum'}
-                  </Text>
-                </View>
-                <View style={styles.chevron}>
-                  <Ionicons name="chevron-forward" size={16} color={colors.text} />
-                </View>
+                <Text style={styles.sectionLink}>
+                  {tampilSelesai ? 'Sembunyikan sesi selesai' : `Tampilkan sesi selesai (${jumlahSelesai})`}
+                </Text>
+                <Ionicons
+                  name={tampilSelesai ? 'chevron-up' : 'chevron-down'}
+                  size={14}
+                  color={colors.primaryText}
+                />
               </Pressable>
-            );
-          })}
-        </View>
+              {tampilSelesai ? kelompokSelesai.map(renderKelompok) : null}
+            </>
+          ) : null}
+        </>
       )}
     </ScrollView>
   );
@@ -500,5 +537,17 @@ const styles = StyleSheet.create({
     fontFamily: font.medium,
     color: colors.textSecondary,
   },
-  emptyButton: { alignSelf: 'center', minHeight: 44, marginTop: 4 },
+  kelompok: { gap: 10 },
+  kelompokJudulBaris: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  kelompokJudul: { fontSize: 13, fontFamily: font.bold, color: colors.secondaryText },
+  kelompokJumlah: {
+    minWidth: 20,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    backgroundColor: colors.tint,
+  },
+  kelompokJumlahTeks: { fontSize: 11, fontFamily: font.bold, color: colors.secondaryText },
+  toggleSelesai: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8 },
 });
