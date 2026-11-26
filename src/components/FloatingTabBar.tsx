@@ -19,7 +19,7 @@ export default function FloatingTabBar({
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
           const focused = state.index === index;
-          const color = focused ? colors.white : colors.tabInactive;
+          const color = focused ? colors.onHighlight : colors.tabInactive;
           const label =
             typeof options.tabBarLabel === 'string'
               ? options.tabBarLabel
@@ -49,7 +49,7 @@ export default function FloatingTabBar({
               accessibilityRole="button"
               accessibilityState={focused ? { selected: true } : {}}
               accessibilityLabel={options.tabBarAccessibilityLabel ?? label}
-              style={({ pressed }) => [styles.tab, pressed && styles.tabPressed]}
+              style={({ pressed }) => [styles.tab, focused && styles.tabActive, pressed && styles.tabPressed]}
             >
               {options.tabBarIcon?.({
                 focused,
@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 6,
     borderRadius: radius.pill,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.secondary,
     ...shadow.floating,
   },
   tab: {
@@ -90,6 +90,8 @@ const styles = StyleSheet.create({
     gap: 3,
     borderRadius: radius.pill,
   },
+  // Bar = brand (30%); tab aktif = pill highlightOnBrand (aksen bila kontras cukup).
+  tabActive: { backgroundColor: colors.highlightOnBrand },
   tabPressed: { opacity: 0.75 },
   label: { ...text.tab },
   labelFocused: { fontFamily: font.bold },

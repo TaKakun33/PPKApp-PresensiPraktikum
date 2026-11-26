@@ -15,6 +15,7 @@ import { useAuth } from '../context/AuthContext';
 import LogoutButton from '../navigation/LogoutButton';
 import NotificationButton from '../navigation/NotificationButton';
 import ProfileButton from '../navigation/ProfileButton';
+import TemaButton from '../navigation/TemaButton';
 import { getNamaPengguna, subscribeClassesForUser } from '../services/classService';
 import { subscribeAttendanceHistory, subscribeLeaveHistory } from '../services/historyService';
 import { labelWaktu, subscribeSessions, urutkanSesi } from '../services/sessionService';
@@ -48,19 +49,6 @@ function sapaan(): string {
   if (jam < 15) return 'Selamat siang';
   if (jam < 19) return 'Selamat sore';
   return 'Selamat malam';
-}
-
-function inisial(nama: string): string {
-  return (
-    nama
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((kata) => kata[0])
-      .join('')
-      .toUpperCase() || 'P'
-  );
 }
 
 function bagianTanggal(tanggal: string): { hari: string; angka: string; bulan: string } {
@@ -190,9 +178,7 @@ export default function HomeScreen() {
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.profileRow}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{inisial(profile.nama)}</Text>
-        </View>
+        <ProfileButton size={46} />
         <View style={styles.profileText}>
           <Text style={styles.greeting} numberOfLines={1}>
             {sapaan()}
@@ -202,7 +188,7 @@ export default function HomeScreen() {
           </Text>
         </View>
         <NotificationButton />
-        <ProfileButton />
+        <TemaButton />
         <LogoutButton />
       </View>
 
@@ -220,7 +206,7 @@ export default function HomeScreen() {
             accessibilityLabel={`Lihat detail ${nearest.praktikum}`}
           >
             <Text style={styles.heroButtonText}>Lihat detail jadwal</Text>
-            <Ionicons name="arrow-forward" size={15} color={colors.primary} />
+            <Ionicons name="arrow-forward" size={15} color={colors.onHighlight} />
           </Pressable>
         ) : null}
       </View>
@@ -234,7 +220,7 @@ export default function HomeScreen() {
         <View style={styles.summaryMetrics}>
           <View style={styles.metricRow}>
             <View style={styles.metricIcon}>
-              <Ionicons name="calendar-outline" size={17} color={colors.primary} />
+              <Ionicons name="calendar-outline" size={17} color={colors.text} />
             </View>
             <View style={styles.metricText}>
               <Text style={styles.metricValue}>{upcoming.length}</Text>
@@ -243,7 +229,7 @@ export default function HomeScreen() {
           </View>
           <View style={styles.metricRow}>
             <View style={styles.metricIcon}>
-              <Ionicons name="document-text-outline" size={17} color={colors.primary} />
+              <Ionicons name="document-text-outline" size={17} color={colors.text} />
             </View>
             <View style={styles.metricText}>
               <Text style={styles.metricValue}>{izinDiproses}</Text>
@@ -268,7 +254,7 @@ export default function HomeScreen() {
       {jadwalTerdekat.length === 0 ? (
         <View style={styles.emptyCard}>
           <View style={styles.emptyIcon}>
-            <Ionicons name="calendar-outline" size={26} color={colors.primary} />
+            <Ionicons name="calendar-outline" size={26} color={colors.text} />
           </View>
           <Text style={styles.emptyTitle}>Belum ada jadwal terdekat</Text>
           <Text style={styles.emptyText}>
@@ -311,7 +297,7 @@ export default function HomeScreen() {
                   </Text>
                 </View>
                 <View style={styles.chevron}>
-                  <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+                  <Ionicons name="chevron-forward" size={16} color={colors.text} />
                 </View>
               </Pressable>
             );
@@ -331,15 +317,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.tint,
-  },
-  avatarText: { fontSize: 16, fontFamily: font.extraBold, color: colors.primary },
   profileText: { flex: 1, gap: 2 },
   greeting: { ...text.caption, fontFamily: font.medium },
   name: {
@@ -351,7 +328,7 @@ const styles = StyleSheet.create({
   },
   hero: {
     overflow: 'hidden',
-    backgroundColor: colors.primary,
+    backgroundColor: colors.secondary,
     borderRadius: 26,
     padding: 22,
     paddingTop: 24,
@@ -387,7 +364,7 @@ const styles = StyleSheet.create({
     fontSize: 23,
     lineHeight: 29,
     fontFamily: font.extraBold,
-    color: colors.white,
+    color: colors.onSecondary,
     letterSpacing: -0.4,
   },
   heroSubtitle: {
@@ -402,13 +379,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: colors.white,
+    backgroundColor: colors.highlightOnBrand,
     borderRadius: radius.pill,
     paddingVertical: 9,
     paddingHorizontal: 14,
     marginTop: 8,
   },
-  heroButtonText: { fontSize: 12, fontFamily: font.bold, color: colors.primary },
+  heroButtonText: { fontSize: 12, fontFamily: font.bold, color: colors.onHighlight },
   pressed: { opacity: 0.82 },
   summaryCard: {
     flexDirection: 'row',
@@ -430,7 +407,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.card,
   },
-  attendanceValue: { fontSize: 19, fontFamily: font.extraBold, color: colors.primary },
+  attendanceValue: { fontSize: 19, fontFamily: font.extraBold, color: colors.secondaryText },
   attendanceLabel: { fontSize: 10, fontFamily: font.medium, color: colors.textSecondary },
   summaryDivider: { width: 1, height: 68, backgroundColor: colors.border },
   summaryMetrics: { flex: 1, gap: 12 },
@@ -453,7 +430,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   sectionTitle: { ...text.sectionTitle },
-  sectionLink: { fontSize: 12, fontFamily: font.bold, color: colors.primary },
+  sectionLink: { fontSize: 12, fontFamily: font.bold, color: colors.primaryText },
   scheduleList: { gap: 10 },
   scheduleCard: {
     flexDirection: 'row',
@@ -482,12 +459,12 @@ const styles = StyleSheet.create({
     width: 3,
     height: 44,
     borderRadius: radius.pill,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.secondary,
   },
   scheduleBody: { flex: 1, gap: 2 },
   scheduleTitle: { fontSize: 14, fontFamily: font.bold, color: colors.text },
   scheduleMeta: { fontSize: 11, fontFamily: font.medium, color: colors.textSecondary },
-  scheduleAssistant: { fontSize: 11, fontFamily: font.semibold, color: colors.primary },
+  scheduleAssistant: { fontSize: 11, fontFamily: font.semibold, color: colors.secondaryText },
   chevron: {
     width: 28,
     height: 28,

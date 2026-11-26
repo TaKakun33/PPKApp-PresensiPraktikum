@@ -29,7 +29,7 @@ function HeaderButton({ icon, label, onPress, primary }: { icon: IoniconsName; l
       accessibilityRole="button"
       accessibilityLabel={label}
     >
-      <Ionicons name={icon} size={16} color={primary ? colors.white : colors.primary} />
+      <Ionicons name={icon} size={16} color={primary ? colors.onPrimary : colors.text} />
       <Text style={[styles.headerButtonText, primary && styles.headerButtonTextPrimary]}>{label}</Text>
     </Pressable>
   );
@@ -116,7 +116,7 @@ export default function ScheduleScreen() {
         ListHeaderComponent={
           <View style={styles.header}>
             <View style={styles.roleChip}>
-              <Ionicons name="person-circle-outline" size={15} color={colors.primary} />
+              <Ionicons name="person-circle-outline" size={15} color={colors.text} />
               <Text style={styles.roleText} numberOfLines={1}>
                 {profile.nama} ({isAsisten ? 'Asisten' : 'Praktikan'})
               </Text>
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.tint,
     marginBottom: 4,
   },
-  roleText: { ...text.caption, color: colors.primary, fontFamily: font.semibold },
+  roleText: { ...text.caption, color: colors.secondaryText, fontFamily: font.semibold },
   title: { fontSize: 20, fontFamily: font.extraBold, color: colors.text },
   subtitle: { ...text.body, fontFamily: font.medium },
   headerActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
@@ -193,8 +193,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
   },
   headerButtonPrimary: { borderColor: colors.primary, backgroundColor: colors.primary },
-  headerButtonText: { fontSize: 12, fontFamily: font.bold, color: colors.primary },
-  headerButtonTextPrimary: { color: colors.white },
+  headerButtonText: { fontSize: 12, fontFamily: font.bold, color: colors.secondaryText },
+  headerButtonTextPrimary: { color: colors.onPrimary },
   pressed: { opacity: 0.8 },
   separator: { height: 12 },
 });

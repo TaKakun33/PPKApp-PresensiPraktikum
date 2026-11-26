@@ -17,15 +17,12 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { COLORS } from '../constants/colors';
+import { colors, isDark } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { useScrollKeFieldFokus } from '../hooks/useScrollKeFieldFokus';
 import { getAuthErrorMessage, sendPasswordReset } from '../services/authService';
 import AuthLoadingGate from '../navigation/AuthLoadingGate';
 
-const NAVY = '#0B2447';
-const INPUT_BG = '#F5F6F8';
-const MUTED_TEXT = '#8A8F98';
 
 export default function LoginScreen() {
   const { signIn, state, authError, profileError, clearAuthError } = useAuth();
@@ -99,7 +96,7 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       {/* behavior="padding" di Android DAN iOS: Android edge-to-edge tidak me-resize jendela sendiri. */}
       <KeyboardAvoidingView style={styles.flex} behavior="padding">
         <ScrollView
@@ -128,11 +125,11 @@ export default function LoginScreen() {
           <View style={styles.form} onLayout={saatLayoutForm}>
             <View onLayout={saatLayoutField('email')}>
               <View style={styles.inputBox}>
-                <Ionicons name="mail-outline" size={18} color={MUTED_TEXT} />
+                <Ionicons name="mail-outline" size={18} color={colors.placeholder} />
                 <TextInput
                   style={styles.input}
                   placeholder="Email"
-                  placeholderTextColor={MUTED_TEXT}
+                  placeholderTextColor={colors.placeholder}
                   value={email}
                   onFocus={() => fokusKe('email')}
                   onChangeText={(t) => {
@@ -154,12 +151,12 @@ export default function LoginScreen() {
 
             <View onLayout={saatLayoutField('password')}>
               <View style={styles.inputBox}>
-                <Ionicons name="lock-closed-outline" size={18} color={MUTED_TEXT} />
+                <Ionicons name="lock-closed-outline" size={18} color={colors.placeholder} />
                 <TextInput
                   ref={passwordRef}
                   style={styles.input}
                   placeholder="Password"
-                  placeholderTextColor={MUTED_TEXT}
+                  placeholderTextColor={colors.placeholder}
                   value={password}
                   onFocus={() => fokusKe('password')}
                   onChangeText={(t) => {
@@ -183,7 +180,7 @@ export default function LoginScreen() {
                   <Ionicons
                     name={showPass ? 'eye-off-outline' : 'eye-outline'}
                     size={19}
-                    color={MUTED_TEXT}
+                    color={colors.placeholder}
                   />
                 </Pressable>
               </View>
@@ -205,14 +202,14 @@ export default function LoginScreen() {
 
             {info ? (
               <View style={styles.infoBox}>
-                <Ionicons name="checkmark-circle" size={15} color={COLORS.success} />
+                <Ionicons name="checkmark-circle" size={15} color={colors.success} />
                 <Text style={styles.infoBoxText}>{info}</Text>
               </View>
             ) : null}
 
             {displayedError ? (
               <View style={styles.errorBox}>
-                <Ionicons name="alert-circle" size={15} color={COLORS.danger} />
+                <Ionicons name="alert-circle" size={15} color={colors.danger} />
                 <Text style={styles.errorText}>{displayedError}</Text>
               </View>
             ) : null}
@@ -224,7 +221,7 @@ export default function LoginScreen() {
               accessibilityRole="button"
               accessibilityLabel={busy ? 'Memproses' : 'Masuk'}
             >
-              {busy ? <ActivityIndicator size="small" color={COLORS.white} /> : null}
+              {busy ? <ActivityIndicator size="small" color={colors.onPrimary} /> : null}
               <Text style={styles.buttonText}>{busy ? 'Memproses...' : 'Masuk'}</Text>
             </Pressable>
 
@@ -246,11 +243,11 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.white },
+  safe: { flex: 1, backgroundColor: colors.card },
   flex: { flex: 1 },
   scrollContent: {
     flexGrow: 1,
-    backgroundColor: COLORS.white,
+    backgroundColor: colors.card,
     paddingHorizontal: 24,
     paddingTop: 18,
   },
@@ -258,7 +255,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 190,
     borderRadius: 22,
-    backgroundColor: '#F1F2F4',
+    backgroundColor: colors.tint,
   },
   brand: {
     marginTop: 26,
@@ -269,14 +266,14 @@ const styles = StyleSheet.create({
     fontSize: 27,
     lineHeight: 33,
     fontFamily: 'PlusJakartaSans_800ExtraBold',
-    color: NAVY,
+    color: colors.text,
     letterSpacing: -0.6,
   },
   heroSubtitle: {
     fontSize: 13,
     lineHeight: 19,
     fontFamily: 'PlusJakartaSans_500Medium',
-    color: MUTED_TEXT,
+    color: colors.textSecondary,
   },
   form: { marginTop: 30, gap: 14 },
   inputBox: {
@@ -284,10 +281,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: INPUT_BG,
+    backgroundColor: colors.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#F0F1F3',
+    borderColor: colors.border,
     paddingLeft: 16,
     paddingRight: 12,
   },
@@ -295,7 +292,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontFamily: 'PlusJakartaSans_400Regular',
-    color: NAVY,
+    color: colors.text,
     paddingVertical: 13,
     paddingHorizontal: 0,
   },
@@ -316,13 +313,13 @@ const styles = StyleSheet.create({
   forgotText: {
     fontSize: 13,
     fontFamily: 'PlusJakartaSans_600SemiBold',
-    color: NAVY,
+    color: colors.primaryText,
   },
   infoBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: COLORS.successLight,
+    backgroundColor: colors.successTint,
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 12,
@@ -331,16 +328,16 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontFamily: 'PlusJakartaSans_500Medium',
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
   },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: COLORS.dangerLight,
+    backgroundColor: colors.dangerTint,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.dangerBorder,
+    borderColor: colors.dangerBorder,
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
@@ -348,11 +345,11 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontFamily: 'PlusJakartaSans_500Medium',
-    color: COLORS.danger,
+    color: colors.danger,
   },
   button: {
     marginTop: 8,
-    backgroundColor: NAVY,
+    backgroundColor: colors.primary,
     paddingVertical: 16,
     paddingHorizontal: 22,
     borderRadius: 14,
@@ -367,7 +364,7 @@ const styles = StyleSheet.create({
     fontFamily: 'PlusJakartaSans_700Bold',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
-    color: COLORS.white,
+    color: colors.onPrimary,
   },
   footer: {
     marginTop: 'auto',
@@ -384,16 +381,16 @@ const styles = StyleSheet.create({
   infoText: {
     fontSize: 13,
     fontFamily: 'PlusJakartaSans_400Regular',
-    color: MUTED_TEXT,
+    color: colors.textSecondary,
   },
   link: {
     fontSize: 13,
     fontFamily: 'PlusJakartaSans_700Bold',
-    color: NAVY,
+    color: colors.primaryText,
   },
   copyright: {
     fontSize: 11,
     fontFamily: 'PlusJakartaSans_400Regular',
-    color: MUTED_TEXT,
+    color: colors.textSecondary,
   },
 });

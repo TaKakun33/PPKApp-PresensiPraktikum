@@ -63,7 +63,7 @@ function ActionButton({
   tone?: 'default' | 'danger' | 'primary';
   disabled?: boolean;
 }) {
-  const color = tone === 'primary' ? colors.primary : colors.text;
+  const color = tone === 'primary' ? colors.primaryText : colors.text;
   return (
     <Pressable
       style={({ pressed }) => [
@@ -228,7 +228,7 @@ function PesertaPanel({ cls }: { cls: ClassDoc }) {
         jadi bisa langsung menambah yang lain.
       </Text>
 
-      {mencari ? <ActivityIndicator style={styles.panelLoading} color={colors.primary} /> : null}
+      {mencari ? <ActivityIndicator style={styles.panelLoading} color={colors.primaryText} /> : null}
       {!mencari && hasil ? (
         hasil.length === 0 ? (
           <Text style={styles.emptyText}>
@@ -257,6 +257,7 @@ function PesertaPanel({ cls }: { cls: ClassDoc }) {
                 <PrimaryButton
                   label="Tambah"
                   size="sm"
+                  variant="secondary"
                   onPress={() => tambah(p)}
                   disabled={!!savingId}
                   loading={savingId === p.id}
@@ -277,7 +278,7 @@ function PesertaPanel({ cls }: { cls: ClassDoc }) {
       {error ? (
         <Text style={[styles.info, { color: colors.danger }]}>{error}</Text>
       ) : peserta === null ? (
-        <ActivityIndicator style={styles.panelLoading} color={colors.primary} />
+        <ActivityIndicator style={styles.panelLoading} color={colors.primaryText} />
       ) : peserta.length === 0 ? (
         <Text style={styles.emptyText}>Belum ada peserta. Cari praktikan di atas untuk menambahkannya.</Text>
       ) : (
@@ -296,7 +297,7 @@ function PesertaPanel({ cls }: { cls: ClassDoc }) {
               accessibilityRole="button"
               accessibilityLabel={`Keluarkan ${p.nama}`}
             >
-              <Ionicons name="person-remove-outline" size={18} color={colors.primary} />
+              <Ionicons name="person-remove-outline" size={18} color={colors.text} />
             </Pressable>
           </View>
         ))
@@ -642,7 +643,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: colors.tint,
   },
-  saranText: { fontSize: 12, fontFamily: font.semibold, color: colors.primary },
+  saranText: { fontSize: 12, fontFamily: font.semibold, color: colors.secondaryText },
   info: { fontSize: 12, lineHeight: 18, fontFamily: font.medium },
   emptyText: { ...text.caption, paddingVertical: 6 },
   pesertaRow: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 8 },
@@ -654,7 +655,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.tint,
   },
-  pesertaInitial: { fontSize: 13, fontFamily: font.extraBold, color: colors.primary },
+  pesertaInitial: { fontSize: 13, fontFamily: font.extraBold, color: colors.secondaryText },
   pesertaNama: { fontSize: 14, fontFamily: font.semibold, color: colors.text },
   pesertaNim: { ...text.caption },
   label: { ...text.bodyStrong, color: colors.textSecondary, marginTop: 8 },
@@ -669,7 +670,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     backgroundColor: colors.card,
   },
-  backdrop: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: 'rgba(20, 35, 74, 0.48)' },
+  backdrop: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: colors.overlay },
   modal: { backgroundColor: colors.card, borderRadius: 24, padding: 20, gap: 6 },
   modalTitle: { fontSize: 18, fontFamily: font.extraBold, color: colors.text, marginBottom: 4 },
   modalActions: { flexDirection: 'row', gap: 10, marginTop: 14 },

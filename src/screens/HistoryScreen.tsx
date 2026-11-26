@@ -217,7 +217,7 @@ export default function HistoryScreen() {
         <View style={styles.banner}>
           <View style={styles.bannerCircle} />
           <View style={styles.bannerIcon}>
-            <Ionicons name="checkmark" size={23} color={colors.white} />
+            <Ionicons name="checkmark" size={23} color={colors.onSecondary} />
           </View>
           <View style={styles.bannerBody}>
             <Text style={styles.bannerValue}>{persentaseHadir}%</Text>
@@ -238,7 +238,7 @@ export default function HistoryScreen() {
               <Ionicons
                 name={activeTab === 'presensi' ? 'checkbox-outline' : 'document-text-outline'}
                 size={24}
-                color={colors.primary}
+                color={colors.text}
               />
             </View>
             <Text style={styles.emptyTitle}>
@@ -257,7 +257,7 @@ export default function HistoryScreen() {
               return (
                 <View key={attendance.id} style={styles.itemCard}>
                   <View style={styles.itemIcon}>
-                    <Ionicons name="checkmark" size={17} color={colors.primary} />
+                    <Ionicons name="checkmark" size={17} color={colors.text} />
                   </View>
                   <View style={styles.itemBody}>
                     <Text style={styles.itemTitle} numberOfLines={1}>
@@ -283,7 +283,7 @@ export default function HistoryScreen() {
                 <View key={leave.id} style={styles.leaveCard}>
                   <View style={styles.leaveTop}>
                     <View style={styles.itemIcon}>
-                      <Ionicons name="document-text" size={16} color={colors.primary} />
+                      <Ionicons name="document-text" size={16} color={colors.text} />
                     </View>
                     <View style={styles.itemBody}>
                       <Text style={styles.itemTitle} numberOfLines={1}>
@@ -302,7 +302,7 @@ export default function HistoryScreen() {
 
                   {kategori ? (
                     <View style={styles.aiBadge}>
-                      <Ionicons name="sparkles-outline" size={12} color={colors.primary} />
+                      <Ionicons name="sparkles-outline" size={12} color={colors.text} />
                       <Text style={styles.aiBadgeText}>Kategori AI: {labelKategori(kategori)}</Text>
                     </View>
                   ) : null}
@@ -352,13 +352,13 @@ const styles = StyleSheet.create({
   },
   segmentActive: { backgroundColor: colors.primary },
   segmentText: { fontSize: 13, fontFamily: font.semibold, color: colors.textSecondary },
-  segmentTextActive: { color: colors.white, fontFamily: font.bold },
+  segmentTextActive: { color: colors.onPrimary, fontFamily: font.bold },
   banner: {
     overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.secondary,
     borderRadius: radius.card,
     padding: 18,
   },
@@ -384,7 +384,7 @@ const styles = StyleSheet.create({
     fontSize: 27,
     lineHeight: 32,
     fontFamily: font.extraBold,
-    color: colors.white,
+    color: colors.onSecondary,
     letterSpacing: -0.6,
   },
   bannerLabel: {
@@ -442,7 +442,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: radius.pill,
   },
-  aiBadgeText: { fontSize: 10, fontFamily: font.semibold, color: colors.primary },
+  aiBadgeText: { fontSize: 10, fontFamily: font.semibold, color: colors.secondaryText },
   noteBox: {
     padding: 11,
     borderRadius: 14,

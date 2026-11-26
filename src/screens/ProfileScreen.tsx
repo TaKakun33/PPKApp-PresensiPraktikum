@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { fontSize: 30, fontFamily: font.extraBold, color: colors.primary },
+  avatarText: { fontSize: 30, fontFamily: font.extraBold, color: colors.secondaryText },
   name: { textAlign: 'center', fontSize: 18, fontFamily: font.extraBold, color: colors.text },
   roleBadge: {
     alignSelf: 'center',
@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 12,
   },
-  roleText: { fontSize: 12, fontFamily: font.semibold, color: colors.primary },
+  roleText: { fontSize: 12, fontFamily: font.semibold, color: colors.secondaryText },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   infoLabel: { ...text.bodyStrong, color: colors.textSecondary },
   infoValue: { flex: 1, textAlign: 'right', ...text.bodyStrong },

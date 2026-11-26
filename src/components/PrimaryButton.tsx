@@ -38,7 +38,7 @@ export default function PrimaryButton({
 }: Props) {
   const isPrimary = variant === 'primary';
   const inactive = disabled || loading;
-  const foreground = isPrimary ? colors.white : colors.primary;
+  const foreground = inactive ? colors.textSecondary : isPrimary ? colors.onPrimary : colors.secondaryText;
 
   return (
     <Pressable
@@ -57,7 +57,7 @@ export default function PrimaryButton({
       ]}
     >
       {loading ? (
-        <ActivityIndicator size="small" color={inactive && !isPrimary ? colors.placeholder : foreground} />
+        <ActivityIndicator size="small" color={foreground} />
       ) : icon ? (
         <Ionicons name={icon} size={size === 'sm' ? 15 : 17} color={foreground} />
       ) : null}
@@ -66,7 +66,6 @@ export default function PrimaryButton({
           styles.label,
           size === 'sm' && styles.labelSmall,
           { color: foreground },
-          inactive && !isPrimary && styles.labelSecondaryDisabled,
         ]}
         numberOfLines={1}
       >
@@ -89,10 +88,9 @@ const styles = StyleSheet.create({
   small: { minHeight: 42, paddingHorizontal: 14, gap: 6 },
   primary: { backgroundColor: colors.primary },
   secondary: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
-  primaryDisabled: { backgroundColor: colors.dashed },
+  primaryDisabled: { backgroundColor: colors.border },
   secondaryDisabled: { backgroundColor: colors.surface, borderColor: colors.border },
   pressed: { opacity: 0.84 },
   label: { ...text.button, fontFamily: font.bold },
   labelSmall: { fontSize: 12, letterSpacing: 0.4 },
-  labelSecondaryDisabled: { color: colors.placeholder },
 });

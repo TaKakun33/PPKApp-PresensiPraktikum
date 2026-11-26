@@ -9,9 +9,10 @@ import {
 } from '@expo-google-fonts/plus-jakarta-sans';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
-import { colors, font } from '../constants/theme';
+import { colors, font, isDark } from '../constants/theme';
 import { AuthProvider } from '../context/AuthContext';
 // Zhafran (feat/push-notif, SRS-34, 36): provider kotak masuk & registrasi notifikasi.
 import { NotificationProvider } from '../context/NotificationContext';
@@ -38,11 +39,12 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <NotificationProvider>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
         <Stack
           screenOptions={{
             headerShown: false,
             headerStyle: { backgroundColor: colors.card },
-            headerTintColor: colors.primary,
+            headerTintColor: colors.primaryText,
             headerTitleStyle: { color: colors.text, fontFamily: font.bold, fontSize: 17 },
             headerShadowVisible: false,
             contentStyle: { backgroundColor: colors.bg },

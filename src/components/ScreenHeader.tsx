@@ -6,6 +6,7 @@ import { text } from '../constants/theme';
 import LogoutButton from '../navigation/LogoutButton';
 import NotificationButton from '../navigation/NotificationButton';
 import ProfileButton from '../navigation/ProfileButton';
+import TemaButton from '../navigation/TemaButton';
 
 type Props = {
   title: string;
@@ -23,6 +24,7 @@ export default function ScreenHeader({ title, right }: Props) {
       <View style={styles.actions}>
         {right}
         <NotificationButton />
+        <TemaButton />
         <ProfileButton />
         <LogoutButton />
       </View>

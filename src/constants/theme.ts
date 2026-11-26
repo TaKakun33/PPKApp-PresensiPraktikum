@@ -1,25 +1,14 @@
 import type { TextStyle, ViewStyle } from 'react-native';
 
-export const colors = {
-  primary: '#14234A',
-  bg: '#F4F5F7',
-  card: '#FFFFFF',
-  surface: '#F4F5F7',
-  tint: '#E3E8F3',
-  border: '#E5E7EB',
-  dashed: '#C5CAD6',
-  text: '#14234A',
-  textSecondary: '#6B7280',
-  placeholder: '#9CA3AF',
-  tabInactive: '#8FA0C8',
-  white: '#FFFFFF',
-  success: '#1E8E5A',
-  successTint: '#E6F4EC',
-  warning: '#B7791F',
-  warningTint: '#FBF1DC',
-  danger: '#C53030',
-  dangerTint: '#FBE9E9',
-} as const;
+import { bacaPilihanTema } from '../lib/temaTersimpan';
+import { THEMES, type ThemeColors } from './themes';
+
+// Warna diambil dari registry tema (src/constants/themes.ts) sesuai pilihan pengguna yang
+// tersimpan di perangkat. Pilihan dibaca sekali saat aplikasi mulai; mengganti tema memuat
+// ulang aplikasi supaya semua StyleSheet ikut memakai warna baru.
+export const pilihanTema = bacaPilihanTema();
+export const colors: ThemeColors = THEMES[pilihanTema.tema][pilihanTema.mode];
+export const isDark = pilihanTema.mode === 'dark';
 
 export const radius = {
   pill: 999,
@@ -45,8 +34,8 @@ export const text: Record<
   'screenTitle' | 'sectionTitle' | 'body' | 'bodyStrong' | 'caption' | 'button' | 'tab',
   TextStyle
 > = {
-  screenTitle: { fontSize: 18, fontFamily: font.extraBold, color: colors.text },
-  sectionTitle: { fontSize: 16, fontFamily: font.bold, color: colors.text },
+  screenTitle: { fontSize: 18, fontFamily: font.extraBold, color: colors.heading },
+  sectionTitle: { fontSize: 16, fontFamily: font.bold, color: colors.heading },
   body: { fontSize: 13, lineHeight: 19, fontFamily: font.medium, color: colors.textSecondary },
   bodyStrong: { fontSize: 13, lineHeight: 19, fontFamily: font.semibold, color: colors.text },
   caption: { fontSize: 12, lineHeight: 16, fontFamily: font.medium, color: colors.textSecondary },
@@ -64,12 +53,14 @@ export const status = {
   success: { bg: colors.successTint, text: colors.success },
   warning: { bg: colors.warningTint, text: colors.warning },
   danger: { bg: colors.dangerTint, text: colors.danger },
-  neutral: { bg: colors.tint, text: colors.textSecondary },
+  neutral: { bg: colors.surface, text: colors.textSecondary },
+  info: { bg: colors.tint, text: colors.secondaryText },
+  active: { bg: colors.primary, text: colors.onPrimary },
 } as const;
 
 export const shadow: Record<'floating', ViewStyle> = {
   floating: {
-    shadowColor: colors.primary,
+    shadowColor: colors.secondary,
     shadowOpacity: 0.18,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },

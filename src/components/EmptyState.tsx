@@ -25,7 +25,7 @@ export default function EmptyState({
     <View style={[styles.container, compact && styles.containerCompact]}>
       <View style={[styles.box, compact && styles.boxCompact]}>
         <View style={[styles.iconBox, compact && styles.iconBoxCompact]}>
-          <Ionicons name={icon} size={compact ? 24 : 28} color={colors.primary} />
+          <Ionicons name={icon} size={compact ? 24 : 28} color={colors.text} />
         </View>
         <Text style={[styles.title, compact && styles.titleCompact]}>{title}</Text>
         {message ? <Text style={[styles.message, compact && styles.messageCompact]}>{message}</Text> : null}

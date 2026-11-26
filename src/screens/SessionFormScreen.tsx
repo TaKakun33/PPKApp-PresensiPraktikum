@@ -292,7 +292,7 @@ export default function SessionFormScreen() {
             <Text style={[styles.selectText, !form.tanggal && styles.selectPlaceholder]}>
               {form.tanggal ? formatTanggal(`${form.tanggal}T00:00:00`) : 'Pilih tanggal'}
             </Text>
-            <Ionicons name="calendar-outline" size={18} color={colors.primary} />
+            <Ionicons name="calendar-outline" size={18} color={colors.text} />
           </Pressable>
         </View>
         {showDatePicker ? (
@@ -323,7 +323,7 @@ export default function SessionFormScreen() {
                     mode="date"
                     display="compact"
                     minimumDate={batasTanggal}
-                    accentColor={colors.primary}
+                    accentColor={colors.primaryText}
                     style={styles.nativePicker}
                     onValueChange={(_, date) => pilihTanggal(date)}
                   />
@@ -406,7 +406,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     padding: 24,
-    backgroundColor: 'rgba(20, 35, 74, 0.48)',
+    backgroundColor: colors.overlay,
   },
   pickerCard: {
     backgroundColor: colors.card,
