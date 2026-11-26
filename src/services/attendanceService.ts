@@ -31,10 +31,8 @@ import type { StatusIzin } from "../lib/constants";
 import { db } from "../lib/firebase";
 import type { Session } from "../lib/types";
 import { buatKodePresensi, kodePresensiValid, normalisasiKode } from "../utils/kodePresensi";
+import { waktuWib } from "./jadwalService";
 import { getErrorCode, isTimeoutError, withTimeout } from "./serviceUtils";
-
-// Durasi kadaluarsa kode presensi / QR: 30 menit.
-const QR_EXPIRES_MENIT = 30;
 
 export type CheckInUser = {
   uid?: string;
@@ -186,14 +184,18 @@ export async function checkIn(
 
 /** Isi dokumen sessionCodes untuk sesi ini (dipakai openSession dan pastikanKodePresensi).
  * Skema (SRS-26): { sessionId, dibuatOleh, kode, expiresAt, createdAt }.
- * kode = 5 karakter, expiresAt = now + 30 menit.
+ * expiresAt = akhir jam sesi (WIB). Rules presensi menolak kode yang sudah lewat expiresAt,
+ * jadi QR tidak bisa dipakai lagi setelah jam praktikum selesai.
  */
-export function dataKodePresensi(sessionId: string, asistenId: string) {
+export function dataKodePresensi(
+  session: Pick<Session, "id" | "tanggal" | "waktuSelesai">,
+  asistenId: string
+) {
   return {
-    sessionId,
+    sessionId: session.id,
     dibuatOleh: asistenId,
     kode: buatKodePresensi(),
-    expiresAt: new Date(Date.now() + QR_EXPIRES_MENIT * 60 * 1000),
+    expiresAt: new Date(waktuWib(session.tanggal, session.waktuSelesai)),
     createdAt: serverTimestamp(),
   };
 }
@@ -223,7 +225,7 @@ export async function pastikanKodePresensi(session: Session, asistenId: string):
   if (!session?.id || !asistenId || session.status !== STATUS_SESI.DIBUKA) return;
   try {
     await withTimeout(
-      setDoc(doc(db, "sessionCodes", session.id), dataKodePresensi(session.id, asistenId)),
+      setDoc(doc(db, "sessionCodes", session.id), dataKodePresensi(session, asistenId)),
       CHECKIN_TIMEOUT_MS
     );
   } catch {
