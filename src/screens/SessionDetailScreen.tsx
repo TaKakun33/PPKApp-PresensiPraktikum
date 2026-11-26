@@ -12,7 +12,6 @@ import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import LoadingState from '../components/LoadingState';
 import PrimaryButton from '../components/PrimaryButton';
-import QrPresensi from '../components/QrPresensi';
 import StatusBadge from '../components/StatusBadge';
 import type { Role } from '../lib/constants';
 import type { ClassDoc, Session } from '../lib/types';
@@ -27,7 +26,6 @@ import {
   subscribeMyAttendances,
   subscribeSession,
 } from '../services/sessionService';
-import { subscribeKodePresensi } from '../services/attendanceService';
 import { formatJam } from '../utils/format';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
@@ -156,8 +154,6 @@ export default function SessionDetailScreen() {
   const [hadir, setHadir] = useState<Hadir>({ ada: false, waktu: null });
   const [jumlahHadir, setJumlahHadir] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [qrVisible, setQrVisible] = useState(false);
-  const [kodeQr, setKodeQr] = useState<string | null>(null);
 
   // Listener utama: setiap perubahan dokumen sesi langsung tampil.
   useEffect(() => {
@@ -194,12 +190,6 @@ export default function SessionDetailScreen() {
       aktif = false;
     };
   }, [pengampuKey]);
-
-  // Subscribe kode presensi QR untuk asisten pengampu saat sesi Dibuka.
-  useEffect(() => {
-    if (!id || !pengampu || !session || session.status !== 'dibuka') return;
-    return subscribeKodePresensi(id, setKodeQr, () => setKodeQr(null));
-  }, [id, pengampu, session]);
 
   // Kehadiran: praktikan -> presensinya sendiri, asisten pengampu -> jumlah hadir.
   useEffect(() => {
@@ -352,29 +342,11 @@ export default function SessionDetailScreen() {
               </Pressable>
             </View>
           ) : (
-            <>
-              <Text style={styles.manageNote}>
-                Jadwal terkunci karena sesi sudah dibuka. Buka atau tutup sesi lewat tab Kelola Sesi.
-              </Text>
-              {kodeQr ? (
-                <PrimaryButton
-                  label="Tampilkan QR"
-                  icon="qr-code-outline"
-                  onPress={() => setQrVisible(true)}
-                  style={styles.tombolQr}
-                />
-              ) : null}
-            </>
+            <Text style={styles.manageNote}>
+              Jadwal terkunci karena sesi sudah dibuka. Buka atau tutup sesi lewat tab Kelola Sesi.
+            </Text>
           )}
         </View>
-      ) : null}
-
-      {qrVisible && kodeQr ? (
-        <QrPresensi
-          sessionId={id}
-          kode={kodeQr}
-          onTutup={() => setQrVisible(false)}
-        />
       ) : null}
     </ScrollView>
   );
@@ -465,10 +437,6 @@ const styles = StyleSheet.create({
   manageNote: {
     paddingVertical: 10,
     ...text.body,
-  },
-  tombolQr: {
-    alignSelf: 'stretch',
-    marginTop: 10,
   },
   notFound: { flex: 1, padding: 24, backgroundColor: colors.bg },
   backButton: { alignSelf: 'center', minWidth: 160, marginBottom: 24 },
