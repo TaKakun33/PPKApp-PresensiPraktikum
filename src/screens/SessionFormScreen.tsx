@@ -208,7 +208,7 @@ export default function SessionFormScreen() {
 
   function kembali() {
     if (router.canGoBack()) router.back();
-    else router.replace('/asisten/jadwal');
+    else router.replace('/asisten/home');
   }
 
   const header = <Stack.Screen options={{ headerShown: true, title: id ? 'Ubah Sesi' : 'Tambah Sesi' }} />;

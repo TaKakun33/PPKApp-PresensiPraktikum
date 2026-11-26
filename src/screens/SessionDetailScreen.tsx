@@ -8,6 +8,7 @@ import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import ConfirmModal from '../components/ConfirmModal';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import LoadingState from '../components/LoadingState';
@@ -19,9 +20,11 @@ import { colors, font, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { getNamaPengguna, isTertunda, labelKelas, pesanFirestore, subscribeClass } from '../services/classService';
 import {
+  alasanTidakBisaDibuka,
   deleteSession,
   labelTanggal,
   labelWaktu,
+  openSession,
   subscribeAttendances,
   subscribeMyAttendances,
   subscribeSession,
@@ -116,7 +119,7 @@ function describePresence(
       icon: 'radio-button-on-outline',
       tone: 'info',
       title: 'Presensi sedang dibuka',
-      message: 'Lakukan presensi lewat tab Presensi.',
+      message: '',
     };
   }
   return {
@@ -154,6 +157,14 @@ export default function SessionDetailScreen() {
   const [hadir, setHadir] = useState<Hadir>({ ada: false, waktu: null });
   const [jumlahHadir, setJumlahHadir] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [konfirmasiBuka, setKonfirmasiBuka] = useState(false);
+  const [membuka, setMembuka] = useState(false);
+  // Detak per 30 detik: tombol Buka Sesi muncul sendiri begitu jam sesi tiba.
+  const [, setDetak] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setDetak((n) => n + 1), 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Listener utama: setiap perubahan dokumen sesi langsung tampil.
   useEffect(() => {
@@ -280,6 +291,29 @@ export default function SessionDetailScreen() {
       },
     ]);
 
+  // Tombol Buka Sesi hanya untuk asisten pengampu, selama sesi belum dibuka dan jam sesinya sudah tiba
+  // (belum waktunya / sudah lewat = tidak tampil). Aturan sama dengan tombol Buka sesi di Kelola Sesi.
+  const bisaBukaSekarang = pengampu && session.status === 'belum_dibuka' && alasanTidakBisaDibuka(session) === null;
+
+  // Praktikan: tombol Presensi muncul selama sesi dibuka dan dia belum tercatat hadir; membuka tab Presensi.
+  const bisaPresensi = profile.role === 'praktikan' && session.status === 'dibuka' && !hadir.ada;
+
+  const bukaSesi = async () => {
+    if (membuka) return;
+    setMembuka(true);
+    try {
+      await openSession(session.id, profile.id);
+      setKonfirmasiBuka(false);
+      // Sesi terbuka: langsung ke layar kehadiran sesi (kode/QR presensi + daftar hadir).
+      router.replace({ pathname: '/presensi-manual', params: { sessionId: session.id } });
+    } catch (e) {
+      setKonfirmasiBuka(false);
+      Alert.alert('Gagal membuka sesi', e instanceof Error ? e.message : 'Gagal membuka sesi.');
+    } finally {
+      setMembuka(false);
+    }
+  };
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.hero}>
@@ -308,7 +342,7 @@ export default function SessionDetailScreen() {
           </View>
           <View style={styles.rowText}>
             <Text style={[styles.presenceTitle, { color: tone.color }]}>{presence.title}</Text>
-            <Text style={styles.presenceMessage}>{presence.message}</Text>
+            {presence.message ? <Text style={styles.presenceMessage}>{presence.message}</Text> : null}
           </View>
         </View>
         {dibuka || ditutup ? (
@@ -317,7 +351,30 @@ export default function SessionDetailScreen() {
             {ditutup ? <Text style={styles.timelineText}>Ditutup pukul {jam(ditutup)}</Text> : null}
           </View>
         ) : null}
+        {bisaPresensi ? (
+          <View style={styles.bukaWrap}>
+            <PrimaryButton
+              label="Presensi"
+              onPress={() => router.push({ pathname: '/praktikan/presensi', params: { sessionId: session.id } })}
+              accessibilityLabel={`Presensi sesi ${session.praktikum}`}
+            />
+          </View>
+        ) : null}
       </View>
+
+      {bisaBukaSekarang ? (
+        <View style={styles.card}>
+          <Text style={styles.sectionLabel}>Kelola Sesi</Text>
+          <View style={styles.bukaWrap}>
+            <PrimaryButton
+              label="Buka Sesi"
+              onPress={() => setKonfirmasiBuka(true)}
+              disabled={membuka}
+              accessibilityLabel={`Buka sesi ${session.praktikum}`}
+            />
+          </View>
+        </View>
+      ) : null}
 
       {pengampu ? (
         <View style={styles.card}>
@@ -348,6 +405,17 @@ export default function SessionDetailScreen() {
           )}
         </View>
       ) : null}
+
+      <ConfirmModal
+        visible={konfirmasiBuka}
+        title="Buka sesi?"
+        message={`Apakah kamu yakin ingin membuka ${session.praktikum}?`}
+        confirmLabel={membuka ? 'Memproses...' : 'Konfirmasi'}
+        onConfirm={bukaSesi}
+        onCancel={() => {
+          if (!membuka) setKonfirmasiBuka(false);
+        }}
+      />
     </ScrollView>
   );
 }
@@ -420,6 +488,7 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   timelineText: { ...text.caption },
+  bukaWrap: { paddingVertical: 10 },
   manageRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 10 },
   manageButton: {
     flexDirection: 'row',

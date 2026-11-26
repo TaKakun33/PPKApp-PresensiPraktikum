@@ -31,6 +31,7 @@ import type { StatusIzin, StatusSesi } from "../lib/constants";
 import { db } from "../lib/firebase";
 import type { Attendance, ClassDoc, LeaveRequest, Profile, Session } from "../lib/types";
 import { dataKodePresensi } from "./attendanceService";
+import { BATAS_LEWAT_SESI_DIBUKA_MS } from "../utils/aktivitasLab";
 import { formatTanggal } from "../utils/format";
 import {
   asistenIdsKelas,
@@ -51,6 +52,7 @@ import {
 } from "./jadwalService";
 // Zhafran (feat/push-notif, SRS-35): kirim push notification saat sesi dibuka, jadwal diubah, izin diputuskan.
 import { kirimNotifikasi } from "./notificationService";
+import { withTimeout } from "./serviceUtils";
 
 /** Durasi setiap sesi praktikum: tepat 2 jam (satu slot). */
 export const DURASI_SESI_MENIT = 120;
@@ -285,6 +287,31 @@ export async function closeSession(sessionId: string, asistenId: string): Promis
   }
 
   await updateDoc(ref, { status: "ditutup" as StatusSesi, closedAt: serverTimestamp() });
+}
+
+/** Sesi `dibuka` yang lupa ditutup: sudah lewat 1 jam dari jam selesai jadwalnya. */
+export function sesiLupaDitutup(sesi: Pick<Session, "status" | "tanggal" | "waktuSelesai">, sekarang: number = Date.now()): boolean {
+  if (sesi.status !== "dibuka") return false;
+  const selesai = waktuWib(sesi.tanggal, sesi.waktuSelesai);
+  return !Number.isNaN(selesai) && sekarang >= selesai + BATAS_LEWAT_SESI_DIBUKA_MS;
+}
+
+/**
+ * Tutup otomatis sesi `dibuka` yang sudah lewat 1 jam dari jam selesai. Dipanggil dari layar asisten
+ * (tidak ada server yang menjalankannya), jadi baru berjalan saat ada asisten pengampu membuka aplikasi.
+ * Gagal menulis (offline, bukan pengampu, sudah ditutup perangkat lain) diabaikan; dicoba lagi pada pemanggilan berikutnya.
+ */
+export async function tutupSesiLupaDitutup(sesi: Session[]): Promise<void> {
+  await Promise.all(
+    sesi
+      .filter((item) => sesiLupaDitutup(item))
+      .map((item) =>
+        withTimeout(
+          updateDoc(doc(db, "sessions", item.id), { status: "ditutup" as StatusSesi, closedAt: serverTimestamp() }),
+          15000
+        ).catch(() => {})
+      )
+  );
 }
 
 // ─── PRESENSI ─────────────────────────────────────────────────────────────────

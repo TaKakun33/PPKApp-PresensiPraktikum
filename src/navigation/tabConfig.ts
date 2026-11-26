@@ -9,7 +9,6 @@ export type TabDef = { name: string; title: string; icon: IoniconsName };
 
 export const PRAKTIKAN_TABS: TabDef[] = [
   { name: 'home', title: 'Home', icon: 'home-outline' },
-  { name: 'jadwal', title: 'Jadwal', icon: 'calendar-outline' },
   { name: 'peta', title: 'Peta', icon: 'map-outline' },
   { name: 'presensi', title: 'Presensi', icon: 'checkbox-outline' },
   { name: 'izin', title: 'Izin', icon: 'document-text-outline' },
@@ -17,7 +16,7 @@ export const PRAKTIKAN_TABS: TabDef[] = [
 ];
 
 export const ASISTEN_TABS: TabDef[] = [
-  { name: 'jadwal', title: 'Jadwal', icon: 'calendar-outline' },
+  { name: 'home', title: 'Home', icon: 'home-outline' },
   { name: 'peta', title: 'Peta', icon: 'map-outline' },
   { name: 'kelola', title: 'Kelola Sesi', icon: 'settings-outline' },
   { name: 'rekap', title: 'Rekap', icon: 'list-outline' },

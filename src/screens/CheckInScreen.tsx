@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import Card from '../components/Card';
 import EmptyState from '../components/EmptyState';
@@ -17,14 +17,23 @@ import { useAuth } from '../context/AuthContext';
 import { STATUS_IZIN, STATUS_LABEL, STATUS_SESI } from '../lib/constants';
 import type { StatusIzin } from '../lib/constants';
 import type { Session } from '../lib/types';
-import { checkIn, subscribeCheckInState } from '../services/attendanceService';
-import { ambilStatusLokasi, hitungJarakKeLab } from '../services/lokasiService';
+import { checkIn, jamSesiSudahLewat, subscribeCheckInState } from '../services/attendanceService';
+import { ambilStatusLokasi, hitungJarakKeLab, pesanStatusLokasi, type LokasiStatus } from '../services/lokasiService';
 import { parsingPayloadQR } from '../services/sessionCodeService';
 import { subscribeSessions } from '../services/sessionService';
 import { getLabs } from '../services/labService';
+import { withTimeout } from '../services/serviceUtils';
 import { formatJam } from '../utils/format';
 import { KODE_PRESENSI_PANJANG, kodePresensiValid, normalisasiKode } from '../utils/kodePresensi';
+import { koordinatValid } from '../utils/aktivitasLab';
 import { formatJarakMeter } from '../utils/geo';
+
+/** Batas menunggu data lab dari Firestore supaya layar tidak macet saat koneksi buruk. */
+const BATAS_MUAT_LAB_MS = 12000;
+/** Seberapa sering "sekarang" dicek ulang agar tombol presensi mati sendiri saat jam sesi berakhir. */
+const DETAK_JAM_MS = 10000;
+
+type LabInfo = { lat: number | null; lng: number | null; radiusMeter: number | null; nama: string | null };
 
 type Props = {
   route?: {
@@ -60,10 +69,14 @@ export default function CheckInScreen({ route }: Props) {
   const [kode, setKode] = useState('');
 
   // Lokasi & radius (SRS-27, SRS-28)
-  const [lokasiStatus, setLokasiStatus] = useState<{ status: 'memuat' | 'siap' | 'izin_ditolak' | 'gps_mati' | 'lokasi_tidak_tersedia' | 'timeout' | 'offline' | 'error'; message?: string; jarakMeter?: number; dalamRadius?: boolean }>({ status: 'memuat' });
-  const [lokasiPosisi, setLokasiPosisi] = useState<{ lat: number; lng: number; akurasiMeter: number } | null>(null);
-  const [labInfo, setLabInfo] = useState<{ lat: number | null; lng: number | null; radiusMeter: number | null; nama: string | null } | null>(null);
+  // lokasiRaw: hasil pembacaan perangkat (null = sedang memeriksa). Jarak & status radius diturunkan
+  // dari lokasiRaw + labInfo di bawah, jadi urutan datangnya dua data ini tidak berpengaruh.
+  const [lokasiRaw, setLokasiRaw] = useState<LokasiStatus | null>(null);
+  const [labInfo, setLabInfo] = useState<LabInfo | null>(null);
+  const [labMuat, setLabMuat] = useState<'memuat' | 'siap' | 'gagal'>('memuat');
+  const [refreshLokasiKey, setRefreshLokasiKey] = useState(0);
   const [qrVisible, setQrVisible] = useState(false);
+  const [sekarang, setSekarang] = useState(() => Date.now());
 
   useEffect(() => {
     if (paramSessionId || !profile || profile.role !== 'praktikan') {
@@ -115,71 +128,76 @@ export default function CheckInScreen({ route }: Props) {
     };
   }, [sessionId, uid, reloadKey]);
 
-  // Muat lokasi lab sesi (SRS-27)
+  const labKode = session?.labKode;
+
+  // Muat lokasi lab sesi (SRS-27). Gagal / lambat ditampilkan sebagai banner, bukan layar macet.
   useEffect(() => {
-    if (!sessionId || !session?.labKode) return;
+    if (!sessionId || !labKode) return;
 
     let aktif = true;
-    getLabs().then((labs) => {
-      if (!aktif) return;
-      const lab = labs.find((l) => l.kode === session?.labKode);
-      if (lab) {
-        setLabInfo({
-          lat: lab.lat,
-          lng: lab.lng,
-          radiusMeter: lab.radiusMeter,
-          nama: lab.nama,
-        });
-      }
-    });
-    return () => {
-      aktif = false;
-    };
-  }, [sessionId, session?.labKode]);
-
-  // Cek lokasi perangkat saat sesi Dibuka dan lab info tersedia (SRS-27, SRS-28)
-  useEffect(() => {
-    if (!sessionId || !session || session.status !== STATUS_SESI.DIBUKA || attended) {
-      if (session?.status !== STATUS_SESI.DIBUKA) {
-        const timer = setTimeout(() => {
-          setLokasiStatus({ status: 'siap' });
-        }, 0);
-        return () => clearTimeout(timer);
-      }
-      return;
-    }
-
-    let aktif = true;
-    const cekLokasi = async () => {
-      const status = await ambilStatusLokasi();
-      if (!aktif) return;
-
-      if (status.status === 'siap' && status.lokasi && labInfo && labInfo.lat != null && labInfo.lng != null && labInfo.radiusMeter != null) {
-        setLokasiPosisi(status.lokasi);
-        const jarak = hitungJarakKeLab(
-          status.lokasi,
-          labInfo.lat,
-          labInfo.lng,
-          labInfo.radiusMeter
+    withTimeout(getLabs(), BATAS_MUAT_LAB_MS)
+      .then((labs) => {
+        if (!aktif) return;
+        const lab = labs.find((l) => l.kode === labKode);
+        setLabInfo(
+          lab ? { lat: lab.lat, lng: lab.lng, radiusMeter: lab.radiusMeter, nama: lab.nama } : null
         );
-        setLokasiStatus({
-          status: 'siap',
-          jarakMeter: jarak.jarakMeter,
-          dalamRadius: jarak.dalamRadius,
-        });
-      } else {
-        setLokasiStatus({
-          status: status.status,
-          message: status.message,
-        });
-      }
-    };
-
-    cekLokasi();
+        setLabMuat('siap');
+      })
+      .catch(() => {
+        if (aktif) setLabMuat('gagal');
+      });
     return () => {
       aktif = false;
     };
-  }, [sessionId, session, attended, labInfo]);
+  }, [sessionId, labKode, refreshLokasiKey]);
+
+  // Jam sesi: tombol presensi harus mati sendiri begitu jam selesai lewat (kode ikut kedaluwarsa).
+  const sesiDibukaAktif = session?.status === STATUS_SESI.DIBUKA;
+  useEffect(() => {
+    if (!sesiDibukaAktif) return;
+    const timer = setInterval(() => setSekarang(Date.now()), DETAK_JAM_MS);
+    return () => clearInterval(timer);
+  }, [sesiDibukaAktif]);
+  const jamSesiHabis = sesiDibukaAktif && jamSesiSudahLewat(session, sekarang);
+
+  // Cek lokasi perangkat selama sesi Dibuka dan praktikan masih bisa presensi (SRS-27, SRS-28).
+  // Diulang lewat tombol "Perbarui lokasi" (refreshLokasiKey).
+  const perluLokasi = sesiDibukaAktif && !attended && izinStatus !== STATUS_IZIN.DITERIMA && !jamSesiHabis;
+  useEffect(() => {
+    if (!perluLokasi) return;
+
+    let aktif = true;
+    ambilStatusLokasi()
+      .then((status) => {
+        if (aktif) setLokasiRaw(status);
+      })
+      .catch(() => {
+        if (aktif) setLokasiRaw({ status: 'error', message: 'Lokasi perangkat belum bisa dibaca. Coba perbarui lokasi.' });
+      });
+    return () => {
+      aktif = false;
+    };
+  }, [perluLokasi, refreshLokasiKey]);
+
+  const perbaruiLokasi = () => {
+    setLokasiRaw(null);
+    setLabMuat('memuat');
+    setRefreshLokasiKey((key) => key + 1);
+  };
+
+  // Turunan: data lab lengkap? sudah dalam radius?
+  const labLengkap =
+    !!labInfo &&
+    koordinatValid(labInfo.lat, labInfo.lng) &&
+    typeof labInfo.radiusMeter === 'number' &&
+    labInfo.radiusMeter > 0;
+  const labBelumDiatur = !!session && (!labKode || (labMuat === 'siap' && !labLengkap));
+  const jarakLab =
+    lokasiRaw?.status === 'siap' && labInfo && labLengkap
+      ? hitungJarakKeLab(lokasiRaw.lokasi, labInfo.lat as number, labInfo.lng as number, labInfo.radiusMeter as number)
+      : null;
+  const posisiPerangkat = lokasiRaw?.status === 'siap' ? lokasiRaw.lokasi : null;
 
   if (!sessionId && error) {
     return (
@@ -291,19 +309,51 @@ export default function CheckInScreen({ route }: Props) {
     buttonLabel = "Ditutup";
     reason = "Sesi sudah ditutup.";
     canPress = false;
+  } else if (isDibuka && jamSesiHabis) {
+    buttonLabel = "Waktu Habis";
+    reason = "Jam sesi sudah berakhir, jadi kode presensi tidak berlaku lagi. Hubungi asisten jika kamu perlu dicatat hadir.";
+    canPress = false;
   } else if (isDibuka) {
     buttonLabel = isSubmitting ? "Memproses..." : "Presensi Sekarang";
-    const lokasiValid =
-      lokasiStatus.status === 'siap' && lokasiStatus.dalamRadius === true;
+    const lokasiValid = jarakLab?.dalamRadius === true;
     canPress = !isSubmitting && kodePresensiValid(kode) && lokasiValid;
     if (!isSubmitting && !kodePresensiValid(kode)) {
       reason = `Masukkan kode presensi ${KODE_PRESENSI_PANJANG} karakter dari asisten.`;
-    } else if (!isSubmitting && !lokasiValid && kodePresensiValid(kode)) {
-      if (lokasiStatus.status === 'siap' && lokasiStatus.dalamRadius === false) {
-        reason = `Anda di luar radius lab (${formatJarakMeter(lokasiStatus.jarakMeter ?? 0)}). Pindah ke dalam lab lalu coba lagi.`;
+    } else if (!isSubmitting && !lokasiValid) {
+      if (labBelumDiatur) {
+        reason = "Lokasi lab belum diatur, jadi presensi belum bisa dilakukan. Hubungi asisten.";
+      } else if (labMuat === 'gagal') {
+        reason = "Data lokasi lab gagal dimuat. Ketuk Perbarui lokasi untuk mencoba lagi.";
+      } else if (lokasiRaw && lokasiRaw.status !== 'siap') {
+        reason = `${pesanStatusLokasi(lokasiRaw)} Lalu ketuk Perbarui lokasi.`;
+      } else if (jarakLab && !jarakLab.dalamRadius) {
+        reason = `Kamu di luar radius lab (${formatJarakMeter(jarakLab.jarakMeter)}). Pindah ke dalam lab lalu ketuk Perbarui lokasi.`;
       }
     }
   }
+
+  // Form presensi (kode, banner lokasi) hanya tampil selama praktikan memang masih bisa presensi.
+  const tampilFormPresensi = isDibuka && !attended && !izinDiterima && !jamSesiHabis;
+
+  // Isi banner lokasi mengikuti kondisi nyata: memuat, lab belum diatur / gagal dimuat, error perangkat,
+  // di luar radius, atau di dalam radius.
+  let bannerLokasi: { icon: 'location-outline' | 'alert-circle-outline'; warna: string; teks: string; bisaPerbarui: boolean } | null = null;
+  if (tampilFormPresensi) {
+    if (labBelumDiatur) {
+      bannerLokasi = { icon: 'alert-circle-outline', warna: colors.danger, teks: 'Lokasi lab belum diatur', bisaPerbarui: true };
+    } else if (labMuat === 'gagal') {
+      bannerLokasi = { icon: 'alert-circle-outline', warna: colors.danger, teks: 'Data lokasi lab gagal dimuat', bisaPerbarui: true };
+    } else if (lokasiRaw === null || labMuat === 'memuat') {
+      bannerLokasi = null; // sedang memeriksa; ditampilkan terpisah di bawah
+    } else if (lokasiRaw.status !== 'siap') {
+      bannerLokasi = { icon: 'alert-circle-outline', warna: colors.danger, teks: pesanStatusLokasi(lokasiRaw), bisaPerbarui: true };
+    } else if (jarakLab) {
+      bannerLokasi = jarakLab.dalamRadius
+        ? { icon: 'location-outline', warna: colors.success, teks: `Di dalam radius lab (${formatJarakMeter(jarakLab.jarakMeter)})`, bisaPerbarui: true }
+        : { icon: 'alert-circle-outline', warna: colors.danger, teks: `Di luar radius lab (${formatJarakMeter(jarakLab.jarakMeter)})`, bisaPerbarui: true };
+    }
+  }
+  const lokasiSedangDiperiksa = tampilFormPresensi && !bannerLokasi;
 
   // Kirim presensi dengan kode tertentu. Dipakai tombol Presensi (kode ketik) dan hasil scan QR.
   const kirimPresensi = async (kodeDipakai: string) => {
@@ -316,12 +366,12 @@ export default function CheckInScreen({ route }: Props) {
         nim: profile?.nim,
       },
       kodeDipakai,
-      lokasiPosisi ? {
-        lat: lokasiPosisi.lat,
-        lng: lokasiPosisi.lng,
-        akurasiMeter: lokasiPosisi.akurasiMeter,
+      posisiPerangkat ? {
+        lat: posisiPerangkat.lat,
+        lng: posisiPerangkat.lng,
+        akurasiMeter: posisiPerangkat.akurasiMeter,
       } : undefined,
-      lokasiStatus.jarakMeter
+      jarakLab?.jarakMeter
     );
 
     setIsSubmitting(false);
@@ -358,18 +408,23 @@ export default function CheckInScreen({ route }: Props) {
       Alert.alert('QR Salah Sesi', 'Kode QR ini bukan untuk sesi praktikum yang sedang Anda buka.');
       return;
     }
-    if (lokasiStatus.status !== 'siap') {
-      Alert.alert(
-        'Presensi Gagal',
-        lokasiStatus.message ?? 'Lokasi belum terbaca. Tunggu sebentar lalu scan ulang.'
-      );
-      return;
+    // Pemeriksaan sama dengan tombol Presensi; bila gagal, alasannya langsung ditampilkan.
+    let gagal: string | null = null;
+    if (jamSesiHabis) {
+      gagal = 'Jam sesi sudah berakhir, jadi kode presensi tidak berlaku lagi. Hubungi asisten jika kamu perlu dicatat hadir.';
+    } else if (labBelumDiatur) {
+      gagal = 'Lokasi lab belum diatur, jadi presensi belum bisa dilakukan. Hubungi asisten.';
+    } else if (labMuat === 'gagal') {
+      gagal = 'Data lokasi lab gagal dimuat. Ketuk Perbarui lokasi lalu scan ulang.';
+    } else if (lokasiRaw && lokasiRaw.status !== 'siap') {
+      gagal = `${pesanStatusLokasi(lokasiRaw)} Lalu ketuk Perbarui lokasi dan scan ulang.`;
+    } else if (!jarakLab) {
+      gagal = 'Lokasi masih diperiksa. Tunggu sebentar lalu scan ulang.';
+    } else if (!jarakLab.dalamRadius) {
+      gagal = `Kamu di luar radius lab (${formatJarakMeter(jarakLab.jarakMeter)}). Pindah ke dalam lab lalu scan ulang.`;
     }
-    if (lokasiStatus.dalamRadius !== true) {
-      Alert.alert(
-        'Presensi Gagal',
-        `Anda di luar radius lab (${formatJarakMeter(lokasiStatus.jarakMeter ?? 0)}). Pindah ke dalam lab lalu scan ulang.`
-      );
+    if (gagal) {
+      Alert.alert('Presensi Gagal', gagal);
       return;
     }
     void kirimPresensi(parsed.kode);
@@ -426,29 +481,32 @@ export default function CheckInScreen({ route }: Props) {
             </View>
           </View>
 
-          {isDibuka && !attended && !izinDiterima && lokasiStatus.status !== 'memuat' ? (
+          {bannerLokasi ? (
             <View style={styles.lokasiBanner}>
-              {lokasiStatus.status === 'siap' ? (
-                <>
-                  <Ionicons name="location-outline" size={16} color={colors.success} />
-                  <Text style={styles.lokasiTe}>
-                    Di dalam radius lab ({formatJarakMeter(lokasiStatus.jarakMeter ?? 0)})
-                  </Text>
-                </>
-              ) : (
-                <>
-                  <Ionicons
-                    name={'alert-circle-outline'}
-                    size={16}
-                    color={colors.danger}
-                  />
-                  <Text style={styles.lokasiTe}>{lokasiStatus.message ?? 'Lokasi tidak valid'}</Text>
-                </>
-              )}
+              <Ionicons name={bannerLokasi.icon} size={16} color={bannerLokasi.warna} />
+              <Text style={[styles.lokasiTe, styles.lokasiTeks]}>{bannerLokasi.teks}</Text>
+              {bannerLokasi.bisaPerbarui ? (
+                <Pressable
+                  onPress={perbaruiLokasi}
+                  disabled={isSubmitting}
+                  accessibilityRole="button"
+                  accessibilityLabel="Perbarui lokasi"
+                  hitSlop={8}
+                  style={({ pressed }) => [styles.perbarui, pressed && styles.perbaruiDitekan]}
+                >
+                  <Ionicons name="refresh-outline" size={14} color={colors.primary} />
+                  <Text style={styles.perbaruiTeks}>Perbarui lokasi</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : lokasiSedangDiperiksa ? (
+            <View style={styles.lokasiBanner}>
+              <ActivityIndicator size="small" color={colors.textSecondary} />
+              <Text style={[styles.lokasiTe, styles.lokasiTeks]}>Memeriksa lokasi...</Text>
             </View>
           ) : null}
 
-          {isDibuka && !attended && !izinDiterima ? (
+          {tampilFormPresensi ? (
             <View style={styles.kodeSection}>
               <Text style={styles.kodeLabel}>Kode presensi</Text>
               <View style={styles.kodeBaris}>
@@ -480,7 +538,7 @@ export default function CheckInScreen({ route }: Props) {
             </View>
           ) : null}
 
-          {isDibuka && !attended && izinMenunggu ? (
+          {tampilFormPresensi && izinMenunggu ? (
             <Text style={styles.izinNote}>
               Kamu punya pengajuan izin yang masih menunggu. Jika kamu presensi, pengajuan izin itu akan
               dibatalkan otomatis.
@@ -576,6 +634,10 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontFamily: font.semibold,
   },
+  lokasiTeks: { flex: 1 },
+  perbarui: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  perbaruiDitekan: { opacity: 0.6 },
+  perbaruiTeks: { fontSize: 12, fontFamily: font.semibold, color: colors.primary },
   // Label di atas; kotak kode dan tombol Scan QR berbagi satu baris di bawahnya.
   kodeSection: { gap: 8, paddingTop: 4 },
   kodeLabel: { ...text.bodyStrong },

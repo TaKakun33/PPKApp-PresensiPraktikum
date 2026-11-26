@@ -15,7 +15,7 @@ export default function RoleGuard({ role, children }: { role?: Role; children: R
   if (state.status === 'unauthenticated') return <Redirect href="/login" />;
 
   if (role && state.profile.role !== role) {
-    return <Redirect href={state.profile.role === 'asisten' ? '/asisten/jadwal' : '/praktikan/home'} />;
+    return <Redirect href={state.profile.role === 'asisten' ? '/asisten/home' : '/praktikan/home'} />;
   }
 
   return <>{children}</>;

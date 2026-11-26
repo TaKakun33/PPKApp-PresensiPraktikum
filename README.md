@@ -210,7 +210,7 @@ src/
 │   ├── presensi-manual.tsx # Presensi manual oleh asisten
 │   ├── session/[id].tsx  # Detail sesi
 │   ├── praktikan/        # Tab praktikan: Home, Jadwal, Presensi, Riwayat, Izin
-│   └── asisten/          # Tab asisten: Jadwal, Kelola, Rekap, Izin
+│   └── asisten/          # Tab asisten: Home, Kelola, Rekap, Izin
 ├── screens/              # Isi layar
 │   ├── LoginScreen.tsx
 │   ├── RegisterScreen.tsx

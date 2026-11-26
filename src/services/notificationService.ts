@@ -100,7 +100,7 @@ export function navigasiDariNotif(data: NotifData | undefined, role: Profile['ro
       router.push(role === 'asisten' ? '/asisten/izin' : '/praktikan/izin');
       return true;
     case 'jadwal':
-      router.push(role === 'asisten' ? '/asisten/jadwal' : '/praktikan/jadwal');
+      router.push(role === 'asisten' ? '/asisten/home' : '/praktikan/home');
       return true;
     default:
       return false;

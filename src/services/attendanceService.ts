@@ -48,6 +48,16 @@ export type CheckInResult =
 
 const CHECKIN_TIMEOUT_MS = 12000;
 
+/** Jam selesai sesi (WIB) sudah terlewati. Kode presensi kedaluwarsa pada saat yang sama (expiresAt). */
+export function jamSesiSudahLewat(
+  sesi: Partial<Pick<Session, "tanggal" | "waktuSelesai">> | null | undefined,
+  sekarang: number = Date.now()
+): boolean {
+  if (!sesi?.tanggal || !sesi?.waktuSelesai) return false;
+  const akhir = waktuWib(sesi.tanggal, sesi.waktuSelesai);
+  return !Number.isNaN(akhir) && sekarang >= akhir;
+}
+
 /** ID dokumen presensi. Harus sama dengan pola di firestore.rules. */
 export function attendanceDocId(sessionId: string, uid: string): string {
   return `${sessionId}_${uid}`;
@@ -94,6 +104,9 @@ export async function checkIn(
         const sessionData = sessionSnap.data() as Partial<Session> | undefined;
         if (sessionData?.status !== STATUS_SESI.DIBUKA) {
           throw new Error("SESI_NOT_OPEN");
+        }
+        if (jamSesiSudahLewat(sessionData)) {
+          throw new Error("SESI_WAKTU_HABIS");
         }
 
         const attSnap = await transaction.get(attendanceRef);
@@ -144,6 +157,12 @@ export async function checkIn(
     }
     if (msg.includes("SESI_NOT_OPEN")) {
       return { ok: false, message: "Sesi praktikum belum dibuka atau sudah ditutup." };
+    }
+    if (msg.includes("SESI_WAKTU_HABIS")) {
+      return {
+        ok: false,
+        message: "Jam sesi sudah berakhir, jadi kode presensi tidak berlaku lagi. Hubungi asisten jika kamu perlu dicatat hadir.",
+      };
     }
     if (msg.includes("IZIN_DITERIMA")) {
       return {
@@ -239,6 +258,9 @@ export type ManualCheckInTarget = { id: string; nama: string; nim?: string };
 /**
  * Asisten pengampu mencatat presensi seorang praktikan (mis. HP praktikan bermasalah).
  * - Hanya saat sesi Dibuka dan hanya untuk peserta kelas sesi tersebut (ditegakkan firestore.rules).
+ * - Seperti presensi mandiri: izin `diterima` menolak presensi, izin `menunggu` dibatalkan di transaksi
+ *   yang sama. Karena rules tidak mengizinkan asisten menghapus izin, izin menunggu ditandai `ditolak`
+ *   (dengan catatan otomatis). Penolakan izin `diterima` hanya dicek di klien.
  * - ID dokumen sama dengan presensi biasa, jadi satu praktikan tetap hanya satu presensi per sesi:
  *   mencatat praktikan yang sudah hadir ditolak server (dokumen ada = update = ditolak).
  * - Waktu hadir = waktu server saat dicatat.
@@ -257,21 +279,50 @@ export async function checkInManual(
   }
 
   try {
+    const attendanceRef = doc(db, "attendances", attendanceDocId(session.id, praktikan.id));
+    // ID izin sama dengan ID presensi ({sessionId}_{uid}).
+    const leaveRef = doc(db, "leaveRequests", attendanceDocId(session.id, praktikan.id));
+
     await withTimeout(
-      setDoc(doc(db, "attendances", attendanceDocId(session.id, praktikan.id)), {
-        sessionId: session.id,
-        kelasId: session.kelasId,
-        userId: praktikan.id,
-        nama: praktikan.nama,
-        nim: praktikan.nim ?? "",
-        waktuHadir: serverTimestamp(),
-        manual: true,
-        dicatatOleh: asistenId,
+      runTransaction(db, async (transaction: any) => {
+        // Semua baca dulu, baru tulis (syarat transaksi Firestore).
+        const leaveSnap = await transaction.get(leaveRef);
+        const izinStatus = leaveSnap.exists()
+          ? (leaveSnap.data() as { status?: string } | undefined)?.status
+          : undefined;
+        if (izinStatus === STATUS_IZIN.DITERIMA) {
+          throw new Error("IZIN_DITERIMA");
+        }
+        if (izinStatus === STATUS_IZIN.MENUNGGU) {
+          // Asisten tidak boleh menghapus izin (rules), tapi boleh memutuskannya: pengajuan yang belum
+          // diputuskan ditandai ditolak supaya tidak ada hadir + izin menunggu sekaligus.
+          transaction.update(leaveRef, {
+            status: STATUS_IZIN.DITOLAK,
+            catatanAsisten: "Dibatalkan otomatis karena asisten mencatat kamu hadir pada sesi ini.",
+          });
+        }
+
+        transaction.set(attendanceRef, {
+          sessionId: session.id,
+          kelasId: session.kelasId,
+          userId: praktikan.id,
+          nama: praktikan.nama,
+          nim: praktikan.nim ?? "",
+          waktuHadir: serverTimestamp(),
+          manual: true,
+          dicatatOleh: asistenId,
+        });
       }),
       CHECKIN_TIMEOUT_MS
     );
     return { ok: true };
   } catch (error: any) {
+    if ((error?.message || "").includes("IZIN_DITERIMA")) {
+      return {
+        ok: false,
+        message: "Izin praktikan ini sudah diterima. Kembalikan izinnya ke awal dulu jika ingin mencatatnya hadir.",
+      };
+    }
     const code = getErrorCode(error);
     if (isTimeoutError(error) || code === "firestore/unavailable" || code === "firestore/deadline-exceeded") {
       return {

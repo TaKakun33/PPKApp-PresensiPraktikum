@@ -32,6 +32,12 @@ const MIN_DELTA = 0.0008;
 const DELTA_SATU_TITIK = 0.0004;
 const PADDING_WILAYAH = 1.6;
 
+/**
+ * Sesi `dibuka` yang lupa ditutup asisten tetap dianggap berlangsung paling lama sampai
+ * 1 jam setelah jam selesai jadwalnya; lewat dari itu diperlakukan seperti sudah ditutup.
+ */
+export const BATAS_LEWAT_SESI_DIBUKA_MS = 60 * 60 * 1000;
+
 /** Koordinat valid: angka berhingga, dalam rentang bumi, dan bukan titik (0, 0) bawaan. */
 export function koordinatValid(lat: unknown, lng: unknown): boolean {
   return (
@@ -110,8 +116,8 @@ function rentangMs(sesi: Session): { mulai: number; selesai: number } | null {
 
 /**
  * Tentukan aktivitas sebuah lab pada waktu `sekarang` (epoch ms).
- * - Berlangsung: sesi yang sudah dibuka asisten, atau yang jamnya sedang berjalan tetapi belum dibuka.
- *   Sesi yang sudah ditutup tidak dihitung.
+ * - Berlangsung: sesi yang sudah dibuka asisten (paling lama 1 jam setelah jam selesai), atau yang jamnya
+ *   sedang berjalan tetapi belum dibuka. Sesi yang sudah ditutup tidak dihitung.
  * - Berikutnya: sesi belum dibuka yang jam mulainya di masa depan, terdekat lebih dulu.
  */
 export function hitungAktivitasLab(
@@ -126,6 +132,9 @@ export function hitungAktivitasLab(
     if (!sesiMilikLab(sesi, lab) || sesi.status === 'ditutup') continue;
     const rentang = rentangMs(sesi);
     if (!rentang) continue;
+
+    // Sesi dibuka yang sudah lewat 1 jam dari jam selesai dianggap ditutup (lupa ditutup asisten).
+    if (sesi.status === 'dibuka' && sekarang >= rentang.selesai + BATAS_LEWAT_SESI_DIBUKA_MS) continue;
 
     if (sesi.status === 'dibuka' || (sesi.status === 'belum_dibuka' && sekarang >= rentang.mulai && sekarang < rentang.selesai)) {
       berlangsung.push({ sesi, mulai: rentang.mulai });

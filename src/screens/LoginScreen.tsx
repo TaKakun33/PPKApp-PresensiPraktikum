@@ -42,7 +42,7 @@ export default function LoginScreen() {
 
   // Sudah login -> arahkan ke layar sesuai peran.
   if (state.status === 'authenticated') {
-    return <Redirect href={state.profile.role === 'asisten' ? '/asisten/jadwal' : '/praktikan/home'} />;
+    return <Redirect href={state.profile.role === 'asisten' ? '/asisten/home' : '/praktikan/home'} />;
   }
 
   const displayedError = error || authError || '';
