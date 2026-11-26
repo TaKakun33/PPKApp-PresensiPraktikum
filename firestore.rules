@@ -445,25 +445,25 @@ service cloud.firestore {
     }
 
     // --- sessionCodes -------------------------------------------------------
-    // Kode unik presensi per sesi: sessionCodes/{sessionId} = { sessionId, asistenId, kode, createdAt }
-    // `kode` = 5 karakter huruf besar/angka, dibuat saat sesi dibuka (sessionService.openSession).
-    // Dibaca HANYA oleh asisten pengampu kelas sesi (pembuat atau partner); praktikan tidak bisa membacanya. Praktikan mengirim kode
-    // di dokumen presensinya dan rules attendances yang mencocokkannya.
-    // Pakai get (bukan resource.data) supaya aman dibaca saat dokumennya belum ada.
-    // Dibuat bersama perubahan status sesi menjadi `dibuka` dalam satu batch, karena itu status
-    // sesi diperiksa dengan getAfter. Kode tidak bisa diubah atau dihapus (update/delete ditolak).
+    // Kode unik presensi per sesi: sessionCodes/{sessionId} = { sessionId, dibuatOleh, kode, expiresAt, createdAt }
+    // `kode` = 5 karakter huruf besar/angka, dibuat saat sesi dibuka dan ditampilkan lewat QR.
+    // Dibaca oleh semua user login (get per dokumen, list diblokir). Praktikan mendapatkan kode
+    // dengan memindai QR dari asisten atau lewat kode yang dibagikan asisten.
+    // Dibuat bersama perubahan status sesi menjadi `dibuka` dalam satu batch. Kode tidak bisa diubah
+    // atau dihapus (update/delete ditolak).
     match /sessionCodes/{sessionId} {
-      allow get: if isPengampuSesi(sessionId);
+      allow get: if signedIn();
       allow list: if false;
 
       allow create: if isAsisten()
-        && request.resource.data.keys().hasOnly(['sessionId', 'asistenId', 'kode', 'createdAt'])
-        && request.resource.data.keys().hasAll(['sessionId', 'asistenId', 'kode', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['sessionId', 'dibuatOleh', 'kode', 'expiresAt', 'createdAt'])
+        && request.resource.data.keys().hasAll(['sessionId', 'dibuatOleh', 'kode', 'expiresAt', 'createdAt'])
         && request.resource.data.sessionId == sessionId
-        && request.resource.data.asistenId == request.auth.uid
+        && request.resource.data.dibuatOleh == request.auth.uid
         && request.resource.data.kode is string
         && request.resource.data.kode.matches('^[A-Z0-9]{5}$')
         && request.resource.data.createdAt == request.time
+        && request.resource.data.expiresAt > request.time
         && isPengampuSesi(sessionId)
         && getAfter(/databases/$(database)/documents/sessions/$(sessionId)).data.status == 'dibuka';
 
@@ -491,8 +491,8 @@ service cloud.firestore {
       );
 
       allow create: if isPraktikan()
-        && request.resource.data.keys().hasOnly(['sessionId', 'kelasId', 'userId', 'nama', 'nim', 'waktuHadir', 'kode'])
-        && request.resource.data.keys().hasAll(['sessionId', 'kelasId', 'userId', 'nama', 'nim', 'waktuHadir', 'kode'])
+        && request.resource.data.keys().hasOnly(['sessionId', 'kelasId', 'userId', 'nama', 'nim', 'waktuHadir', 'kode', 'lokasi', 'akurasiMeter', 'jarakMeter'])
+        && request.resource.data.keys().hasAll(['sessionId', 'kelasId', 'userId', 'nama', 'nim', 'waktuHadir', 'kode', 'lokasi', 'akurasiMeter', 'jarakMeter'])
         && request.resource.data.sessionId is string
         && request.resource.data.userId == request.auth.uid
         && attId == (request.resource.data.sessionId + '_' + request.auth.uid)
@@ -506,7 +506,9 @@ service cloud.firestore {
         && !(exists(/databases/$(database)/documents/leaveRequests/$(attId))
              && get(/databases/$(database)/documents/leaveRequests/$(attId)).data.status == 'diterima')
         && request.resource.data.kode == codeOf(request.resource.data.sessionId).kode
-        && request.resource.data.waktuHadir == request.time;
+        && request.resource.data.waktuHadir == request.time
+        // Validasi lokasi (SRS-27): jarakMeter <= radiusMeter lab sesi
+        && request.resource.data.jarakMeter <= get(/databases/$(database)/documents/labs/$(sessionOf(request.resource.data.sessionId).labKode)).data.radiusMeter;
 
       // Presensi oleh asisten pengampu kelas sesi, pembuat maupun partner (attendanceService.checkInManual).
       // Aturan yang sama seperti presensi sendiri (satu per praktikan per sesi, hanya saat sesi

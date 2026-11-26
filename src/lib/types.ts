@@ -39,6 +39,10 @@ export type Attendance = {
   // Hanya ada pada presensi yang dicatat manual oleh asisten (attendanceService.checkInManual).
   manual?: boolean;
   dicatatOleh?: string; // uid asisten yang mencatat
+  // Data lokasi presensi (SRS-27): ditambahkan saat praktikan presensi sendiri.
+  lokasi?: { lat: number; lng: number };
+  akurasiMeter?: number;
+  jarakMeter?: number;
 };
 
 export type LeaveRequest = {
