@@ -6,9 +6,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Redirect, router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, SectionList, StyleSheet, Text, View } from 'react-native';
 
 import EmptyState from '../components/EmptyState';
+import KelompokHeader from '../components/KelompokHeader';
 import ErrorState from '../components/ErrorState';
 import LoadingState from '../components/LoadingState';
 import ScreenHeader from '../components/ScreenHeader';
@@ -18,6 +19,7 @@ import { colors, font, layout, radius, text } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { labelKelas, pesanFirestore, subscribeClassesForUser } from '../services/classService';
 import { subscribeSessions, urutkanSesi } from '../services/sessionService';
+import { kelompokkanSesi } from '../utils/kelompokSesi';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -41,6 +43,12 @@ export default function ScheduleScreen() {
   const [kelasNama, setKelasNama] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+  // Detak per menit: kelompok "Hari ini" / "Sudah ditutup" ikut berubah sendiri (mis. lewat tengah malam WIB).
+  const [, setDetak] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setDetak((n) => n + 1), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!profile) return;
@@ -96,15 +104,21 @@ export default function ScheduleScreen() {
 
   const isAsisten = profile.role === 'asisten';
   const belumPunyaKelas = !isAsisten && (profile.kelasIds ?? []).length === 0;
+  const kelompok = kelompokkanSesi(sessions);
 
   return (
     <View style={styles.screen}>
       <ScreenHeader title="Jadwal" />
-      <FlatList
+      <SectionList
         style={styles.list}
         contentContainerStyle={styles.content}
-        data={sessions}
+        sections={kelompok}
         keyExtractor={(item) => item.id}
+        stickySectionHeadersEnabled={false}
+        renderSectionHeader={({ section }) => (
+          <KelompokHeader judul={section.judul} keterangan={section.keterangan} jumlah={section.data.length} />
+        )}
+        SectionSeparatorComponent={() => null}
         renderItem={({ item }) => (
           <SessionCard
             session={item}
@@ -124,7 +138,7 @@ export default function ScheduleScreen() {
             <Text style={styles.title}>{isAsisten ? 'Sesi yang Kamu Ampu' : 'Jadwal Praktikum'}</Text>
             <Text style={styles.subtitle}>
               {sessions.length > 0
-                ? `${sessions.length} sesi, diperbarui otomatis. Tekan kartu untuk melihat detail.`
+                ? `${sessions.length} sesi, dikelompokkan menurut status. Tekan kartu untuk melihat detail.`
                 : 'Belum ada sesi.'}
             </Text>
             {isAsisten ? (
