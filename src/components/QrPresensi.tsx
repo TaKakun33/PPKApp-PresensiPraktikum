@@ -1,9 +1,13 @@
 // Tampilan QR untuk asisten (SRS-26).
 // Menampilkan kode QR berisi "sessionId:kode" yang dapat dipindai praktikan.
 // Mengikuti gaya UI aplikasi (Card, PrimaryButton, tema warna).
+//
+// QR digambar sendiri dari matriks QRCode.create() memakai View.
+// QRCode.toDataURL() tidak bisa dipakai: di React Native library qrcode
+// memakai versi browser yang membutuhkan <canvas> HTML.
 import QRCode from 'qrcode';
-import { useEffect, useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { useMemo } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 
 import Card from './Card';
 import PrimaryButton from './PrimaryButton';
@@ -16,27 +20,58 @@ type Props = {
   onTutup: () => void;
 };
 
-export default function QrPresensi({ sessionId, kode, onTutup }: Props) {
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-  const [qrError, setQrError] = useState<string | null>(null);
+const UKURAN_QR = 200;
+const WARNA_GELAP = '#14234A';
+const WARNA_TERANG = '#FFFFFF';
 
-  useEffect(() => {
-    let aktif = true;
-    QRCode.toDataURL(buatPayloadQR(sessionId, kode), {
-      width: 280,
-      margin: 2,
-      color: { dark: '#14234A', light: '#FFFFFF' },
-    })
-      .then((url: string) => {
-        if (aktif) setQrDataUrl(url);
-      })
-      .catch(() => {
-        if (aktif) setQrError('Gagal menghasilkan kode QR.');
-      });
-    return () => {
-      aktif = false;
-    };
-  }, [sessionId, kode]);
+type Petak = { baris: number; kolom: number; panjang: number };
+
+// Matriks QR diringkas menjadi deretan petak gelap per baris supaya jumlah View sedikit.
+function buatPetakQR(payload: string): { petak: Petak[]; ukuran: number } | null {
+  try {
+    const { modules } = QRCode.create(payload, { errorCorrectionLevel: 'M' });
+    const ukuran = modules.size;
+    const petak: Petak[] = [];
+    for (let baris = 0; baris < ukuran; baris++) {
+      let mulai = -1;
+      for (let kolom = 0; kolom <= ukuran; kolom++) {
+        const gelap = kolom < ukuran && modules.get(baris, kolom);
+        if (gelap && mulai < 0) mulai = kolom;
+        if (!gelap && mulai >= 0) {
+          petak.push({ baris, kolom: mulai, panjang: kolom - mulai });
+          mulai = -1;
+        }
+      }
+    }
+    return { petak, ukuran };
+  } catch {
+    return null;
+  }
+}
+
+function GambarQR({ petak, ukuran }: { petak: Petak[]; ukuran: number }) {
+  const sel = Math.floor(UKURAN_QR / ukuran);
+  return (
+    <View style={{ width: sel * ukuran, height: sel * ukuran, backgroundColor: WARNA_TERANG }}>
+      {petak.map((p) => (
+        <View
+          key={`${p.baris}-${p.kolom}`}
+          style={{
+            position: 'absolute',
+            top: p.baris * sel,
+            left: p.kolom * sel,
+            width: p.panjang * sel,
+            height: sel,
+            backgroundColor: WARNA_GELAP,
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
+export default function QrPresensi({ sessionId, kode, onTutup }: Props) {
+  const qr = useMemo(() => buatPetakQR(buatPayloadQR(sessionId, kode)), [sessionId, kode]);
 
   return (
     <View style={styles.modal}>
@@ -46,17 +81,13 @@ export default function QrPresensi({ sessionId, kode, onTutup }: Props) {
           Praktikan memindai kode QR ini dengan layar presensi miliknya.
         </Text>
 
-        {qrError ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{qrError}</Text>
-          </View>
-        ) : qrDataUrl ? (
+        {qr ? (
           <View style={styles.qrContainer}>
-            <Image source={{ uri: qrDataUrl }} style={styles.qrImage} />
+            <GambarQR petak={qr.petak} ukuran={qr.ukuran} />
           </View>
         ) : (
-          <View style={styles.loadingBox}>
-            <Text style={styles.loadingText}>Menghasilkan QR...</Text>
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>Gagal menghasilkan kode QR.</Text>
           </View>
         )}
 
@@ -103,27 +134,10 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   qrContainer: {
-    borderWidth: 4,
-    borderColor: colors.white,
-    padding: 8,
-    backgroundColor: colors.white,
-  },
-  qrImage: {
-    width: 200,
-    height: 200,
-    resizeMode: 'contain',
-  },
-  loadingBox: {
-    width: 200,
-    height: 200,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-  },
-  loadingText: {
-    ...text.caption,
-    color: colors.textSecondary,
+    // Area kosong (quiet zone) putih di sekeliling QR, tetap putih di mode gelap.
+    padding: 12,
+    backgroundColor: WARNA_TERANG,
+    borderRadius: 8,
   },
   errorBox: {
     width: 200,
