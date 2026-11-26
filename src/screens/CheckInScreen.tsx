@@ -305,9 +305,8 @@ export default function CheckInScreen({ route }: Props) {
     }
   }
 
-  const handleCheckIn = async () => {
-    if (!canPress || isSubmitting) return;
-
+  // Kirim presensi dengan kode tertentu. Dipakai tombol Presensi (kode ketik) dan hasil scan QR.
+  const kirimPresensi = async (kodeDipakai: string) => {
     setIsSubmitting(true);
     const result = await checkIn(
       session.id,
@@ -316,7 +315,7 @@ export default function CheckInScreen({ route }: Props) {
         name: profile?.nama,
         nim: profile?.nim,
       },
-      kode,
+      kodeDipakai,
       lokasiPosisi ? {
         lat: lokasiPosisi.lat,
         lng: lokasiPosisi.lng,
@@ -336,22 +335,44 @@ export default function CheckInScreen({ route }: Props) {
     }
   };
 
+  const handleCheckIn = () => {
+    if (!canPress || isSubmitting) return;
+    void kirimPresensi(kode);
+  };
+
   const handleScanQR = () => {
     setQrVisible(true);
   };
 
+  // Hasil scan langsung dikirim sebagai presensi: praktikan langsung melihat berhasil atau gagal,
+  // tanpa mengisi kotak kode dan tanpa menekan tombol Presensi lagi.
   const handleScanResult = (payload: string) => {
     setQrVisible(false);
+    if (isSubmitting) return;
     const parsed = parsingPayloadQR(payload);
-    if (parsed) {
-      if (session && parsed.sessionId !== session.id) {
-        Alert.alert('QR Salah Sesi', 'Kode QR ini bukan untuk sesi praktikum yang sedang Anda buka.');
-        return;
-      }
-      setKode(parsed.kode);
-    } else {
+    if (!parsed) {
       Alert.alert('QR Tidak Valid', 'Format kode QR tidak dikenali.');
+      return;
     }
+    if (parsed.sessionId !== session.id) {
+      Alert.alert('QR Salah Sesi', 'Kode QR ini bukan untuk sesi praktikum yang sedang Anda buka.');
+      return;
+    }
+    if (lokasiStatus.status !== 'siap') {
+      Alert.alert(
+        'Presensi Gagal',
+        lokasiStatus.message ?? 'Lokasi belum terbaca. Tunggu sebentar lalu scan ulang.'
+      );
+      return;
+    }
+    if (lokasiStatus.dalamRadius !== true) {
+      Alert.alert(
+        'Presensi Gagal',
+        `Anda di luar radius lab (${formatJarakMeter(lokasiStatus.jarakMeter ?? 0)}). Pindah ke dalam lab lalu scan ulang.`
+      );
+      return;
+    }
+    void kirimPresensi(parsed.kode);
   };
 
   const waktu =
