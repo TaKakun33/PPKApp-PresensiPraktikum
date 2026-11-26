@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 
 import { STATUS_SESI } from '../lib/constants';
@@ -9,7 +9,9 @@ import {
   alasanTidakBisaDibuka,
   closeSession,
   openSession,
+  sesiLupaDitutup,
   subscribeSessions,
+  tutupSesiLupaDitutup,
 } from '../services/sessionService';
 import ConfirmModal from '../components/ConfirmModal';
 import EmptyState from '../components/EmptyState';
@@ -92,6 +94,21 @@ export default function ManageSessionScreen() {
   const currentSessionState =
     sessionState && sessionState.profileId === profile?.id ? sessionState : null;
   const sessions = currentSessionState?.sessions ?? [];
+
+  // Tutup otomatis sesi dibuka yang lupa ditutup (lewat 1 jam dari jam selesai). Dicek tiap data sesi
+  // berubah dan tiap menit selama layar ini terbuka.
+  const sessionsRef = useRef<Session[]>([]);
+  useEffect(() => {
+    sessionsRef.current = sessions;
+  }, [sessions]);
+  const adaSesiLupa = sessions.some((item) => sesiLupaDitutup(item));
+  useEffect(() => {
+    if (role !== 'asisten') return;
+    const jalankan = () => void tutupSesiLupaDitutup(sessionsRef.current);
+    jalankan();
+    const timer = setInterval(jalankan, 60000);
+    return () => clearInterval(timer);
+  }, [role, adaSesiLupa, profileId]);
   const isLoading = role === 'asisten' && (!currentSessionState || currentSessionState.loading);
   const loadError = currentSessionState?.error ?? null;
 
