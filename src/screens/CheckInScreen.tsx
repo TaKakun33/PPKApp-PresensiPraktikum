@@ -430,6 +430,7 @@ export default function CheckInScreen({ route }: Props) {
           {isDibuka && !attended && !izinDiterima ? (
             <View style={styles.kodeSection}>
               <Text style={styles.kodeLabel}>Kode presensi</Text>
+              <View style={styles.kodeBaris}>
               <TextInput
                 style={styles.kodeInput}
                 value={kode}
@@ -454,6 +455,7 @@ export default function CheckInScreen({ route }: Props) {
                 disabled={isSubmitting}
                 style={styles.tombolScan}
               />
+              </View>
             </View>
           ) : null}
 
@@ -553,9 +555,13 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontFamily: font.semibold,
   },
-  kodeSection: { gap: 8, paddingTop: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  // Label di atas; kotak kode dan tombol Scan QR berbagi satu baris di bawahnya.
+  kodeSection: { gap: 8, paddingTop: 4 },
   kodeLabel: { ...text.bodyStrong },
+  kodeBaris: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   kodeInput: {
+    flex: 1,
+    minWidth: 0,
     minHeight: 56,
     paddingHorizontal: 16,
     borderWidth: 1,

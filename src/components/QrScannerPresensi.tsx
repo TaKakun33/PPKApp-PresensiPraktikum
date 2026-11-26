@@ -3,7 +3,7 @@
 // seluruh aplikasi crash ("Cannot find native module 'ExpoCamera'"). File ini memuat
 // QrScannerKamera di dalam try/catch dan menampilkan pesan bila fitur kamera belum tersedia.
 import type { ComponentType } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Modal, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
 import PrimaryButton from './PrimaryButton';
@@ -27,10 +27,24 @@ function muatKamera(): ComponentType<Props> | null {
 
 const Kamera = muatKamera();
 
+// Ditampilkan dalam Modal agar menutupi seluruh layar, termasuk header dan tab bar.
 export default function QrScannerPresensi(props: Props) {
   if (!props.visible) return null;
-  if (Kamera) return <Kamera {...props} />;
 
+  return (
+    <Modal
+      visible
+      animationType="fade"
+      transparent
+      statusBarTranslucent
+      onRequestClose={props.onClose}
+    >
+      {Kamera ? <Kamera {...props} /> : <KameraTidakAda onClose={props.onClose} />}
+    </Modal>
+  );
+}
+
+function KameraTidakAda({ onClose }: { onClose: () => void }) {
   return (
     <View style={styles.overlay}>
       <View style={styles.card}>
@@ -40,7 +54,7 @@ export default function QrScannerPresensi(props: Props) {
           Fitur pindai QR belum ada di versi aplikasi ini. Pasang versi aplikasi terbaru, atau
           lakukan presensi dengan kode.
         </Text>
-        <PrimaryButton label="Tutup" onPress={props.onClose} variant="secondary" style={styles.tombol} />
+        <PrimaryButton label="Tutup" onPress={onClose} variant="secondary" style={styles.tombol} />
       </View>
     </View>
   );

@@ -96,37 +96,38 @@ export default function QrScannerKamera({ visible, onScan, onClose }: Props) {
     );
   }
 
+  // Kamera memenuhi layar; di atasnya hanya judul, bingkai bidik, dan tombol, tanpa lapisan gelap.
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={styles.container}>
       <CameraView
-        style={styles.camera}
+        style={StyleSheet.absoluteFill}
         facing="back"
         barcodeScannerSettings={{
           barcodeTypes: ['qr'],
         }}
-        onBarcodeScanned={handleBarCodeScanned}
+        onBarcodeScanned={scanning ? handleBarCodeScanned : undefined}
       />
-      <View style={styles.overlay}>
-        <View style={styles.card}>
-          <Ionicons name="qr-code-outline" size={32} color={colors.primary} />
-          <Text style={styles.title}>Pindai Kode QR</Text>
-          <Text style={styles.message}>
-            Arahkan kamera ke kode QR yang ditampilkan asisten.
-          </Text>
-          {!scanning && (
-            <PrimaryButton
-              label="Lanjutkan Scan"
-              onPress={() => setScanning(true)}
-              style={styles.tombol}
-            />
-          )}
+      <View style={[styles.atas, { paddingTop: insets.top + 16 }]}>
+        <Text style={styles.judulKamera}>Pindai Kode QR</Text>
+        <Text style={styles.pesanKamera}>Arahkan kamera ke kode QR yang ditampilkan asisten.</Text>
+      </View>
+      <View style={styles.tengah} pointerEvents="none">
+        <View style={styles.bingkai} />
+      </View>
+      <View style={[styles.bawah, { paddingBottom: insets.bottom + 20 }]}>
+        {!scanning && (
           <PrimaryButton
-            label="Batal"
-            onPress={onClose}
-            variant="secondary"
+            label="Lanjutkan Scan"
+            onPress={() => setScanning(true)}
             style={styles.tombol}
           />
-        </View>
+        )}
+        <PrimaryButton
+          label="Batal"
+          onPress={onClose}
+          variant="secondary"
+          style={styles.tombol}
+        />
       </View>
     </View>
   );
@@ -135,10 +136,42 @@ export default function QrScannerKamera({ visible, onScan, onClose }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: '#000000',
   },
-  camera: {
+  atas: {
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+    gap: 6,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+  },
+  judulKamera: {
+    fontSize: 18,
+    fontFamily: font.extraBold,
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  pesanKamera: {
+    ...text.caption,
+    color: 'rgba(255, 255, 255, 0.85)',
+    textAlign: 'center',
+  },
+  tengah: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bingkai: {
+    width: 240,
+    height: 240,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    borderRadius: 20,
+  },
+  bawah: {
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    gap: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
   },
   overlay: {
     ...StyleSheet.absoluteFill,
