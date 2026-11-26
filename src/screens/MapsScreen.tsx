@@ -42,6 +42,25 @@ import {
 const BATAS_MUAT_MS = 12000;
 /** Seberapa sering "sekarang" dihitung ulang agar status berlangsung/berikutnya ikut berubah sendiri. */
 const DETAK_MS = 30000;
+/**
+ * Snapshot pertama Firestore hampir selalu datang dari cache sesaat sebelum data server tiba.
+ * Banner "Tidak terhubung ke server" baru tampil jika status cache bertahan selama ini.
+ */
+const TUNDA_BANNER_OFFLINE_MS = 3000;
+
+/** true hanya jika `nilai` terus true selama `ms`; kembali false seketika saat `nilai` false. */
+function useBertahanTrue(nilai: boolean, ms: number): boolean {
+  const [bertahan, setBertahan] = useState(false);
+  useEffect(() => {
+    if (!nilai) {
+      const reset = setTimeout(() => setBertahan(false), 0);
+      return () => clearTimeout(reset);
+    }
+    const timer = setTimeout(() => setBertahan(true), ms);
+    return () => clearTimeout(timer);
+  }, [nilai, ms]);
+  return nilai && bertahan;
+}
 
 // Warna area radius per lab (urut sesuai daftar lab). Lab Informatika berdekatan, jadi warna berbeda
 // membantu membedakan lingkaran yang saling tumpang tindih. Chip lab memakai warna yang sama.
@@ -80,6 +99,7 @@ export default function MapsScreen() {
   const [galatLab, setGalatLab] = useState<string | null>(null);
   const [muatLab, setMuatLab] = useState(0);
   const dataLabDiterima = useRef(false);
+  const labOffline = useBertahanTrue(labDariCache, TUNDA_BANNER_OFFLINE_MS);
 
   useEffect(() => {
     if (!fokus) return;
@@ -114,6 +134,7 @@ export default function MapsScreen() {
   const [muatSesi, setMuatSesi] = useState(0);
   const [sesiDariCache, setSesiDariCache] = useState(false);
   const dataSesiDiterima = useRef(false);
+  const sesiOffline = useBertahanTrue(sesiDariCache, TUNDA_BANNER_OFFLINE_MS);
   // Diturunkan dari `sekarang` (ikut berganti oleh detak 30 dtk), jadi lewat tengah malam WIB rentang ikut bergeser.
   const hariIni = tanggalWibDari(sekarang);
 
@@ -304,7 +325,7 @@ export default function MapsScreen() {
     />
   ) : labs === null ? (
     <KondisiBanner memuat pesan="Memuat data lab..." />
-  ) : labDariCache ? (
+  ) : labOffline ? (
     <KondisiBanner nada="peringatan" icon="cloud-offline-outline" pesan="Tidak terhubung ke server. Menampilkan data lab yang tersimpan." />
   ) : labs.length === 0 ? (
     <KondisiBanner icon="map-outline" pesan="Belum ada data lab. Hubungi asisten untuk mengatur lokasi lab." />
@@ -429,7 +450,7 @@ export default function MapsScreen() {
               lab={terpilih}
               aktivitas={aktivitas}
               galatAktivitas={galatSesi}
-              dataMungkinLama={sesiDariCache}
+              dataMungkinLama={sesiOffline}
               namaKelas={(kelasId) => kelasNama[kelasId]}
               onTutup={() => setKodeTerpilih(null)}
               onCobaLagi={() => {
