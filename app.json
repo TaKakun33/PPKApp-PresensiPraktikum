@@ -36,6 +36,13 @@
         }
       ],
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Aplikasi memakai kamera untuk memindai kode QR presensi.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
         "expo-notifications",
         {
           "icon": "./assets/images/icon.png",
