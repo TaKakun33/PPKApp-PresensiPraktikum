@@ -639,18 +639,33 @@ service cloud.firestore {
     }
 
     // --- pushTokens -----------------------
-    // Token push notifikasi per pengguna: pushTokens/{uid} = { token, platform, diperbaruiPada }.
+    // Token push notifikasi per pengguna:
+    // pushTokens/{uid} = { token, platform, namaDevice, email, diperbaruiPada }.
     // - Tulis (create/update): hanya pemilik uid sendiri, dengan field yang valid.
     // - Baca : semua asisten yang login (untuk mengambil token saat mengirim notifikasi dari klien).
     // - Hapus : tidak diizinkan dari klien.
     match /pushTokens/{uid} {
       allow create, update: if signedIn()
         && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['token', 'platform', 'diperbaruiPada'])
-        && request.resource.data.keys().hasAll(['token', 'platform', 'diperbaruiPada'])
+        && request.resource.data.keys().hasOnly([
+          'token', 'platform', 'namaDevice', 'email', 'diperbaruiPada'
+        ])
+        && request.resource.data.keys().hasAll([
+          'token', 'platform', 'namaDevice', 'email', 'diperbaruiPada'
+        ])
         && request.resource.data.token is string
         && request.resource.data.token.size() > 0
         && request.resource.data.platform in ['android', 'ios']
+        && request.resource.data.namaDevice is string
+        && request.resource.data.namaDevice.size() > 0
+        && request.resource.data.namaDevice.size() <= 150
+        && request.resource.data.email is string
+        && request.resource.data.email.size() > 0
+        && request.resource.data.email.size() <= 254
+        && (
+          request.auth.token.email == null
+          || request.resource.data.email.lower() == request.auth.token.email.lower()
+        )
         && request.resource.data.diperbaruiPada == request.time;
 
       // Asisten yang login boleh membaca token untuk keperluan kirim notifikasi.

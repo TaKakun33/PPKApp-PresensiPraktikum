@@ -21,16 +21,38 @@ import { subscribeSessions, urutkanSesi } from '../services/sessionService';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
-function HeaderButton({ icon, label, onPress, primary }: { icon: IoniconsName; label: string; onPress: () => void; primary?: boolean }) {
+function HeaderButton({
+  icon,
+  label,
+  onPress,
+  primary,
+  fullWidth,
+  grow,
+}: {
+  icon: IoniconsName;
+  label: string;
+  onPress: () => void;
+  primary?: boolean;
+  fullWidth?: boolean;
+  grow?: boolean;
+}) {
   return (
     <Pressable
-      style={({ pressed }) => [styles.headerButton, primary && styles.headerButtonPrimary, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.headerButton,
+        primary && styles.headerButtonPrimary,
+        fullWidth && styles.headerButtonFull,
+        grow && styles.headerButtonGrow,
+        pressed && styles.pressed,
+      ]}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
     >
       <Ionicons name={icon} size={16} color={primary ? colors.white : colors.primary} />
-      <Text style={[styles.headerButtonText, primary && styles.headerButtonTextPrimary]}>{label}</Text>
+      <Text style={[styles.headerButtonText, primary && styles.headerButtonTextPrimary]} numberOfLines={1}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -129,9 +151,27 @@ export default function ScheduleScreen() {
             </Text>
             {isAsisten ? (
               <View style={styles.headerActions}>
-                <HeaderButton icon="add" label="Tambah Sesi" primary onPress={() => router.push('/session-form')} />
-                <HeaderButton icon="people-outline" label="Kelola Kelas" onPress={() => router.push('/kelas')} />
-                <HeaderButton icon="location-outline" label="Kelola Lokasi Lab" onPress={() => router.push('/lab-lokasi')} />
+                <HeaderButton
+                  icon="add"
+                  label="Tambah Sesi"
+                  primary
+                  fullWidth
+                  onPress={() => router.push('/session-form')}
+                />
+                <View style={styles.headerSecondaryRow}>
+                  <HeaderButton
+                    icon="people-outline"
+                    label="Kelola Kelas"
+                    grow
+                    onPress={() => router.push('/kelas')}
+                  />
+                  <HeaderButton
+                    icon="location-outline"
+                    label="Kelola Lokasi Lab"
+                    grow
+                    onPress={() => router.push('/lab-lokasi')}
+                  />
+                </View>
               </View>
             ) : null}
           </View>
@@ -180,18 +220,22 @@ const styles = StyleSheet.create({
   roleText: { ...text.caption, color: colors.primary, fontFamily: font.semibold },
   title: { fontSize: 20, fontFamily: font.extraBold, color: colors.text },
   subtitle: { ...text.body, fontFamily: font.medium },
-  headerActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  headerActions: { gap: 8, marginTop: 10 },
+  headerSecondaryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   headerButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.card,
   },
+  headerButtonFull: { width: '100%' },
+  headerButtonGrow: { flexGrow: 1 },
   headerButtonPrimary: { borderColor: colors.primary, backgroundColor: colors.primary },
   headerButtonText: { fontSize: 12, fontFamily: font.bold, color: colors.primary },
   headerButtonTextPrimary: { color: colors.white },

@@ -70,7 +70,7 @@ export function useNotifikasi(
 
     // SRS-34: Daftarkan token saat user login.
     // Error sudah ditangani di dalam fungsi (tidak perlu catch di sini).
-    daftarkanPushToken(profile.id);
+    daftarkanPushToken(profile.id, profile.email);
 
     // SRS-36: Tangani notifikasi yang masuk saat app di foreground.
     // setNotificationHandler di notificationService.ts sudah mengurus tampilannya.
@@ -95,7 +95,7 @@ export function useNotifikasi(
       listenerForegroundRef.current?.remove();
       listenerResponseRef.current?.remove();
     };
-    // Re-run hanya jika user ganti (id) atau role berubah.
+    // Re-run hanya jika user ganti (id/email) atau role berubah.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile?.id, profile?.role]);
+  }, [profile?.id, profile?.email, profile?.role]);
 }

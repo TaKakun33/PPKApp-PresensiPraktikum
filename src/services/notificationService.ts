@@ -23,7 +23,7 @@ import {
 } from '@react-native-firebase/firestore';
 import { router } from 'expo-router';
 
-import { db } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
 import type { Profile } from '../lib/types';
 
 // ─── KONFIGURASI FOREGROUND ────────────────────────────────────────────────────
@@ -45,8 +45,35 @@ Notifications.setNotificationHandler({
 export type PushTokenDoc = {
   token: string;
   platform: 'android' | 'ios';
+  namaDevice: string;
+  email: string;
   diperbaruiPada: ReturnType<typeof serverTimestamp>;
 };
+
+/** Ambil nama perangkat yang mudah dibaca untuk identifikasi dokumen pushTokens di Firestore. */
+function ambilNamaDevice(): string {
+  const deviceName = Device.deviceName?.trim();
+  const modelName = Device.modelName?.trim();
+  const brand = Device.brand?.trim();
+
+  if (deviceName && modelName) {
+    const lowerDevice = deviceName.toLowerCase();
+    const lowerModel = modelName.toLowerCase();
+    if (lowerModel.includes(lowerDevice)) return modelName.slice(0, 150);
+    if (lowerDevice.includes(lowerModel)) return deviceName.slice(0, 150);
+    return `${deviceName} (${modelName})`.slice(0, 150);
+  }
+  if (deviceName) return deviceName.slice(0, 150);
+  if (brand && modelName) {
+    if (modelName.toLowerCase().startsWith(brand.toLowerCase())) {
+      return modelName.slice(0, 150);
+    }
+    return `${brand} ${modelName}`.slice(0, 150);
+  }
+  if (modelName) return modelName.slice(0, 150);
+  if (brand) return brand.slice(0, 150);
+  return 'Perangkat tidak diketahui';
+}
 
 /** Masa simpan notifikasi biasa sebelum dihapus otomatis (3 hari). */
 export const RETENSI_NOTIF_HARI = 3;
@@ -116,7 +143,10 @@ export function navigasiDariNotif(data: NotifData | undefined, role: Profile['ro
  *   Aplikasi tetap berjalan (K7 / SRS-36).
  * @returns push token jika berhasil, null jika gagal/ditolak.
  */
-export async function daftarkanPushToken(uid: string): Promise<string | null> {
+export async function daftarkanPushToken(
+  uid: string,
+  email?: string,
+): Promise<string | null> {
   // Push notification hanya berfungsi di perangkat fisik nyata.
   if (!Device.isDevice) {
     console.warn('[Notifikasi] Push notification hanya berjalan di perangkat nyata, bukan emulator.');
@@ -150,11 +180,21 @@ export async function daftarkanPushToken(uid: string): Promise<string | null> {
     return null; // Gagal ambil token: aplikasi tetap jalan (SRS-36).
   }
 
+  const emailTersimpan = (email?.trim() || auth.currentUser?.email?.trim() || '').slice(0, 254);
+  if (!emailTersimpan) {
+    console.warn('[Notifikasi] Email pengguna tidak tersedia; pendaftaran push token dilewati.');
+    return null;
+  }
+
+  const namaDevice = ambilNamaDevice();
+
   // Simpan token ke Firestore: pushTokens/{uid}.
   try {
     await setDoc(doc(db, 'pushTokens', uid), {
       token,
       platform: Platform.OS === 'ios' ? 'ios' : 'android',
+      namaDevice,
+      email: emailTersimpan,
       diperbaruiPada: serverTimestamp(),
     } satisfies PushTokenDoc);
   } catch (e) {
