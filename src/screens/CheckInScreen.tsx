@@ -8,6 +8,7 @@ import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import LoadingState from '../components/LoadingState';
 import PrimaryButton from '../components/PrimaryButton';
+import QrScannerPresensi from '../components/QrScannerPresensi';
 import ScreenHeader from '../components/ScreenHeader';
 import StatusBadge from '../components/StatusBadge';
 import SuccessBottomSheet from '../components/SuccessBottomSheet';
@@ -17,9 +18,13 @@ import { STATUS_IZIN, STATUS_LABEL, STATUS_SESI } from '../lib/constants';
 import type { StatusIzin } from '../lib/constants';
 import type { Session } from '../lib/types';
 import { checkIn, subscribeCheckInState } from '../services/attendanceService';
+import { ambilStatusLokasi, hitungJarakKeLab } from '../services/lokasiService';
+import { parsingPayloadQR } from '../services/sessionCodeService';
 import { subscribeSessions } from '../services/sessionService';
+import { getLabs } from '../services/labService';
 import { formatJam } from '../utils/format';
 import { KODE_PRESENSI_PANJANG, kodePresensiValid, normalisasiKode } from '../utils/kodePresensi';
+import { formatJarakMeter } from '../utils/geo';
 
 type Props = {
   route?: {
@@ -53,6 +58,12 @@ export default function CheckInScreen({ route }: Props) {
   const [reloadKey, setReloadKey] = useState(0);
   // Kode unik 5 karakter dari asisten; selalu disimpan dalam huruf besar.
   const [kode, setKode] = useState('');
+
+  // Lokasi & radius (SRS-27, SRS-28)
+  const [lokasiStatus, setLokasiStatus] = useState<{ status: 'memuat' | 'siap' | 'izin_ditolak' | 'gps_mati' | 'lokasi_tidak_tersedia' | 'timeout' | 'offline' | 'error'; message?: string; jarakMeter?: number; dalamRadius?: boolean }>({ status: 'memuat' });
+  const [lokasiPosisi, setLokasiPosisi] = useState<{ lat: number; lng: number; akurasiMeter: number } | null>(null);
+  const [labInfo, setLabInfo] = useState<{ lat: number | null; lng: number | null; radiusMeter: number | null; nama: string | null } | null>(null);
+  const [qrVisible, setQrVisible] = useState(false);
 
   useEffect(() => {
     if (paramSessionId || !profile || profile.role !== 'praktikan') {
@@ -103,6 +114,72 @@ export default function CheckInScreen({ route }: Props) {
       unsubscribe();
     };
   }, [sessionId, uid, reloadKey]);
+
+  // Muat lokasi lab sesi (SRS-27)
+  useEffect(() => {
+    if (!sessionId || !session?.labKode) return;
+
+    let aktif = true;
+    getLabs().then((labs) => {
+      if (!aktif) return;
+      const lab = labs.find((l) => l.kode === session?.labKode);
+      if (lab) {
+        setLabInfo({
+          lat: lab.lat,
+          lng: lab.lng,
+          radiusMeter: lab.radiusMeter,
+          nama: lab.nama,
+        });
+      }
+    });
+    return () => {
+      aktif = false;
+    };
+  }, [sessionId, session?.labKode]);
+
+  // Cek lokasi perangkat saat sesi Dibuka dan lab info tersedia (SRS-27, SRS-28)
+  useEffect(() => {
+    if (!sessionId || !session || session.status !== STATUS_SESI.DIBUKA || attended) {
+      if (session?.status !== STATUS_SESI.DIBUKA) {
+        const timer = setTimeout(() => {
+          setLokasiStatus({ status: 'siap' });
+        }, 0);
+        return () => clearTimeout(timer);
+      }
+      return;
+    }
+
+    let aktif = true;
+    const cekLokasi = async () => {
+      const status = await ambilStatusLokasi();
+      if (!aktif) return;
+
+      if (status.status === 'siap' && status.lokasi && labInfo && labInfo.lat != null && labInfo.lng != null && labInfo.radiusMeter != null) {
+        setLokasiPosisi(status.lokasi);
+        const jarak = hitungJarakKeLab(
+          status.lokasi,
+          labInfo.lat,
+          labInfo.lng,
+          labInfo.radiusMeter
+        );
+        setLokasiStatus({
+          status: 'siap',
+          jarakMeter: jarak.jarakMeter,
+          dalamRadius: jarak.dalamRadius,
+        });
+      } else {
+        setLokasiStatus({
+          status: status.status,
+          message: status.message,
+        });
+      }
+    };
+
+    cekLokasi();
+    return () => {
+      aktif = false;
+    };
+  }, [sessionId, session, attended, labInfo]);
 
   if (!sessionId && error) {
     return (
@@ -216,9 +293,15 @@ export default function CheckInScreen({ route }: Props) {
     canPress = false;
   } else if (isDibuka) {
     buttonLabel = isSubmitting ? "Memproses..." : "Presensi Sekarang";
-    canPress = !isSubmitting && kodePresensiValid(kode);
+    const lokasiValid =
+      lokasiStatus.status === 'siap' && lokasiStatus.dalamRadius === true;
+    canPress = !isSubmitting && kodePresensiValid(kode) && lokasiValid;
     if (!isSubmitting && !kodePresensiValid(kode)) {
       reason = `Masukkan kode presensi ${KODE_PRESENSI_PANJANG} karakter dari asisten.`;
+    } else if (!isSubmitting && !lokasiValid && kodePresensiValid(kode)) {
+      if (lokasiStatus.status === 'siap' && lokasiStatus.dalamRadius === false) {
+        reason = `Anda di luar radius lab (${formatJarakMeter(lokasiStatus.jarakMeter ?? 0)}). Pindah ke dalam lab lalu coba lagi.`;
+      }
     }
   }
 
@@ -233,7 +316,13 @@ export default function CheckInScreen({ route }: Props) {
         name: profile?.nama,
         nim: profile?.nim,
       },
-      kode
+      kode,
+      lokasiPosisi ? {
+        lat: lokasiPosisi.lat,
+        lng: lokasiPosisi.lng,
+        akurasiMeter: lokasiPosisi.akurasiMeter,
+      } : undefined,
+      lokasiStatus.jarakMeter
     );
 
     setIsSubmitting(false);
@@ -244,6 +333,24 @@ export default function CheckInScreen({ route }: Props) {
       setShowSuccess(true);
     } else {
       Alert.alert("Presensi Gagal", result.message);
+    }
+  };
+
+  const handleScanQR = () => {
+    setQrVisible(true);
+  };
+
+  const handleScanResult = (payload: string) => {
+    setQrVisible(false);
+    const parsed = parsingPayloadQR(payload);
+    if (parsed) {
+      if (session && parsed.sessionId !== session.id) {
+        Alert.alert('QR Salah Sesi', 'Kode QR ini bukan untuk sesi praktikum yang sedang Anda buka.');
+        return;
+      }
+      setKode(parsed.kode);
+    } else {
+      Alert.alert('QR Tidak Valid', 'Format kode QR tidak dikenali.');
     }
   };
 
@@ -298,6 +405,28 @@ export default function CheckInScreen({ route }: Props) {
             </View>
           </View>
 
+          {isDibuka && !attended && !izinDiterima && lokasiStatus.status !== 'memuat' ? (
+            <View style={styles.lokasiBanner}>
+              {lokasiStatus.status === 'siap' ? (
+                <>
+                  <Ionicons name="location-outline" size={16} color={colors.success} />
+                  <Text style={styles.lokasiTe}>
+                    Di dalam radius lab ({formatJarakMeter(lokasiStatus.jarakMeter ?? 0)})
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons
+                    name={'alert-circle-outline'}
+                    size={16}
+                    color={colors.danger}
+                  />
+                  <Text style={styles.lokasiTe}>{lokasiStatus.message ?? 'Lokasi tidak valid'}</Text>
+                </>
+              )}
+            </View>
+          ) : null}
+
           {isDibuka && !attended && !izinDiterima ? (
             <View style={styles.kodeSection}>
               <Text style={styles.kodeLabel}>Kode presensi</Text>
@@ -316,6 +445,14 @@ export default function CheckInScreen({ route }: Props) {
                 returnKeyType="done"
                 onSubmitEditing={handleCheckIn}
                 accessibilityLabel="Kode presensi dari asisten"
+              />
+              <PrimaryButton
+                label="Scan QR"
+                icon="qr-code-outline"
+                size="sm"
+                onPress={handleScanQR}
+                disabled={isSubmitting}
+                style={styles.tombolScan}
               />
             </View>
           ) : null}
@@ -344,6 +481,12 @@ export default function CheckInScreen({ route }: Props) {
         sessionName={session.praktikum}
         waktuHadir={successTime}
         onClose={() => setShowSuccess(false)}
+      />
+
+      <QrScannerPresensi
+        visible={qrVisible}
+        onScan={handleScanResult}
+        onClose={() => setQrVisible(false)}
       />
     </View>
   );
@@ -395,7 +538,22 @@ const styles = StyleSheet.create({
     color: colors.text,
     textAlign: "right",
   },
-  kodeSection: { gap: 8, paddingTop: 4 },
+  lokasiBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: radius.input,
+    backgroundColor: colors.surface,
+    marginBottom: 8,
+  },
+  lokasiTe: {
+    ...text.body,
+    color: colors.text,
+    fontFamily: font.semibold,
+  },
+  kodeSection: { gap: 8, paddingTop: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   kodeLabel: { ...text.bodyStrong },
   kodeInput: {
     minHeight: 56,
@@ -409,6 +567,11 @@ const styles = StyleSheet.create({
     fontFamily: font.extraBold,
     letterSpacing: 8,
     textAlign: "center",
+  },
+  tombolScan: {
+    minWidth: 100,
+    minHeight: 56,
+    paddingHorizontal: 12,
   },
   izinNote: {
     ...text.caption,
