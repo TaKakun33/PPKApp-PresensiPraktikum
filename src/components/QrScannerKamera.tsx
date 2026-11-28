@@ -20,9 +20,10 @@ type Props = {
   visible: boolean;
   onScan: (payload: string) => void;
   onClose: () => void;
+  onManual?: () => void;
 };
 
-export default function QrScannerKamera({ visible, onScan, onClose }: Props) {
+export default function QrScannerKamera({ visible, onScan, onClose, onManual }: Props) {
   const [permission, requestPermission] = useCameraPermissions();
   const [mounted, setMounted] = useState(false);
   const [scanning, setScanning] = useState(true);
@@ -63,6 +64,20 @@ export default function QrScannerKamera({ visible, onScan, onClose }: Props) {
       <View style={styles.overlay}>
         <View style={styles.loading}>
           <Text style={styles.loadingText}>Mengaktifkan kamera...</Text>
+          {onManual ? (
+            <PrimaryButton
+              label="Absensi Manual"
+              icon="keypad-outline"
+              onPress={onManual}
+              style={styles.tombol}
+            />
+          ) : null}
+          <PrimaryButton
+            label="Batal"
+            onPress={onClose}
+            variant="secondary"
+            style={styles.tombol}
+          />
         </View>
       </View>
     );
@@ -77,12 +92,21 @@ export default function QrScannerKamera({ visible, onScan, onClose }: Props) {
           <Text style={styles.message}>
             Izin kamera diperlukan untuk memindai kode QR presensi.
           </Text>
+          {onManual ? (
+            <PrimaryButton
+              label="Absensi Manual"
+              icon="keypad-outline"
+              onPress={onManual}
+              style={styles.tombol}
+            />
+          ) : null}
           <PrimaryButton
             label="Coba Lagi"
             onPress={() => {
               setScanning(true);
               requestPermission();
             }}
+            variant={onManual ? 'secondary' : 'primary'}
             style={styles.tombol}
           />
           <PrimaryButton
@@ -122,6 +146,14 @@ export default function QrScannerKamera({ visible, onScan, onClose }: Props) {
             style={styles.tombol}
           />
         )}
+        {onManual ? (
+          <PrimaryButton
+            label="Absensi Manual"
+            icon="keypad-outline"
+            onPress={onManual}
+            style={styles.tombol}
+          />
+        ) : null}
         <PrimaryButton
           label="Batal"
           onPress={onClose}
@@ -164,7 +196,7 @@ const styles = StyleSheet.create({
     width: 240,
     height: 240,
     borderWidth: 3,
-    borderColor: '#FFFFFF',
+    borderColor: colors.highlightOnBrand,
     borderRadius: 20,
   },
   bawah: {
@@ -175,7 +207,7 @@ const styles = StyleSheet.create({
   },
   overlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(20, 35, 74, 0.6)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -193,7 +225,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: radius.card,
     padding: 24,
+    gap: 12,
     alignItems: 'center',
+    maxWidth: 300,
+    width: '100%',
   },
   loadingText: {
     ...text.body,

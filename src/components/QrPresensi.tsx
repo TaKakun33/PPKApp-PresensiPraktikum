@@ -21,8 +21,8 @@ type Props = {
 };
 
 const UKURAN_QR = 200;
-const WARNA_GELAP = '#14234A';
-const WARNA_TERANG = '#FFFFFF';
+const WARNA_GELAP = colors.secondary;
+const WARNA_TERANG = colors.white;
 
 type Petak = { baris: number; kolom: number; panjang: number };
 
@@ -110,7 +110,7 @@ export default function QrPresensi({ sessionId, kode, onTutup }: Props) {
 const styles = StyleSheet.create({
   modal: {
     flex: 1,
-    backgroundColor: 'rgba(20, 35, 74, 0.48)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
