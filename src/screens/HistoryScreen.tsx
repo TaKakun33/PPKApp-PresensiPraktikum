@@ -191,10 +191,6 @@ export default function HistoryScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.subtitle}>
-          Pantau semua aktivitas presensi dan pengajuan izinmu.
-        </Text>
-
         <View style={styles.segmented}>
           {(['presensi', 'perizinan'] as const).map((tab) => {
             const active = activeTab === tab;
@@ -333,7 +329,6 @@ const styles = StyleSheet.create({
     paddingBottom: layout.tabBarSpace,
     gap: 16,
   },
-  subtitle: { ...text.body },
   segmented: {
     flexDirection: 'row',
     backgroundColor: colors.card,

@@ -337,7 +337,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   header: { gap: 8, marginBottom: 4 },
-  subtitle: { ...text.body },
+  subtitle: {
+    fontSize: 13.5,
+    lineHeight: 20,
+    fontFamily: font.semibold,
+    color: colors.text,
+    textAlign: 'justify',
+  },
   feedback: {
     padding: 12,
     borderWidth: 1,
