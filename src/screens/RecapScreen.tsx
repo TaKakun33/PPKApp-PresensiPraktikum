@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useEffect, useMemo, useState } from 'react';
-import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type LayoutChangeEvent, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { STATUS_SESI } from '../lib/constants';
 import type { Attendance, ClassDoc, LeaveRequest, Profile, Session } from '../lib/types';
@@ -28,6 +28,10 @@ import { useNamaKelas } from '../hooks/useNamaKelas';
  * Urutan pilihan sesi: yang masih berjalan di depan.
  * Dibuka -> Belum Dibuka (keduanya yang terdekat dulu) -> Ditutup (yang terbaru dulu).
  */
+const BATAS_TAMPIL_REKAP = 5;
+const PADDING_VERTIKAL_SCROLL = 2;
+const TINGGI_AWAL_REKAP = 345;
+
 const SESI_ORDER: Record<Session['status'], number> = {
   [STATUS_SESI.DIBUKA]: 0,
   [STATUS_SESI.BELUM]: 1,
@@ -67,6 +71,14 @@ export default function RecapScreen() {
 
   // Jam sekarang, diperbarui berkala supaya status "Tidak hadir" muncul saat waktu sesi habis.
   const [now, setNow] = useState(() => Date.now());
+  const [tinggiRekap, setTinggiRekap] = useState<number | null>(null);
+
+  const ukurKartuKelima = useCallback((event: LayoutChangeEvent) => {
+    const { y, height } = event.nativeEvent.layout;
+    // Ruang bawah setara padding vertikal agar border kartu ke-5 utuh dan kartu ke-6 tetap tersembunyi di balik gap (10dp).
+    const tinggiPas = Math.ceil(y + height) + PADDING_VERTIKAL_SCROLL;
+    setTinggiRekap((prev) => (prev === tinggiPas ? prev : tinggiPas));
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30000);
@@ -259,212 +271,225 @@ export default function RecapScreen() {
     );
   }
 
+  const pakaiFixScrollRekap = attendanceRows.length > BATAS_TAMPIL_REKAP;
+
+  const renderBarisRekap = (
+    item: (typeof attendanceRows)[number],
+    onLayout?: (event: LayoutChangeEvent) => void,
+  ) => (
+    <View key={item.key} onLayout={onLayout} style={styles.attendanceCard}>
+      <View style={styles.attendanceRow}>
+        <View style={styles.studentBadge}>
+          <Text style={styles.studentInitial}>{item.nama.trim().charAt(0).toUpperCase() || '?'}</Text>
+        </View>
+        <View style={styles.studentInfo}>
+          <Text style={styles.studentName}>{item.nama}</Text>
+          <Text style={styles.studentNim}>NIM: {item.nim || '—'}</Text>
+        </View>
+        <View style={styles.timeContainer}>
+          <Text
+            style={[
+              styles.statusText,
+              item.status === 'hadir' && styles.statusHadir,
+              item.status === 'izin' && styles.statusIzin,
+              item.status === 'tidak' && styles.statusTidak,
+            ]}
+          >
+            {REKAP_LABEL[item.status]}
+          </Text>
+          {item.status === 'hadir' ? <Text style={styles.timeValue}>{item.waktuTampil}</Text> : null}
+          {item.status === 'hadir' && item.manual ? (
+            <Text style={styles.manualTag}>Dicatat asisten</Text>
+          ) : null}
+        </View>
+      </View>
+    </View>
+  );
+
   return (
     <View style={styles.screen}>
       <ScreenHeader title="Rekap" />
-      <FlatList
-        data={attendanceRows}
-        keyExtractor={(item) => item.key}
-        contentContainerStyle={styles.content}
-        ListHeaderComponent={
-          <View style={styles.header}>
-            <Text style={styles.subtitle}>
-              Pilih sesi untuk melihat daftar praktikan yang hadir.
-            </Text>
+      <View style={styles.content}>
+        <View style={styles.header}>
+          <Text style={styles.subtitle}>Pilih sesi</Text>
 
-            {loadError ? (
-              <View style={[styles.feedback, styles.errorFeedback]}>
-                <Text style={styles.feedbackText}>{loadError}</Text>
-              </View>
-            ) : null}
-
-            {sessions.length > 0 ? (
-              <View style={styles.dropdownWrap}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Pilih sesi rekap"
-                  accessibilityValue={{
-                    text: selectedSession
-                      ? `${selectedSession.praktikum}, ${labelKelas(selectedSession.kelasId)}`
-                      : 'Belum dipilih',
-                  }}
-                  onPress={() => setPickerOpen(true)}
-                  style={({ pressed }) => [styles.dropdownButton, pressed && styles.optionPressed]}
-                >
-                  <View style={styles.dropdownTextWrap}>
-                    <Text style={styles.dropdownCaption}>Sesi / Kelas</Text>
-                    <Text numberOfLines={1} style={styles.dropdownValue}>
-                      {selectedSession
-                        ? `${selectedSession.praktikum} · ${labelKelas(selectedSession.kelasId)} · ${selectedSession.tanggal}`
-                        : 'Pilih sesi'}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-down" size={18} color={colors.text} />
-                </Pressable>
-
-                <Modal
-                  transparent
-                  animationType="fade"
-                  visible={pickerOpen}
-                  onRequestClose={() => setPickerOpen(false)}
-                >
-                  <View style={styles.pickerBackdrop}>
-                    <Pressable
-                      style={styles.pickerBackdropPress}
-                      onPress={() => setPickerOpen(false)}
-                      accessibilityLabel="Tutup pilihan sesi"
-                    />
-                    <View style={styles.pickerCard}>
-                      <Text style={styles.pickerTitle}>Pilih Sesi Rekap</Text>
-                      <ScrollView style={styles.pickerList} showsVerticalScrollIndicator={false}>
-                        {sessions.map((session) => {
-                          const selected = session.id === selectedSession?.id;
-                          return (
-                            <Pressable
-                              key={session.id}
-                              accessibilityRole="menuitem"
-                              accessibilityState={{ selected }}
-                              accessibilityLabel={`${session.praktikum}, ${labelKelas(session.kelasId)}, ${session.tanggal}`}
-                              onPress={() => {
-                                setSelectedSessionId(session.id);
-                                setPickerOpen(false);
-                              }}
-                              style={({ pressed }) => [
-                                styles.pickerOption,
-                                selected && styles.pickerOptionSelected,
-                                pressed && styles.optionPressed,
-                              ]}
-                            >
-                              <View style={styles.dropdownTextWrap}>
-                                <Text
-                                  numberOfLines={2}
-                                  style={[
-                                    styles.pickerOptionTitle,
-                                    selected && styles.sessionOptionTitleSelected,
-                                  ]}
-                                >
-                                  {session.praktikum}
-                                </Text>
-                                <Text
-                                  style={[
-                                    styles.sessionOptionDetails,
-                                    selected && styles.sessionOptionTitleSelected,
-                                  ]}
-                                >
-                                  {labelKelas(session.kelasId)} · {session.tanggal}
-                                </Text>
-                              </View>
-                              {selected ? <Ionicons name="checkmark" size={18} color={colors.primaryText} /> : null}
-                            </Pressable>
-                          );
-                        })}
-                      </ScrollView>
-                    </View>
-                  </View>
-                </Modal>
-              </View>
-            ) : null}
-
-            {selectedSession ? (
-              <View style={styles.selectedSessionCard}>
-                <View style={styles.selectedSessionTop}>
-                  <View style={styles.selectedSessionInfo}>
-                    <Text style={styles.selectedSessionTitle}>{selectedSession.praktikum}</Text>
-                    <Text style={styles.selectedSessionDetails}>{labelKelas(selectedSession.kelasId)}</Text>
-                  </View>
-                  <StatusBadge status={selectedSession.status} />
-                </View>
-                <Text style={styles.selectedSessionDetails}>
-                  {selectedSession.tanggal}, {selectedSession.waktuMulai} - {selectedSession.waktuSelesai}
-                </Text>
-                <Text style={styles.selectedSessionDetails}>Ruangan: {selectedSession.ruangan}</Text>
-                {!isLoadingAttendances && selectedSession.status !== STATUS_SESI.BELUM ? (
-                  <View style={styles.countContainer}>
-                    <View style={styles.countItem}>
-                      <Text style={styles.countValue}>{jumlah.hadir}</Text>
-                      <Text style={styles.countLabel}>hadir</Text>
-                    </View>
-                    <View style={styles.countItem}>
-                      <Text style={[styles.countValue, styles.countIzin]}>{jumlah.izin}</Text>
-                      <Text style={styles.countLabel}>izin</Text>
-                    </View>
-                    {sesiSelesai ? (
-                      <View style={styles.countItem}>
-                        <Text style={[styles.countValue, styles.countTidak]}>{jumlah.tidak}</Text>
-                        <Text style={styles.countLabel}>tidak hadir</Text>
-                      </View>
-                    ) : (
-                      <View style={styles.countItem}>
-                        <Text style={[styles.countValue, styles.countBelum]}>{jumlah.belum}</Text>
-                        <Text style={styles.countLabel}>belum hadir</Text>
-                      </View>
-                    )}
-                  </View>
-                ) : null}
-              </View>
-            ) : null}
-          </View>
-        }
-        ListEmptyComponent={
-          isLoadingSessions ? (
-            <LoadingState message="Memuat sesi aktif..." />
-          ) : sessions.length === 0 ? (
-            <EmptyState
-              icon="calendar-outline"
-              title="Belum ada sesi yang ditugaskan"
-              message="Sesi yang ditugaskan kepadamu akan muncul di sini."
-            />
-          ) : selectedSession?.status === STATUS_SESI.BELUM ? (
-            <EmptyState
-              icon="lock-closed-outline"
-              title="Sesi belum dibuka"
-              message="Rekap kehadiran tersedia setelah sesi dibuka."
-            />
-          ) : isLoadingAttendances ? (
-            <LoadingState message="Memuat rekap kehadiran..." />
-          ) : attendanceError ? (
-            <EmptyState title="Tidak dapat memuat rekap" message={attendanceError} />
-          ) : (
-            <EmptyState
-              icon="people-outline"
-              title="Belum ada praktikan yang hadir"
-              message="Daftar kehadiran untuk sesi ini masih kosong."
-            />
-          )
-        }
-        renderItem={({ item }) => {
-          return (
-            <View style={styles.attendanceCard}>
-              <View style={styles.attendanceRow}>
-                <View style={styles.studentBadge}>
-                  <Text style={styles.studentInitial}>{item.nama.trim().charAt(0).toUpperCase() || '?'}</Text>
-                </View>
-                <View style={styles.studentInfo}>
-                  <Text style={styles.studentName}>{item.nama}</Text>
-                  <Text style={styles.studentNim}>NIM: {item.nim || '—'}</Text>
-                </View>
-                <View style={styles.timeContainer}>
-                  <Text
-                    style={[
-                      styles.statusText,
-                      item.status === 'hadir' && styles.statusHadir,
-                      item.status === 'izin' && styles.statusIzin,
-                      item.status === 'tidak' && styles.statusTidak,
-                    ]}
-                  >
-                    {REKAP_LABEL[item.status]}
-                  </Text>
-                  {item.status === 'hadir' ? <Text style={styles.timeValue}>{item.waktuTampil}</Text> : null}
-                  {item.status === 'hadir' && item.manual ? (
-                    <Text style={styles.manualTag}>Dicatat asisten</Text>
-                  ) : null}
-                </View>
-              </View>
-
+          {loadError ? (
+            <View style={[styles.feedback, styles.errorFeedback]}>
+              <Text style={styles.feedbackText}>{loadError}</Text>
             </View>
-          );
-        }}
-      />
+          ) : null}
+
+          {sessions.length > 0 ? (
+            <View style={styles.dropdownWrap}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Pilih sesi rekap"
+                accessibilityValue={{
+                  text: selectedSession
+                    ? `${selectedSession.praktikum}, ${labelKelas(selectedSession.kelasId)}`
+                    : 'Belum dipilih',
+                }}
+                onPress={() => setPickerOpen(true)}
+                style={({ pressed }) => [styles.dropdownButton, pressed && styles.optionPressed]}
+              >
+                <View style={styles.dropdownTextWrap}>
+                  <Text style={styles.dropdownCaption}>Sesi / Kelas</Text>
+                  <Text numberOfLines={1} style={styles.dropdownValue}>
+                    {selectedSession
+                      ? `${selectedSession.praktikum} · ${labelKelas(selectedSession.kelasId)} · ${selectedSession.tanggal}`
+                      : 'Pilih sesi'}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-down" size={18} color={colors.text} />
+              </Pressable>
+
+              <Modal
+                transparent
+                animationType="fade"
+                visible={pickerOpen}
+                onRequestClose={() => setPickerOpen(false)}
+              >
+                <View style={styles.pickerBackdrop}>
+                  <Pressable
+                    style={styles.pickerBackdropPress}
+                    onPress={() => setPickerOpen(false)}
+                    accessibilityLabel="Tutup pilihan sesi"
+                  />
+                  <View style={styles.pickerCard}>
+                    <Text style={styles.pickerTitle}>Pilih Sesi Rekap</Text>
+                    <ScrollView style={styles.pickerList} showsVerticalScrollIndicator={false}>
+                      {sessions.map((session) => {
+                        const selected = session.id === selectedSession?.id;
+                        return (
+                          <Pressable
+                            key={session.id}
+                            accessibilityRole="menuitem"
+                            accessibilityState={{ selected }}
+                            accessibilityLabel={`${session.praktikum}, ${labelKelas(session.kelasId)}, ${session.tanggal}`}
+                            onPress={() => {
+                              setSelectedSessionId(session.id);
+                              setPickerOpen(false);
+                            }}
+                            style={({ pressed }) => [
+                              styles.pickerOption,
+                              selected && styles.pickerOptionSelected,
+                              pressed && styles.optionPressed,
+                            ]}
+                          >
+                            <View style={styles.dropdownTextWrap}>
+                              <Text
+                                numberOfLines={2}
+                                style={[
+                                  styles.pickerOptionTitle,
+                                  selected && styles.sessionOptionTitleSelected,
+                                ]}
+                              >
+                                {session.praktikum}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.sessionOptionDetails,
+                                  selected && styles.sessionOptionTitleSelected,
+                                ]}
+                              >
+                                {labelKelas(session.kelasId)} · {session.tanggal}
+                              </Text>
+                            </View>
+                            {selected ? <Ionicons name="checkmark" size={18} color={colors.primaryText} /> : null}
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                </View>
+              </Modal>
+            </View>
+          ) : null}
+
+          {selectedSession ? (
+            <View style={styles.selectedSessionCard}>
+              <View style={styles.selectedSessionTop}>
+                <View style={styles.selectedSessionInfo}>
+                  <Text style={styles.selectedSessionTitle}>{selectedSession.praktikum}</Text>
+                  <Text style={styles.selectedSessionDetails}>{labelKelas(selectedSession.kelasId)}</Text>
+                </View>
+                <StatusBadge status={selectedSession.status} />
+              </View>
+              <Text style={styles.selectedSessionDetails} numberOfLines={1}>
+                {selectedSession.tanggal}, {selectedSession.waktuMulai} - {selectedSession.waktuSelesai} · {selectedSession.ruangan}
+              </Text>
+              {!isLoadingAttendances && selectedSession.status !== STATUS_SESI.BELUM ? (
+                <View style={styles.countContainer}>
+                  <View style={styles.countItem}>
+                    <Text style={styles.countValue}>{jumlah.hadir}</Text>
+                    <Text style={styles.countLabel}>hadir</Text>
+                  </View>
+                  <View style={styles.countItem}>
+                    <Text style={[styles.countValue, styles.countIzin]}>{jumlah.izin}</Text>
+                    <Text style={styles.countLabel}>izin</Text>
+                  </View>
+                  {sesiSelesai ? (
+                    <View style={styles.countItem}>
+                      <Text style={[styles.countValue, styles.countTidak]}>{jumlah.tidak}</Text>
+                      <Text style={styles.countLabel}>tidak hadir</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.countItem}>
+                      <Text style={[styles.countValue, styles.countBelum]}>{jumlah.belum}</Text>
+                      <Text style={styles.countLabel}>belum hadir</Text>
+                    </View>
+                  )}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
+
+        {attendanceRows.length === 0 ? (
+          <View style={styles.emptyWrap}>
+            {isLoadingSessions ? (
+              <LoadingState message="Memuat sesi aktif..." />
+            ) : sessions.length === 0 ? (
+              <EmptyState
+                icon="calendar-outline"
+                title="Belum ada sesi yang ditugaskan"
+                message="Sesi yang ditugaskan kepadamu akan muncul di sini."
+              />
+            ) : selectedSession?.status === STATUS_SESI.BELUM ? (
+              <EmptyState
+                icon="lock-closed-outline"
+                title="Sesi belum dibuka"
+                message="Rekap kehadiran tersedia setelah sesi dibuka."
+              />
+            ) : isLoadingAttendances ? (
+              <LoadingState message="Memuat rekap kehadiran..." />
+            ) : attendanceError ? (
+              <EmptyState title="Tidak dapat memuat rekap" message={attendanceError} />
+            ) : (
+              <EmptyState
+                icon="people-outline"
+                title="Belum ada praktikan yang hadir"
+                message="Daftar kehadiran untuk sesi ini masih kosong."
+              />
+            )}
+          </View>
+        ) : pakaiFixScrollRekap ? (
+          <ScrollView
+            key={selectedSessionKey ?? 'rekap'}
+            style={[styles.rekapScroll, tinggiRekap !== null && { maxHeight: tinggiRekap }]}
+            contentContainerStyle={styles.rekapScrollContent}
+            showsVerticalScrollIndicator
+          >
+            {attendanceRows.map((item, index) =>
+              renderBarisRekap(item, index === BATAS_TAMPIL_REKAP - 1 ? ukurKartuKelima : undefined),
+            )}
+          </ScrollView>
+        ) : (
+          <View style={styles.rekapList}>
+            {attendanceRows.map((item) => renderBarisRekap(item))}
+          </View>
+        )}
+      </View>
     </View>
   );
 }
@@ -473,36 +498,36 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   state: { flex: 1 },
   content: {
-    flexGrow: 1,
+    flex: 1,
     paddingHorizontal: layout.screenPadding,
-    paddingTop: 8,
-    paddingBottom: layout.tabBarSpace,
-    gap: 12,
+    paddingTop: 4,
+    paddingBottom: 88,
+    gap: 8,
   },
-  header: { gap: 10, marginBottom: 4 },
-  subtitle: { ...text.body },
+  header: { gap: 8 },
+  subtitle: { fontSize: 15, fontFamily: font.bold, color: colors.heading },
   feedback: {
-    padding: 12,
+    padding: 10,
     borderWidth: 1,
     borderRadius: 14,
     backgroundColor: colors.card,
   },
   errorFeedback: { borderColor: colors.danger, backgroundColor: colors.dangerTint },
-  feedbackText: { fontSize: 13, lineHeight: 19, fontFamily: font.medium, color: colors.text },
+  feedbackText: { fontSize: 12, lineHeight: 17, fontFamily: font.medium, color: colors.text },
   optionPressed: { opacity: 0.8 },
-  dropdownWrap: { gap: 8 },
+  dropdownWrap: { gap: 6 },
   dropdownButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.input,
     backgroundColor: colors.card,
   },
-  dropdownTextWrap: { flex: 1, gap: 3 },
+  dropdownTextWrap: { flex: 1, gap: 2 },
   dropdownCaption: { fontSize: 11, fontFamily: font.semibold, color: colors.textSecondary },
   dropdownValue: { fontSize: 14, fontFamily: font.bold, color: colors.text },
   sessionOptionTitleSelected: { color: colors.primaryText },
@@ -535,8 +560,9 @@ const styles = StyleSheet.create({
   pickerOptionSelected: { backgroundColor: colors.tint },
   pickerOptionTitle: { fontSize: 13, fontFamily: font.bold, color: colors.text },
   selectedSessionCard: {
-    padding: 16,
-    gap: 8,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    gap: 4,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.card,
@@ -548,8 +574,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 10,
   },
-  selectedSessionInfo: { flex: 1, gap: 3 },
-  selectedSessionTitle: { fontSize: 16, fontFamily: font.bold, color: colors.text },
+  selectedSessionInfo: { flex: 1, gap: 2 },
+  selectedSessionTitle: { fontSize: 15, fontFamily: font.bold, color: colors.text },
   selectedSessionDetails: { ...text.caption },
   countContainer: {
     flexDirection: 'row',
@@ -557,8 +583,8 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
     columnGap: 18,
     rowGap: 4,
-    marginTop: 4,
-    paddingTop: 10,
+    marginTop: 2,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
@@ -570,31 +596,42 @@ const styles = StyleSheet.create({
   statusHadir: { color: colors.success },
   statusIzin: { color: colors.warning },
   statusTidak: { color: colors.danger },
-  countValue: { fontSize: 22, fontFamily: font.extraBold, color: colors.secondaryText },
-  countLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.textSecondary },
-  attendanceRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  countValue: { fontSize: 20, fontFamily: font.extraBold, color: colors.secondaryText },
+  countLabel: { fontSize: 12.5, fontFamily: font.semibold, color: colors.textSecondary },
+  attendanceRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   attendanceCard: {
-    gap: 10,
-    padding: 14,
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 18,
+    borderRadius: 16,
     backgroundColor: colors.card,
   },
   studentBadge: {
-    width: 38,
-    height: 38,
-    borderRadius: 13,
+    width: 34,
+    height: 34,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.tint,
   },
-  studentInitial: { fontSize: 14, fontFamily: font.extraBold, color: colors.secondaryText },
-  studentInfo: { flex: 1, gap: 4 },
-  studentName: { fontSize: 14, lineHeight: 20, fontFamily: font.bold, color: colors.text },
+  studentInitial: { fontSize: 13, fontFamily: font.extraBold, color: colors.secondaryText },
+  studentInfo: { flex: 1, gap: 1 },
+  studentName: { fontSize: 13.5, lineHeight: 18, fontFamily: font.bold, color: colors.text },
   studentNim: { ...text.caption },
-  timeContainer: { alignItems: 'flex-end', gap: 4 },
+  timeContainer: { alignItems: 'flex-end', gap: 2 },
   timeLabel: { ...text.caption },
-  manualTag: { fontSize: 11, fontFamily: font.semibold, color: colors.textSecondary, textAlign: 'right' },
-  timeValue: { fontSize: 12, fontFamily: font.bold, color: colors.text, textAlign: 'right' },
+  manualTag: { fontSize: 10.5, fontFamily: font.semibold, color: colors.textSecondary, textAlign: 'right' },
+  timeValue: { fontSize: 11.5, fontFamily: font.bold, color: colors.text, textAlign: 'right' },
+  emptyWrap: { flex: 1 },
+  rekapList: { gap: 8 },
+  rekapScroll: {
+    maxHeight: TINGGI_AWAL_REKAP,
+    flexGrow: 0,
+  },
+  rekapScrollContent: {
+    gap: 8,
+    paddingVertical: PADDING_VERTIKAL_SCROLL,
+  },
 });
