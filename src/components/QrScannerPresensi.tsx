@@ -13,6 +13,7 @@ type Props = {
   visible: boolean;
   onScan: (payload: string) => void;
   onClose: () => void;
+  onManual?: () => void;
 };
 
 // Dimuat sekali saat modul ini dibaca; try/catch menahan error modul native yang tidak ada.
@@ -39,12 +40,22 @@ export default function QrScannerPresensi(props: Props) {
       statusBarTranslucent
       onRequestClose={props.onClose}
     >
-      {Kamera ? <Kamera {...props} /> : <KameraTidakAda onClose={props.onClose} />}
+      {Kamera ? (
+        <Kamera {...props} />
+      ) : (
+        <KameraTidakAda onClose={props.onClose} onManual={props.onManual} />
+      )}
     </Modal>
   );
 }
 
-function KameraTidakAda({ onClose }: { onClose: () => void }) {
+function KameraTidakAda({
+  onClose,
+  onManual,
+}: {
+  onClose: () => void;
+  onManual?: () => void;
+}) {
   return (
     <View style={styles.overlay}>
       <View style={styles.card}>
@@ -54,6 +65,14 @@ function KameraTidakAda({ onClose }: { onClose: () => void }) {
           Fitur pindai QR belum ada di versi aplikasi ini. Pasang versi aplikasi terbaru, atau
           lakukan presensi dengan kode.
         </Text>
+        {onManual ? (
+          <PrimaryButton
+            label="Absensi Manual"
+            icon="keypad-outline"
+            onPress={onManual}
+            style={styles.tombol}
+          />
+        ) : null}
         <PrimaryButton label="Tutup" onPress={onClose} variant="secondary" style={styles.tombol} />
       </View>
     </View>
@@ -63,7 +82,7 @@ function KameraTidakAda({ onClose }: { onClose: () => void }) {
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(20, 35, 74, 0.6)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,

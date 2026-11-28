@@ -1,3 +1,4 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -19,6 +20,7 @@ export default function FloatingTabBar({
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
           const focused = state.index === index;
+          const isPresensi = route.name === 'presensi';
           const color = focused ? colors.onHighlight : colors.tabInactive;
           const label =
             typeof options.tabBarLabel === 'string'
@@ -40,6 +42,30 @@ export default function FloatingTabBar({
           const onLongPress = () => {
             emitter.emit({ type: 'tabLongPress', target: route.key });
           };
+
+          if (isPresensi) {
+            return (
+              <Pressable
+                key={route.key}
+                onPress={onPress}
+                onLongPress={onLongPress}
+                accessibilityRole="button"
+                accessibilityState={focused ? { selected: true } : {}}
+                accessibilityLabel={options.tabBarAccessibilityLabel ?? label}
+                style={({ pressed }) => [styles.presensiTab, pressed && styles.tabPressed]}
+              >
+                <View style={[styles.presensiCircle, focused && styles.presensiCircleFocused]}>
+                  <Ionicons name="qr-code" size={28} color={colors.onHighlight} />
+                </View>
+                <Text
+                  style={[styles.label, styles.presensiLabel, focused && styles.labelFocused]}
+                  numberOfLines={1}
+                >
+                  {label}
+                </Text>
+              </Pressable>
+            );
+          }
 
           return (
             <Pressable
@@ -89,6 +115,32 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 3,
     borderRadius: radius.pill,
+  },
+  presensiTab: {
+    flex: 1,
+    height: 66,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: 13,
+  },
+  presensiCircle: {
+    position: 'absolute',
+    top: -24,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: colors.highlightOnBrand,
+    borderWidth: 3,
+    borderColor: colors.secondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadow.floating,
+  },
+  presensiCircleFocused: {
+    transform: [{ scale: 1.04 }],
+  },
+  presensiLabel: {
+    color: colors.highlightOnBrand,
   },
   // Bar = brand (30%); tab aktif = pill highlightOnBrand (aksen bila kontras cukup).
   tabActive: { backgroundColor: colors.highlightOnBrand },

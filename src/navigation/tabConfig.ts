@@ -10,7 +10,7 @@ export type TabDef = { name: string; title: string; icon: IoniconsName };
 export const PRAKTIKAN_TABS: TabDef[] = [
   { name: 'home', title: 'Home', icon: 'home-outline' },
   { name: 'peta', title: 'Peta', icon: 'map-outline' },
-  { name: 'presensi', title: 'Presensi', icon: 'checkbox-outline' },
+  { name: 'presensi', title: 'Presensi', icon: 'qr-code' },
   { name: 'izin', title: 'Izin', icon: 'document-text-outline' },
   { name: 'riwayat', title: 'Riwayat', icon: 'time-outline' },
 ];

@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
+import { type ComponentRef, useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import Card from '../components/Card';
@@ -76,7 +76,34 @@ export default function CheckInScreen({ route }: Props) {
   const [labMuat, setLabMuat] = useState<'memuat' | 'siap' | 'gagal'>('memuat');
   const [refreshLokasiKey, setRefreshLokasiKey] = useState(0);
   const [qrVisible, setQrVisible] = useState(false);
+  const [fokus, setFokus] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
+  const [kodeFocused, setKodeFocused] = useState(false);
+  const kodeInputRef = useRef<ComponentRef<typeof TextInput>>(null);
   const [sekarang, setSekarang] = useState(() => Date.now());
+  const navigation = useNavigation();
+
+  useFocusEffect(
+    useCallback(() => {
+      setFokus(true);
+      setManualMode(false);
+      setQrVisible(false);
+      return () => {
+        setFokus(false);
+        setQrVisible(false);
+        setManualMode(false);
+      };
+    }, []),
+  );
+
+  useEffect(() => {
+    const nav = navigation as { addListener?: (ev: string, cb: () => void) => () => void };
+    if (typeof nav?.addListener !== 'function') return;
+    return nav.addListener('tabPress', () => {
+      setManualMode(false);
+      setQrVisible(false);
+    });
+  }, [navigation]);
 
   useEffect(() => {
     if (paramSessionId || !profile || profile.role !== 'praktikan') {
@@ -160,6 +187,20 @@ export default function CheckInScreen({ route }: Props) {
     return () => clearInterval(timer);
   }, [sesiDibukaAktif]);
   const jamSesiHabis = sesiDibukaAktif && jamSesiSudahLewat(session, sekarang);
+
+  // Kamera QR terbuka otomatis saat tab Presensi aktif dan ada sesi dibuka yang masih bisa dihadiri,
+  // kecuali praktikan memilih "Absensi Manual".
+  const bisaScanOtomatis =
+    !!sessionId &&
+    !loading &&
+    !!session &&
+    session.status === STATUS_SESI.DIBUKA &&
+    !attended &&
+    izinStatus !== STATUS_IZIN.DITERIMA &&
+    !jamSesiHabis;
+  const tampilScanner =
+    bisaScanOtomatis &&
+    ((fokus && !manualMode && !showSuccess && !isSubmitting) || qrVisible);
 
   // Cek lokasi perangkat selama sesi Dibuka dan praktikan masih bisa presensi (SRS-27, SRS-28).
   // Diulang lewat tombol "Perbarui lokasi" (refreshLokasiKey).
@@ -391,13 +432,20 @@ export default function CheckInScreen({ route }: Props) {
   };
 
   const handleScanQR = () => {
+    setManualMode(false);
     setQrVisible(true);
+  };
+
+  const pindahKeManual = () => {
+    setQrVisible(false);
+    setManualMode(true);
   };
 
   // Hasil scan langsung dikirim sebagai presensi: praktikan langsung melihat berhasil atau gagal,
   // tanpa mengisi kotak kode dan tanpa menekan tombol Presensi lagi.
   const handleScanResult = (payload: string) => {
     setQrVisible(false);
+    setManualMode(true);
     if (isSubmitting) return;
     const parsed = parsingPayloadQR(payload);
     if (!parsed) {
@@ -509,32 +557,55 @@ export default function CheckInScreen({ route }: Props) {
           {tampilFormPresensi ? (
             <View style={styles.kodeSection}>
               <Text style={styles.kodeLabel}>Kode presensi</Text>
-              <View style={styles.kodeBaris}>
-              <TextInput
-                style={styles.kodeInput}
-                value={kode}
-                onChangeText={(t) => setKode(normalisasiKode(t))}
-                placeholder="• • • • •"
-                placeholderTextColor={colors.placeholder}
-                autoCapitalize="characters"
-                autoCorrect={false}
-                autoComplete="off"
-                spellCheck={false}
-                maxLength={KODE_PRESENSI_PANJANG}
-                editable={!isSubmitting}
-                returnKeyType="done"
-                onSubmitEditing={handleCheckIn}
-                accessibilityLabel="Kode presensi dari asisten"
-              />
+              <Pressable
+                style={styles.kodeRow}
+                onPress={() => kodeInputRef.current?.focus()}
+                accessible={false}
+              >
+                {Array.from({ length: KODE_PRESENSI_PANJANG }).map((_, idx) => {
+                  const char = kode[idx];
+                  const isActive =
+                    kodeFocused &&
+                    (idx === kode.length ||
+                      (kode.length === KODE_PRESENSI_PANJANG && idx === KODE_PRESENSI_PANJANG - 1));
+                  return (
+                    <View
+                      key={idx}
+                      style={[styles.kodeSlot, isActive && styles.kodeSlotActive]}
+                    >
+                      <Text style={char ? styles.kodeChar : styles.kodeDot}>
+                        {char ?? '•'}
+                      </Text>
+                    </View>
+                  );
+                })}
+                <TextInput
+                  ref={kodeInputRef}
+                  style={styles.kodeHiddenInput}
+                  value={kode}
+                  onChangeText={(t) => setKode(normalisasiKode(t))}
+                  onFocus={() => setKodeFocused(true)}
+                  onBlur={() => setKodeFocused(false)}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  autoComplete="off"
+                  spellCheck={false}
+                  caretHidden
+                  maxLength={KODE_PRESENSI_PANJANG}
+                  editable={!isSubmitting}
+                  returnKeyType="done"
+                  onSubmitEditing={handleCheckIn}
+                  accessibilityLabel="Kode presensi dari asisten"
+                />
+              </Pressable>
               <PrimaryButton
                 label="Scan QR"
                 icon="qr-code-outline"
-                size="sm"
+                variant="secondary"
                 onPress={handleScanQR}
                 disabled={isSubmitting}
                 style={styles.tombolScan}
               />
-              </View>
             </View>
           ) : null}
 
@@ -565,9 +636,10 @@ export default function CheckInScreen({ route }: Props) {
       />
 
       <QrScannerPresensi
-        visible={qrVisible}
+        visible={tampilScanner}
         onScan={handleScanResult}
-        onClose={() => setQrVisible(false)}
+        onClose={pindahKeManual}
+        onManual={pindahKeManual}
       />
     </View>
   );
@@ -638,29 +710,45 @@ const styles = StyleSheet.create({
   perbarui: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   perbaruiDitekan: { opacity: 0.6 },
   perbaruiTeks: { fontSize: 12, fontFamily: font.semibold, color: colors.primary },
-  // Label di atas; kotak kode dan tombol Scan QR berbagi satu baris di bawahnya.
-  kodeSection: { gap: 8, paddingTop: 4 },
+  // Label di atas; 5 kotak kode presensi tetap di bawahnya, diikuti tombol Scan QR.
+  kodeSection: { gap: 10, paddingTop: 4 },
   kodeLabel: { ...text.bodyStrong },
-  kodeBaris: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  kodeInput: {
+  kodeRow: {
+    position: 'relative',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  kodeSlot: {
     flex: 1,
-    minWidth: 0,
-    minHeight: 56,
-    paddingHorizontal: 16,
+    height: 54,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.input,
     backgroundColor: colors.surface,
-    color: colors.text,
-    fontSize: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  kodeSlotActive: {
+    borderColor: colors.primary,
+    borderWidth: 1.5,
+  },
+  kodeChar: {
+    fontSize: 22,
     fontFamily: font.extraBold,
-    letterSpacing: 8,
-    textAlign: "center",
+    color: colors.text,
+  },
+  kodeDot: {
+    fontSize: 22,
+    fontFamily: font.extraBold,
+    color: colors.placeholder,
+  },
+  kodeHiddenInput: {
+    ...StyleSheet.absoluteFill,
+    opacity: 0.01,
   },
   tombolScan: {
-    minWidth: 100,
-    minHeight: 56,
-    paddingHorizontal: 12,
+    alignSelf: 'stretch',
+    minHeight: 46,
   },
   izinNote: {
     ...text.caption,
