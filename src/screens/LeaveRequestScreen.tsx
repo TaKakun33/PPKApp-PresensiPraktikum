@@ -241,12 +241,9 @@ export default function LeaveRequestScreen() {
   // Dibuat sebagai elemen (bukan komponen) agar TextInput tidak di-remount dan kehilangan fokus.
   const header = (
     <View style={styles.headerWrap}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Ajukan Izin</Text>
-        <Text style={styles.subtitle}>
-          Pilih kelas dan sesi yang tidak bisa kamu ikuti, lalu isi catatan izin. Asisten yang akan memutuskan.
-        </Text>
-      </View>
+      <Text style={styles.subtitle}>
+        Pilih kelas dan sesi praktikum yang tidak dapat kamu ikuti, lalu tuliskan alasan izinmu untuk ditinjau oleh asisten pengampu.
+      </Text>
 
       <Card style={styles.formCard}>
         <Text style={styles.label}>Pilih kelas</Text>
@@ -492,10 +489,14 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: layout.tabBarSpace,
   },
-  headerWrap: { gap: 16, marginBottom: 12 },
-  header: { gap: 5 },
-  title: { fontSize: 20, fontFamily: font.extraBold, color: colors.text },
-  subtitle: { ...text.body },
+  headerWrap: { gap: 14, marginBottom: 12 },
+  subtitle: {
+    fontSize: 13.5,
+    lineHeight: 20,
+    fontFamily: font.semibold,
+    color: colors.text,
+    textAlign: 'justify',
+  },
   formCard: { padding: 18, gap: 10 },
   label: { ...text.bodyStrong },
   labelSpaced: { marginTop: 6 },

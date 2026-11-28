@@ -1,8 +1,8 @@
 // Dashboard utama praktikan: ringkasan kehadiran, izin, dan jadwal terdekat.
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type LayoutChangeEvent, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Attendance, ClassDoc, LeaveRequest, Session } from '../lib/types';
@@ -19,7 +19,13 @@ import { getNamaPengguna, subscribeClassesForUser } from '../services/classServi
 import { subscribeAttendanceHistory, subscribeLeaveHistory } from '../services/historyService';
 import { labelWaktu, subscribeSessions, urutkanSesi } from '../services/sessionService';
 import { formatTanggal } from '../utils/format';
-import { kelompokkanSesi, type KelompokSesi } from '../utils/kelompokSesi';
+import { kelompokkanSesi, type KelompokSesi, type KunciKelompok } from '../utils/kelompokSesi';
+
+const BATAS_AKAN_DATANG = 3;
+const BATAS_SELESAI = 2;
+const PADDING_VERTIKAL_SCROLL = 2;
+const TINGGI_AWAL_AKAN_DATANG = 276;
+const TINGGI_AWAL_SELESAI = 182;
 
 const HARI = ['MINGGU', 'SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU'];
 const BULAN = ['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI', 'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER'];
@@ -75,6 +81,13 @@ export default function HomeScreen() {
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
   const [tampilSelesai, setTampilSelesai] = useState(false);
+  const [tinggiKelompok, setTinggiKelompok] = useState<Partial<Record<KunciKelompok, number>>>({});
+
+  const ukurBatasKelompok = useCallback((key: KunciKelompok, event: LayoutChangeEvent) => {
+    const { y, height } = event.nativeEvent.layout;
+    const tinggiPas = Math.ceil(y + height) + PADDING_VERTIKAL_SCROLL;
+    setTinggiKelompok((prev) => (prev[key] === tinggiPas ? prev : { ...prev, [key]: tinggiPas }));
+  }, []);
 
   useEffect(() => {
     if (!profile) return;
@@ -163,11 +176,12 @@ export default function HomeScreen() {
   const kelompokSelesai = kelompok.filter((k) => ['terlewat', 'ditutup'].includes(k.key));
   const jumlahSelesai = kelompokSelesai.reduce((total, k) => total + k.data.length, 0);
 
-  const renderKartu = (session: Session) => {
+  const renderKartu = (session: Session, onLayout?: (event: LayoutChangeEvent) => void) => {
     const tanggal = bagianTanggal(session.tanggal);
     return (
       <Pressable
         key={session.id}
+        onLayout={onLayout}
         style={({ pressed }) => [styles.scheduleCard, pressed && styles.scheduleCardPressed]}
         onPress={() => router.push(`/session/${session.id}`)}
         accessibilityRole="button"
@@ -197,17 +211,41 @@ export default function HomeScreen() {
     );
   };
 
-  const renderKelompok = (k: KelompokSesi) => (
-    <View key={k.key} style={styles.kelompok}>
-      <View style={styles.kelompokJudulBaris}>
-        <Text style={styles.kelompokJudul}>{k.judul}</Text>
-        <View style={styles.kelompokJumlah}>
-          <Text style={styles.kelompokJumlahTeks}>{k.data.length}</Text>
+  const renderKelompok = (k: KelompokSesi) => {
+    const selesai = k.key === 'terlewat' || k.key === 'ditutup';
+    const batas = selesai ? BATAS_SELESAI : BATAS_AKAN_DATANG;
+    const pakaiFixScroll = k.data.length > batas;
+    const maxHeight =
+      tinggiKelompok[k.key] ?? (selesai ? TINGGI_AWAL_SELESAI : TINGGI_AWAL_AKAN_DATANG);
+
+    return (
+      <View key={k.key} style={styles.kelompok}>
+        <View style={styles.kelompokJudulBaris}>
+          <Text style={styles.kelompokJudul}>{k.judul}</Text>
+          <View style={styles.kelompokJumlah}>
+            <Text style={styles.kelompokJumlahTeks}>{k.data.length}</Text>
+          </View>
         </View>
+        {pakaiFixScroll ? (
+          <ScrollView
+            style={[styles.fixScroll, { maxHeight }]}
+            contentContainerStyle={styles.fixScrollContent}
+            nestedScrollEnabled
+            showsVerticalScrollIndicator
+          >
+            {k.data.map((session, index) =>
+              renderKartu(
+                session,
+                index === batas - 1 ? (event) => ukurBatasKelompok(k.key, event) : undefined,
+              ),
+            )}
+          </ScrollView>
+        ) : (
+          <View style={styles.scheduleList}>{k.data.map((session) => renderKartu(session))}</View>
+        )}
       </View>
-      <View style={styles.scheduleList}>{k.data.map(renderKartu)}</View>
-    </View>
-  );
+    );
+  };
 
   const sesiLampau = sessions.filter(
     (session) => session.status === 'ditutup' || session.tanggal < hariIni,
@@ -228,6 +266,7 @@ export default function HomeScreen() {
       style={styles.container}
       contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
       showsVerticalScrollIndicator={false}
+      nestedScrollEnabled
     >
       <View style={styles.profileRow}>
         <ProfileButton size={46} />
@@ -550,4 +589,11 @@ const styles = StyleSheet.create({
   },
   kelompokJumlahTeks: { fontSize: 11, fontFamily: font.bold, color: colors.secondaryText },
   toggleSelesai: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8 },
+  fixScroll: {
+    flexGrow: 0,
+  },
+  fixScrollContent: {
+    gap: 10,
+    paddingVertical: PADDING_VERTIKAL_SCROLL,
+  },
 });

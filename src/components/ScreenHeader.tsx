@@ -3,10 +3,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { text } from '../constants/theme';
-import { useAuth } from '../context/AuthContext';
 import LogoutButton from '../navigation/LogoutButton';
 import NotificationButton from '../navigation/NotificationButton';
-import ProfileButton from '../navigation/ProfileButton';
 import TemaButton from '../navigation/TemaButton';
 
 type Props = {
@@ -16,8 +14,6 @@ type Props = {
 
 export default function ScreenHeader({ title, right }: Props) {
   const insets = useSafeAreaInsets();
-  const { profile, role } = useAuth();
-  const isAsisten = role === 'asisten' || profile?.role === 'asisten';
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + 10 }]}>
@@ -28,7 +24,6 @@ export default function ScreenHeader({ title, right }: Props) {
         {right}
         <NotificationButton />
         <TemaButton />
-        {!isAsisten ? <ProfileButton /> : null}
         <LogoutButton />
       </View>
     </View>
